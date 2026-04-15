@@ -502,6 +502,7 @@ export default function App() {
   };
 
   const filteredTasks = useMemo(() => {
+    if (!currentUser) return [];
     let tasks = data.tasks;
     if (userRole === ROLES.MEMBER) tasks = tasks.filter(t => t.assignee === currentUser.id);
     if (taskTab === 'active') tasks = tasks.filter(t => t.status !== 'Done');
