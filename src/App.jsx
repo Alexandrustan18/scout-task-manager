@@ -1,4 +1,33 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+// ═══ SUPABASE ═══
+var supabase = createClient(
+  "https://ploucecgizjwyumzmhmo.supabase.co",
+  "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh"
+);
+
+// Cloud save/load helpers
+async function cloudLoad(key, fallback) {
+  try {
+    var { data, error } = await supabase.from("app_data").select("data").eq("id", key).single();
+    if (error || !data) return fallback;
+    return data.data || fallback;
+  } catch (e) { return fallback; }
+}
+
+async function cloudSave(key, value) {
+  try {
+    await supabase.from("app_data").upsert({ id: key, data: value, updated_at: new Date().toISOString() });
+  } catch (e) { console.error("Save error:", key, e); }
+}
+
+// Debounce saves to avoid spamming
+var saveTimers = {};
+function debouncedSave(key, value, delay) {
+  if (saveTimers[key]) clearTimeout(saveTimers[key]);
+  saveTimers[key] = setTimeout(function() { cloudSave(key, value); }, delay || 800);
+}
 
 var DEF_TEAM = {
   admin: { name: "Stan", role: "admin", password: "papagal", color: "#16A34A" },
@@ -30,8 +59,6 @@ var DEF_TEMPLATES = [
   { id: "tpl_4", name: "Creative Testing", description: "Ad creative testing workflow", subtasks: ["Analiza competitori", "Creare 5 variante copy", "Creare 3 variante vizual", "Setup A/B test", "Monitor 48h", "Analiza rezultate", "Scale winner"] },
 ];
 
-function ls(k, d) { try { var v = localStorage.getItem("s7_" + k); return v ? JSON.parse(v) : d; } catch(e) { return d; } }
-function ss(k, v) { localStorage.setItem("s7_" + k, JSON.stringify(v)); }
 function gid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function ts() { return new Date().toISOString(); }
 function ds(d) { var x = typeof d === "string" ? new Date(d) : d; return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); }
@@ -56,9 +83,7 @@ function canAccess(role, section) {
   return false;
 }
 
-function Ic({ d, size, color }) {
-  return <svg width={size || 20} height={size || 20} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>;
-}
+function Ic({ d, size, color }) { return <svg width={size || 20} height={size || 20} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>; }
 var Icons = {
   tasks: <><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 12l2 2 4-4"/></>,
   kanban: <><rect x="3" y="3" width="5" height="18" rx="1.5"/><rect x="10" y="3" width="5" height="12" rx="1.5"/><rect x="17" y="3" width="5" height="8" rx="1.5"/></>,
@@ -100,18 +125,18 @@ function Av({ color, size, fs, children }) { return <div style={{ width: size ||
 function Card({ children, style }) { return <div style={{ background: "#fff", border: "1px solid hsl(214,18%,90%)", borderRadius: 10, padding: 16, animation: "fadeUp 0.2s ease", ...style }}>{children}</div>; }
 
 export default function App() {
-  var [team, setTeam] = useState(ls("team", DEF_TEAM));
-  var [user, setUser] = useState(ls("user", null));
-  var [tasks, setTasks] = useState(ls("tasks", []));
-  var [logs, setLogs] = useState(ls("logs", []));
-  var [sessions, setSessions] = useState(ls("sessions", {}));
-  var [shops, setShops] = useState(ls("shops", DEF_SHOPS));
-  var [products, setProducts] = useState(ls("products", []));
-  var [timers, setTimers] = useState(ls("timers", {}));
-  var [templates, setTemplates] = useState(ls("templates", DEF_TEMPLATES));
-  var [targets, setTargets] = useState(ls("targets", []));
-  var [sheets, setSheets] = useState(ls("sheets", []));
-  var [notifications, setNotifications] = useState(ls("notifs", []));
+  var [team, setTeam] = useState(DEF_TEAM);
+  var [user, setUser] = useState(null);
+  var [tasks, setTasks] = useState([]);
+  var [logs, setLogs] = useState([]);
+  var [sessions, setSessions] = useState({});
+  var [shops, setShops] = useState(DEF_SHOPS);
+  var [products, setProducts] = useState([]);
+  var [timers, setTimers] = useState({});
+  var [templates, setTemplates] = useState(DEF_TEMPLATES);
+  var [targets, setTargets] = useState([]);
+  var [sheets, setSheets] = useState([]);
+  var [notifications, setNotifications] = useState([]);
   var [page, setPage] = useState("dashboard");
   var [showAdd, setShowAdd] = useState(false);
   var [editTask, setEditTask] = useState(null);
@@ -129,27 +154,67 @@ export default function App() {
   var [profRange, setProfRange] = useState("all");
   var [showNotifs, setShowNotifs] = useState(false);
   var [calDate, setCalDate] = useState(new Date());
+  var [loading, setLoading] = useState(true);
+
+  // Load all data from Supabase on mount
+  useEffect(function() {
+    async function loadAll() {
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf] = await Promise.all([
+        cloudLoad("team", DEF_TEAM),
+        cloudLoad("tasks", []),
+        cloudLoad("logs", []),
+        cloudLoad("sessions", {}),
+        cloudLoad("shops", DEF_SHOPS),
+        cloudLoad("products", []),
+        cloudLoad("timers", {}),
+        cloudLoad("templates", DEF_TEMPLATES),
+        cloudLoad("targets", []),
+        cloudLoad("sheets", []),
+        cloudLoad("notifs", []),
+      ]);
+      // If team is empty object (first run), use defaults
+      if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
+      setTasks(tk || []);
+      setLogs(lg || []);
+      setSessions(se || {});
+      if (sh && sh.length > 0) setShops(sh); else { setShops(DEF_SHOPS); cloudSave("shops", DEF_SHOPS); }
+      setProducts(pr || []);
+      setTimers(tm || {});
+      if (tpl && tpl.length > 0) setTemplates(tpl); else { setTemplates(DEF_TEMPLATES); cloudSave("templates", DEF_TEMPLATES); }
+      setTargets(tgt || []);
+      setSheets(sht || []);
+      setNotifications(nf || []);
+      // Restore user from localStorage (session only)
+      var savedUser = localStorage.getItem("s7_user");
+      if (savedUser) { try { setUser(JSON.parse(savedUser)); } catch(e) {} }
+      setLoading(false);
+    }
+    loadAll();
+  }, []);
 
   useEffect(function() { var h = function() { setIsMob(window.innerWidth < 820); }; window.addEventListener("resize", h); return function() { window.removeEventListener("resize", h); }; }, []);
-  useEffect(function() { ss("team", team); }, [team]);
-  useEffect(function() { ss("tasks", tasks); }, [tasks]);
-  useEffect(function() { ss("logs", logs); }, [logs]);
-  useEffect(function() { ss("sessions", sessions); }, [sessions]);
-  useEffect(function() { ss("shops", shops); }, [shops]);
-  useEffect(function() { ss("products", products); }, [products]);
-  useEffect(function() { ss("timers", timers); }, [timers]);
-  useEffect(function() { ss("templates", templates); }, [templates]);
-  useEffect(function() { ss("targets", targets); }, [targets]);
-  useEffect(function() { ss("sheets", sheets); }, [sheets]);
-  useEffect(function() { ss("notifs", notifications); }, [notifications]);
+
+  // Auto-save to Supabase when data changes (debounced)
+  useEffect(function() { if (!loading) debouncedSave("team", team, 1000); }, [team]);
+  useEffect(function() { if (!loading) debouncedSave("tasks", tasks, 500); }, [tasks]);
+  useEffect(function() { if (!loading) debouncedSave("logs", logs, 2000); }, [logs]);
+  useEffect(function() { if (!loading) debouncedSave("sessions", sessions, 5000); }, [sessions]);
+  useEffect(function() { if (!loading) debouncedSave("shops", shops, 1000); }, [shops]);
+  useEffect(function() { if (!loading) debouncedSave("products", products, 1000); }, [products]);
+  useEffect(function() { if (!loading) debouncedSave("timers", timers, 1000); }, [timers]);
+  useEffect(function() { if (!loading) debouncedSave("templates", templates, 1000); }, [templates]);
+  useEffect(function() { if (!loading) debouncedSave("targets", targets, 1000); }, [targets]);
+  useEffect(function() { if (!loading) debouncedSave("sheets", sheets, 1000); }, [sheets]);
+  useEffect(function() { if (!loading) debouncedSave("notifs", notifications, 2000); }, [notifications]);
+
   useEffect(function() { var iv = setInterval(function() { setTick(function(t) { return t + 1; }); }, 1000); return function() { clearInterval(iv); }; }, []);
-  useEffect(function() { if (!user) return; var fn = function() { setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); ss("sessions", n); return n; }); }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
+  useEffect(function() { if (!user) return; var fn = function() { setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); return n; }); }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
 
   var addLog = useCallback(function(a, d) { setLogs(function(p) { return [{ id: gid(), user: user || "?", action: a, detail: d, time: ts() }].concat(p).slice(0, 500); }); }, [user]);
   var addNotif = function(type, message, taskId) { setNotifications(function(p) { return [{ id: gid(), type: type, taskId: taskId || null, message: message, time: ts(), read: false }].concat(p); }); };
 
-  var handleLogin = function(u, pw) { var t = team[u]; if (!t || t.password !== pw) return false; setUser(u); ss("user", u); addLog("LOGIN", t.name + " a intrat"); if (t.role === "member") setPage("tasks"); return true; };
-  var handleLogout = function() { if (user) addLog("LOGOUT", (team[user] ? team[user].name : "") + " a iesit"); setUser(null); ss("user", null); setPage("dashboard"); };
+  var handleLogin = function(u, pw) { var t = team[u]; if (!t || t.password !== pw) return false; setUser(u); localStorage.setItem("s7_user", JSON.stringify(u)); addLog("LOGIN", t.name + " a intrat"); if (t.role === "member") setPage("tasks"); return true; };
+  var handleLogout = function() { if (user) addLog("LOGOUT", (team[user] ? team[user].name : "") + " a iesit"); setUser(null); localStorage.removeItem("s7_user"); setPage("dashboard"); };
 
   var visUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
   var assUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team).filter(function(k) { return k !== "admin"; }); if (m.role === "pm") return m.team || []; return [user]; }, [user, team]);
@@ -219,8 +284,10 @@ export default function App() {
 
   var unreadNotifs = useMemo(function() { return notifications.filter(function(n) { return !n.read; }); }, [notifications]);
 
+  if (loading) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "hsl(216,22%,11%)", color: "#4ADE80", fontSize: 20, fontWeight: 700, fontFamily: "system-ui" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 28, marginBottom: 8 }}>HeyAds</div><div style={{ fontSize: 12, color: "#7A8BA0" }}>Se incarca datele...</div></div></div>;
+
   if (!user) return <LoginScreen team={team} onLogin={handleLogin} />;
-  var me = team[user]; if (!me) { setUser(null); ss("user", null); return null; }
+  var me = team[user]; if (!me) { setUser(null); localStorage.removeItem("s7_user"); return null; }
   var canCreate = me.role === "admin" || me.role === "pm";
   var isAdmin = me.role === "admin";
 
@@ -395,7 +462,7 @@ function SheetsPage({ sheets, setSheets, shops }) {
 function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTimer, products, onClose, onEdit }) {
   var [commentText, setCommentText] = useState(""); var t = tasks.find(function(x) { return x.id === task.id; }) || task; var a = team[t.assignee] || {}; var secs = getTS(t.id); var subtasks = t.subtasks || []; var comments = t.comments || []; var doneS = subtasks.filter(function(s) { return s.done; }).length;
   var addComment = function() { if (!commentText.trim()) return; setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, x, { comments: (x.comments || []).concat([{ id: gid(), userId: user, text: commentText.trim(), time: ts() }]) }) : x; }); }); setCommentText(""); };
-  var toggleSub = function(stId) { setTasks(function(p) { return p.map(function(x) { if (x.id !== t.id) return x; return Object.assign({}, x, { subtasks: (x.subtasks || []).map(function(s) { return s.id === stId ? Object.assign({}, s, { done: !s.done }) : s; }) }); }); });  };
+  var toggleSub = function(stId) { setTasks(function(p) { return p.map(function(x) { if (x.id !== t.id) return x; return Object.assign({}, x, { subtasks: (x.subtasks || []).map(function(s) { return s.id === stId ? Object.assign({}, s, { done: !s.done }) : s; }) }); }); }); };
   return <div style={S.modalOv} onClick={onClose}><div style={Object.assign({}, S.modalBox, { maxWidth: 640 })} onClick={function(e) { e.stopPropagation(); }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div><h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>{t.title}</h2><div style={{ display: "flex", gap: 6 }}><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{isOv(t) && <Badge bg="#FEF2F2" color="#DC2626">OVERDUE</Badge>}</div></div><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
     {t.description && <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>{t.description}</div>}
