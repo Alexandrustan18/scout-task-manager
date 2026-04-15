@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -973,7 +974,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
           {d.userTargets.length > 0 && d.userTargets.map(function(tgt) {
             var pct = tgt.target > 0 ? Math.min(100, (d.todayDone / tgt.target) * 100) : 0;
             return <div key={tgt.id} style={{ marginBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}><span style={{ color: "#64748B" }}>Target: {tgt.metric}</span><span style={{ fontWeight: 700, color: pct >= 100 ? GR : "#DC2626" }}>{d.todayDone}/{tgt.target}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}><span style={{ color: "#64748B" }}>Target: {tgt.metric === "all" ? "Toate" : (tgt.metric || "").replace(/^(type:|dept:|plat:)/, "")}</span><span style={{ fontWeight: 700, color: pct >= 100 ? GR : "#DC2626" }}>{d.todayDone}/{tgt.target}</span></div>
               <div style={S.progBg}><div style={S.progBar(pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626", pct)} /></div>
             </div>;
           })}
@@ -1338,10 +1339,19 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
   return <div style={{ maxWidth: 800 }}>{canEdit && <div style={{ marginBottom: 16 }}><button style={S.primBtn} onClick={function() { setShowForm(!showForm); }}><Ic d={Icons.plus} size={14} color="#fff" /> Target nou</button></div>}{showForm && <Card style={{ marginBottom: 16 }}><div style={S.fRow}><div style={S.fCol}><label style={S.label}>User</label><select style={S.fSelF} value={form.userId} onChange={function(e) { setForm(Object.assign({}, form, { userId: e.target.value })); }}><option value="">--</option>{visUsers.filter(function(u) { return u !== "admin"; }).map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Metric</label><select style={S.fSelF} value={form.metric} onChange={function(e) { setForm(Object.assign({}, form, { metric: e.target.value })); }}>{metricOptions.map(function(o) { return <option key={o.id} value={o.id}>{o.l}</option>; })}</select></div></div><div style={S.fRow}><div style={S.fCol}><label style={S.label}>Target zilnic</label><input style={S.input} type="number" value={form.target} onChange={function(e) { setForm(Object.assign({}, form, { target: parseInt(e.target.value) || 0 })); }} /></div><div style={S.fCol}><label style={S.label}>Zile/sapt</label><input style={S.input} type="number" min="1" max="7" value={form.daysPerWeek} onChange={function(e) { setForm(Object.assign({}, form, { daysPerWeek: parseInt(e.target.value) || 5 })); }} /></div></div><div style={{ marginTop: 12, display: "flex", gap: 8 }}><button style={S.primBtn} onClick={save}>Salveaza</button><button style={S.cancelBtn} onClick={function() { setShowForm(false); }}>Anuleaza</button></div></Card>}
   {targets.map(function(tgt) {
     var u = team[tgt.userId]; if (!u) return null;
-    var todayDone = tasks.filter(function(t) { if (t.assignee !== tgt.userId || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false; if (tgt.metric === "all") return true; if (tgt.metric.startsWith("type:") && t.taskType === tgt.metric.replace("type:", "")) return true; if (tgt.metric.startsWith("dept:") && t.department === tgt.metric.replace("dept:", "")) return true; if (tgt.metric.startsWith("plat:") && t.platform === tgt.metric.replace("plat:", "")) return true; return false; }).length;
+    // Normalize metric: backward compat - old targets saved plain "Product Launch" without prefix
+    var normMetric = tgt.metric;
+    if (normMetric && normMetric !== "all" && !normMetric.startsWith("type:") && !normMetric.startsWith("dept:") && !normMetric.startsWith("plat:")) {
+      // Try to detect old format: check if it matches a taskType, department or platform
+      if ((taskTypes || DEF_TASK_TYPES).includes(normMetric)) normMetric = "type:" + normMetric;
+      else if ((departments || DEF_DEPARTMENTS).includes(normMetric)) normMetric = "dept:" + normMetric;
+      else if (PLATFORMS.includes(normMetric)) normMetric = "plat:" + normMetric;
+      else normMetric = "type:" + normMetric; // fallback: assume type
+    }
+    var todayDone = tasks.filter(function(t) { if (t.assignee !== tgt.userId || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false; if (normMetric === "all") return true; if (normMetric.startsWith("type:") && t.taskType === normMetric.replace("type:", "")) return true; if (normMetric.startsWith("dept:") && t.department === normMetric.replace("dept:", "")) return true; if (normMetric.startsWith("plat:") && t.platform === normMetric.replace("plat:", "")) return true; return false; }).length;
     var pct = tgt.target > 0 ? (todayDone / tgt.target) * 100 : 0;
     var rem = Math.max(0, tgt.target - todayDone);
-    var metricLabel = (metricOptions.find(function(o) { return o.id === tgt.metric; }) || {}).l || tgt.metric;
+    var metricLabel = (metricOptions.find(function(o) { return o.id === normMetric; }) || {}).l || tgt.metric;
     return <Card key={tgt.id} style={{ marginBottom: 16, borderLeft: "3px solid " + (pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626") }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}><Av color={u.color} size={32}>{u.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontWeight: 700 }}>{u.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{metricLabel} | {tgt.target}/zi | {tgt.daysPerWeek} zile/sapt</div></div>
       {canEdit && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) setTargets(function(p) { return p.filter(function(x) { return x.id !== tgt.id; }); }); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}</div>
