@@ -200,6 +200,8 @@ export default function App() {
   var [selectedTasks, setSelectedTasks] = useState([]);
   var [bulkMode, setBulkMode] = useState(false);
   var [statusHistory, setStatusHistory] = useState({});
+  // Feature 5: campaign finalize popup
+  var [showFinalize, setShowFinalize] = useState(null);
 
   // Load all data from Supabase on mount
   useEffect(function() {
@@ -460,6 +462,11 @@ export default function App() {
   var chgSt = function(tid, st) {
     if (!canChgDeps(tid, st)) return;
     var prevTask = tasks.find(function(x) { return x.id === tid; });
+    // Feature 5: Campaign task - intercept Done to show finalize popup
+    if (st === "Done" && prevTask && prevTask.campaignItems && prevTask.campaignItems.length > 0 && !prevTask._finalized) {
+      setShowFinalize(prevTask);
+      return;
+    }
     setTasks(function(p) { return p.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts() }) : x; }); });
     if (prevTask) addLog("STATUS", "\"" + prevTask.title + "\" -> " + st);
     // Feature 2: track status history
@@ -542,9 +549,13 @@ export default function App() {
     { id: "manage_users", label: "Manage Users", icon: Icons.usrs, section: "manage_users" },
   ];
 
-  // Feature 10: Role-based nav
+  // Feature 1+4: Granular access control - admin sees all, others check team[user].access array
+  var ALL_PAGES = ["dashboard","tasks","kanban","calendar","heatmap","targets","templates","recurring","workload","team","performance","digest","sla","log","departments","shops","products","sheets","manage_users"];
   var accessibleNav = navItems.filter(function(n) {
     if (me.role === "admin") return true;
+    // If user has custom access array, use it
+    if (me.access && me.access.length > 0) return me.access.includes(n.section);
+    // Fallback: old role-based logic
     if (me.role === "pm") return !["manage_users", "log", "sla"].includes(n.section);
     if (me.role === "member") return ["tasks", "kanban", "calendar"].includes(n.section);
     return false;
@@ -611,6 +622,19 @@ export default function App() {
       </main>
       {showAdd && <TaskModal task={editTask} team={team} assUsers={assUsers} shops={shops} products={products} onSave={saveTask} onClose={function() { setShowAdd(false); setEditTask(null); }} taskTypes={taskTypes} departments={departments} allTasks={tasks} />}
       {viewTask && <ViewTaskModal task={viewTask} team={team} user={user} tasks={tasks} setTasks={setTasks} timers={timers} getTS={getTS} togTimer={togTimer} products={products} onClose={function() { setViewTask(null); }} onEdit={function() { setEditTask(viewTask); setViewTask(null); setShowAdd(true); }} statusHistory={statusHistory} />}
+      {/* Feature 5: Campaign finalize popup */}
+      {showFinalize && <CampaignFinalizeModal task={showFinalize} onFinalize={function(count) {
+        var tid = showFinalize.id;
+        setTasks(function(p) { return p.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: "Done", updatedAt: ts(), _finalized: true, _finalizedCount: count }) : x; }); });
+        addLog("CAMPAIGN", "\"" + showFinalize.title + "\" finalizat: " + count + "/" + (showFinalize.campaignItems || []).length + " produse");
+        addNotif("campaign", "Campaign \"" + showFinalize.title + "\" finalizat: " + count + " produse", tid);
+        setStatusHistory(function(prev) { var n = Object.assign({}, prev); if (!n[tid]) n[tid] = []; n[tid] = n[tid].concat([{ status: "Done", at: ts() }]); return n; });
+        // Stop timer
+        var tm = timers[tid]; if (tm && tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; setTimers(function(p2) { var n2 = Object.assign({}, p2); n2[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n2; }); }
+        setShowFinalize(null);
+      }} onClose={function() { setShowFinalize(null); }} />}
+      {/* Feature 3: AI Bot */}
+      <AIBot tasks={tasks} team={team} timers={timers} user={user} targets={targets} stats={stats} getPerf={getPerf} visUsers={visUsers} slaBreaches={slaBreaches} />
     </div>
   );
 }
@@ -719,12 +743,12 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
             <div style={{ fontSize: 18, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div>
           </div>
 
-          {/* Feature 3: Login KPIs */}
-          <div style={{ display: "flex", gap: 8, fontSize: 10, color: "#94A3B8", marginBottom: 8, flexWrap: "wrap" }}>
+          {/* Feature 3: Login KPIs - only admin sees these */}
+          {me && me.role === "admin" && <div style={{ display: "flex", gap: 8, fontSize: 10, color: "#94A3B8", marginBottom: 8, flexWrap: "wrap" }}>
             <Badge bg={d.hasLoggedToday ? "#ECFDF5" : "#FEF2F2"} color={d.hasLoggedToday ? GR : "#DC2626"}>{d.hasLoggedToday ? "Activ azi" : "Nu a intrat azi"}</Badge>
             {d.firstLogin && <span>Prima logare: {new Date(d.firstLogin).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}</span>}
             {d.lastLogin && <span>Ultima: {new Date(d.lastLogin).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}</span>}
-          </div>
+          </div>}
 
           {/* Feature 2: Daily target progress */}
           {d.userTargets.length > 0 && d.userTargets.map(function(tgt) {
@@ -1151,13 +1175,26 @@ function UsersPage({ team, setTeam, addLog }) {
 }
 
 function EditUserInline({ user, onSave, onCancel }) {
+  var ALL_PAGES = ["dashboard","tasks","kanban","calendar","heatmap","targets","templates","recurring","workload","team","performance","digest","sla","log","departments","shops","products","sheets"];
+  var DASH_WIDGETS = ["kpis","live_timers","team_cards","sla_breaches","login_kpis"];
+  var DASH_LABELS = { kpis: "KPI-uri", live_timers: "Live Timers", team_cards: "Carduri Echipa", sla_breaches: "SLA Breaches", login_kpis: "Login Info" };
+  var PAGE_LABELS = { dashboard: "Dashboard", tasks: "Taskuri", kanban: "Kanban", calendar: "Calendar", heatmap: "Heatmap", targets: "Targets", templates: "Templates", recurring: "Recurring", workload: "Workload", team: "Echipa", performance: "Performance", digest: "Digest", sla: "SLA", log: "Activity Log", departments: "Departamente", shops: "Magazine", products: "Produse", sheets: "Sheets" };
   var [name, setName] = useState(user.name); var [pw, setPw] = useState(user.password); var [role, setRole] = useState(user.role); var [color, setColor] = useState(user.color);
-  return <div style={{ marginTop: 8, padding: 12, background: "#F8FAFC", borderRadius: 8 }}><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}><div><label style={S.label}>Nume</label><input style={S.input} value={name} onChange={function(e) { setName(e.target.value); }} /></div><div><label style={S.label}>Parola</label><input style={S.input} value={pw} onChange={function(e) { setPw(e.target.value); }} /></div><div><label style={S.label}>Rol</label><select style={S.fSelF} value={role} onChange={function(e) { setRole(e.target.value); }}>{ROLES.map(function(r) { return <option key={r} value={r}>{r}</option>; })}</select></div><div><label style={S.label}>Culoare</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{COLORS.map(function(c) { return <div key={c} onClick={function() { setColor(c); }} style={{ width: 20, height: 20, borderRadius: 4, background: c, cursor: "pointer", border: color === c ? "2px solid #1E293B" : "2px solid transparent" }} />; })}</div></div></div><div style={{ display: "flex", gap: 8, marginTop: 10 }}><button style={S.primBtn} onClick={function() { onSave({ name: name, password: pw, role: role, color: color }); }}>Salveaza</button><button style={S.cancelBtn} onClick={onCancel}>Anuleaza</button></div></div>;
+  var [access, setAccess] = useState(user.access || ALL_PAGES);
+  var [dashWidgets, setDashWidgets] = useState(user.dashWidgets || DASH_WIDGETS);
+  var toggleAccess = function(pg) { setAccess(function(prev) { return prev.includes(pg) ? prev.filter(function(x) { return x !== pg; }) : prev.concat([pg]); }); };
+  var toggleWidget = function(w) { setDashWidgets(function(prev) { return prev.includes(w) ? prev.filter(function(x) { return x !== w; }) : prev.concat([w]); }); };
+  return <div style={{ marginTop: 8, padding: 12, background: "#F8FAFC", borderRadius: 8 }}><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}><div><label style={S.label}>Nume</label><input style={S.input} value={name} onChange={function(e) { setName(e.target.value); }} /></div><div><label style={S.label}>Parola</label><input style={S.input} value={pw} onChange={function(e) { setPw(e.target.value); }} /></div><div><label style={S.label}>Rol</label><select style={S.fSelF} value={role} onChange={function(e) { setRole(e.target.value); }}>{ROLES.map(function(r) { return <option key={r} value={r}>{r}</option>; })}</select></div><div><label style={S.label}>Culoare</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{COLORS.map(function(c) { return <div key={c} onClick={function() { setColor(c); }} style={{ width: 20, height: 20, borderRadius: 4, background: c, cursor: "pointer", border: color === c ? "2px solid #1E293B" : "2px solid transparent" }} />; })}</div></div></div>
+  <label style={Object.assign({}, S.label, { marginTop: 14 })}>Acces Pagini</label>
+  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>{ALL_PAGES.map(function(pg) { var active = access.includes(pg); return <button key={pg} onClick={function() { toggleAccess(pg); }} style={Object.assign({}, S.chip, { background: active ? GR : "#F1F5F9", color: active ? "#fff" : "#94A3B8", fontSize: 10, padding: "4px 10px" })}>{PAGE_LABELS[pg] || pg}</button>; })}<button style={Object.assign({}, S.chip, { background: "#EFF6FF", color: "#2563EB", fontSize: 10, padding: "4px 10px" })} onClick={function() { setAccess(ALL_PAGES.slice()); }}>Toate</button><button style={Object.assign({}, S.chip, { background: "#FEF2F2", color: "#DC2626", fontSize: 10, padding: "4px 10px" })} onClick={function() { setAccess(["dashboard", "tasks"]); }}>Minimal</button></div>
+  <label style={S.label}>Widgets Dashboard</label>
+  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>{DASH_WIDGETS.map(function(w) { var active = dashWidgets.includes(w); return <button key={w} onClick={function() { toggleWidget(w); }} style={Object.assign({}, S.chip, { background: active ? GR : "#F1F5F9", color: active ? "#fff" : "#94A3B8", fontSize: 10, padding: "4px 10px" })}>{DASH_LABELS[w] || w}</button>; })}</div>
+  <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button style={S.primBtn} onClick={function() { onSave({ name: name, password: pw, role: role, color: color, access: access, dashWidgets: dashWidgets }); }}>Salveaza</button><button style={S.cancelBtn} onClick={onCancel}>Anuleaza</button></div></div>;
 }
 
 // Feature 6 + 12: Task modal with custom types and departments
 function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, taskTypes, departments, allTasks }) {
-  var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", department: "", shop: "", product: "", productName: "", deadline: TD, links: [], subtasks: [], comments: [], dependsOn: [] });
+  var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", department: "", shop: "", product: "", productName: "", deadline: TD, links: [], subtasks: [], comments: [], dependsOn: [], campaignItems: [] });
   var [newLink, setNewLink] = useState(""); var [newSub, setNewSub] = useState("");
   // Feature 6: custom task type input
   var [customType, setCustomType] = useState("");
@@ -1185,6 +1222,12 @@ function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, tas
     {(f.dependsOn || []).length > 0 && <div style={{ marginTop: 4, marginBottom: 8 }}>{(f.dependsOn || []).map(function(depId) { var dep = (allTasks || []).find(function(x) { return x.id === depId; }); return <div key={depId} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "2px 0" }}><Ic d={Icons.dep} size={12} color="#2563EB" /><span>{dep ? dep.title : depId}</span>{dep && <Badge bg={(SC[dep.status] || "#94A3B8") + "18"} color={SC[dep.status] || "#94A3B8"}>{dep.status}</Badge>}<button style={S.iconBtn} onClick={function() { set("dependsOn", (f.dependsOn || []).filter(function(x) { return x !== depId; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}</div>}
     <label style={S.label}>Linkuri</label><div style={{ display: "flex", gap: 6, marginBottom: 8 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={newLink} onChange={function(e) { setNewLink(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addLink(); }} placeholder="https://..." /><button style={S.primBtn} onClick={addLink}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>{(f.links || []).map(function(l, i) { return <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 12 }}><Ic d={Icons.link} size={12} color="#2563EB" /><a href={l} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l}</a><button style={S.iconBtn} onClick={function() { set("links", (f.links || []).filter(function(_, idx) { return idx !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
     <label style={S.label}>Subtaskuri</label>{(f.subtasks || []).map(function(st, i) { return <div key={st.id || i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}><input type="checkbox" checked={st.done} onChange={function() { var ns = (f.subtasks || []).map(function(s, j) { return j === i ? Object.assign({}, s, { done: !s.done }) : s; }); set("subtasks", ns); }} /><input style={Object.assign({}, S.input, { flex: 1 })} value={st.text} onChange={function(e) { var ns = (f.subtasks || []).map(function(s, j) { return j === i ? Object.assign({}, s, { text: e.target.value }) : s; }); set("subtasks", ns); }} /><button style={S.iconBtn} onClick={function() { set("subtasks", (f.subtasks || []).filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}<div style={{ display: "flex", gap: 6, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1 })} placeholder="Subtask nou..." value={newSub} onChange={function(e) { setNewSub(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter" && newSub.trim()) { set("subtasks", (f.subtasks || []).concat([{ id: gid(), text: newSub.trim(), done: false }])); setNewSub(""); } }} /><button style={S.primBtn} onClick={function() { if (newSub.trim()) { set("subtasks", (f.subtasks || []).concat([{ id: gid(), text: newSub.trim(), done: false }])); setNewSub(""); } }}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
+    {/* Feature 5: Campaign Items (mega-task) */}
+    <label style={S.label}>Produse Campaign (mega-task)</label>
+    <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>Adauga produse/items - la finalizare selectezi cate ai completat si se adauga la target.</div>
+    {(f.campaignItems || []).map(function(ci, i) { return <div key={ci.id || i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3, padding: "4px 8px", background: "#F8FAFC", borderRadius: 6 }}><span style={{ fontSize: 11, color: "#94A3B8", width: 22 }}>{i + 1}.</span><input style={Object.assign({}, S.input, { flex: 1, fontSize: 12, padding: "4px 8px" })} value={ci.name} onChange={function(e) { var nc = (f.campaignItems || []).map(function(x, j) { return j === i ? Object.assign({}, x, { name: e.target.value }) : x; }); set("campaignItems", nc); }} /><button style={S.iconBtn} onClick={function() { set("campaignItems", (f.campaignItems || []).filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
+    <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}><input style={Object.assign({}, S.input, { flex: 1 })} id="campItemInput" placeholder="Nume produs / item..." onKeyDown={function(e) { if (e.key === "Enter" && e.target.value.trim()) { set("campaignItems", (f.campaignItems || []).concat([{ id: gid(), name: e.target.value.trim() }])); e.target.value = ""; } }} /><button style={S.primBtn} onClick={function() { var el = document.getElementById("campItemInput"); if (el && el.value.trim()) { set("campaignItems", (f.campaignItems || []).concat([{ id: gid(), name: el.value.trim() }])); el.value = ""; } }}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
+    {(f.campaignItems || []).length > 0 && <div style={{ fontSize: 11, color: "#64748B", marginBottom: 8 }}>{(f.campaignItems || []).length} produse in campaign. La finalizare vei selecta cate ai completat.</div>}
     <label style={Object.assign({}, S.label, { marginTop: 12 })}>Descriere</label><textarea style={S.ta} value={f.description} onChange={function(e) { set("description", e.target.value); }} placeholder="Detalii..." />
     <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button><button style={S.primBtn} onClick={function() { if (f.title.trim()) onSave(f); }}>{task ? "Salveaza" : "Creeaza"}</button></div>
   </div></div>;
@@ -1276,6 +1319,98 @@ function SLAPage({ slas, setSlas, shops, tasks, team, slaBreaches, isMob }) {
     </Card>}
     {slaBreaches.length === 0 && <Card style={{ textAlign: "center", color: GR, padding: 20 }}>Niciun SLA breach. Totul e in regula.</Card>}
   </div>;
+}
+
+// ═══ FEATURE 5: CAMPAIGN FINALIZE MODAL ═══
+function CampaignFinalizeModal({ task, onFinalize, onClose }) {
+  var [count, setCount] = useState((task.campaignItems || []).length);
+  var total = (task.campaignItems || []).length;
+  return <div style={S.modalOv} onClick={onClose}><div style={Object.assign({}, S.modalBox, { maxWidth: 440 })} onClick={function(e) { e.stopPropagation(); }}>
+    <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>Finalizeaza Campaign</h2>
+    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{task.title}</div>
+    <div style={{ fontSize: 12, color: "#64748B", marginBottom: 16 }}>{total} produse in campaign:</div>
+    <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 16 }}>{(task.campaignItems || []).map(function(ci, i) { return <div key={ci.id || i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, background: "#F8FAFC", fontSize: 12 }}><span style={{ color: "#94A3B8", width: 22 }}>{i + 1}.</span><span style={{ flex: 1 }}>{ci.name}</span></div>; })}</div>
+    <label style={S.label}>Cate ai finalizat?</label>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+      <input style={Object.assign({}, S.input, { width: 100, fontSize: 20, fontWeight: 700, textAlign: "center" })} type="number" min="0" max={total} value={count} onChange={function(e) { var v = parseInt(e.target.value) || 0; setCount(Math.min(v, total)); }} />
+      <span style={{ fontSize: 14, color: "#64748B" }}>/ {total} produse</span>
+    </div>
+    <div style={S.progBg}><div style={S.progBar(count >= total ? GR : count >= total / 2 ? "#D97706" : "#DC2626", total > 0 ? (count / total) * 100 : 0)} /></div>
+    <div style={{ fontSize: 12, color: "#64748B", marginTop: 8, marginBottom: 16 }}>{count} produse se adauga la targetul zilnic. {total - count > 0 ? (total - count) + " ramase." : "Toate finalizate!"}</div>
+    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button><button style={S.primBtn} onClick={function() { onFinalize(count); }}>Finalizeaza ({count})</button></div>
+  </div></div>;
+}
+
+// ═══ FEATURE 3: AI BOT ═══
+function AIBot({ tasks, team, timers, user, targets, stats, getPerf, visUsers, slaBreaches }) {
+  var [open, setOpen] = useState(false);
+  var [msgs, setMsgs] = useState([{ role: "assistant", text: "Sunt asistentul tau AI. Intreaba-ma orice despre taskuri, echipa, performance sau ce ai de facut azi." }]);
+  var [input, setInput] = useState("");
+  var [loading, setLoading] = useState(false);
+
+  var buildContext = function() {
+    var ctx = "Date curente S.C.O.U.T AI:\n";
+    ctx += "User logat: " + (team[user] || {}).name + " (" + user + ")\n";
+    ctx += "Total taskuri vizibile: " + tasks.length + "\n";
+    var byStatus = {}; tasks.forEach(function(t) { byStatus[t.status] = (byStatus[t.status] || 0) + 1; });
+    ctx += "Per status: " + Object.entries(byStatus).map(function(e) { return e[0] + "=" + e[1]; }).join(", ") + "\n";
+    var overdue = tasks.filter(function(t) { return t.deadline && t.deadline < TD && t.status !== "Done"; });
+    ctx += "Intarziate: " + overdue.length + "\n";
+    if (overdue.length > 0) ctx += "Intarziate: " + overdue.slice(0, 5).map(function(t) { return "\"" + t.title + "\" (" + (team[t.assignee] || {}).name + ")"; }).join(", ") + "\n";
+    var urgent = tasks.filter(function(t) { return t.priority === "Urgent" && t.status !== "Done"; });
+    if (urgent.length > 0) ctx += "Urgente: " + urgent.slice(0, 5).map(function(t) { return "\"" + t.title + "\""; }).join(", ") + "\n";
+    ctx += "\nEchipa:\n";
+    visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; }).forEach(function(u) {
+      var p = getPerf(u); var ut = tasks.filter(function(t) { return t.assignee === u; });
+      var active = ut.filter(function(t) { return t.status === "In Progress"; }).length;
+      var todo = ut.filter(function(t) { return t.status === "To Do"; }).length;
+      ctx += "- " + team[u].name + ": score=" + p.score + "%, active=" + active + ", todo=" + todo + ", done=" + p.done + ", overdue=" + p.overdue + "\n";
+    });
+    if (slaBreaches && slaBreaches.length > 0) ctx += "\nSLA Breaches: " + slaBreaches.length + "\n";
+    if (targets && targets.length > 0) ctx += "\nTargets active: " + targets.length + "\n";
+    return ctx;
+  };
+
+  var send = function() {
+    if (!input.trim() || loading) return;
+    var userMsg = { role: "user", text: input.trim() };
+    setMsgs(function(p) { return p.concat([userMsg]); });
+    setInput("");
+    setLoading(true);
+    var ctx = buildContext();
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        system: "Esti un asistent AI pentru platforma S.C.O.U.T AI - un task manager intern al agentiei de performance marketing HeyAds. Raspunzi scurt, direct, actionabil. Vorbesti in romana. Analizezi datele si dai recomandari concrete. Nu inventa date - foloseste doar ce primesti.\n\n" + ctx,
+        messages: [{ role: "user", content: input.trim() }]
+      })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      var reply = (data.content || []).map(function(c) { return c.text || ""; }).join("");
+      setMsgs(function(p) { return p.concat([{ role: "assistant", text: reply || "Nu am putut procesa." }]); });
+      setLoading(false);
+    }).catch(function(err) {
+      setMsgs(function(p) { return p.concat([{ role: "assistant", text: "Eroare conexiune: " + err.message }]); });
+      setLoading(false);
+    });
+  };
+
+  return <>
+    <button onClick={function() { setOpen(!open); }} style={{ position: "fixed", bottom: 20, right: 20, width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, " + GR + ", #4ADE80)", border: "none", color: "#fff", fontSize: 22, fontWeight: 700, boxShadow: "0 4px 20px rgba(12,126,62,0.4)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{open ? <Ic d={Icons.x} size={22} color="#fff" /> : "AI"}</button>
+    {open && <div style={{ position: "fixed", bottom: 80, right: 20, width: 380, maxHeight: 500, background: "#fff", borderRadius: 14, boxShadow: "0 8px 40px rgba(0,0,0,0.15)", zIndex: 400, display: "flex", flexDirection: "column", border: "1px solid hsl(214,18%,90%)", overflow: "hidden" }}>
+      <div style={{ padding: "14px 16px", background: "hsl(216,22%,11%)", color: "#4ADE80", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ADE80", animation: "pulse 2s infinite" }} />S.C.O.U.T AI Assistant</div>
+      <div style={{ flex: 1, overflowY: "auto", padding: 12, maxHeight: 340 }}>
+        {msgs.map(function(m, i) { return <div key={i} style={{ marginBottom: 10, display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}><div style={{ padding: "8px 12px", borderRadius: 10, maxWidth: "85%", background: m.role === "user" ? GR : "#F1F5F9", color: m.role === "user" ? "#fff" : "#1E293B", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.text}</div></div>; })}
+        {loading && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "#F1F5F9", borderRadius: 10, fontSize: 12, color: "#94A3B8", maxWidth: "60%" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: GR, animation: "pulse 1s infinite" }} />Se gandeste...</div>}
+      </div>
+      <div style={{ padding: 10, borderTop: "1px solid #F1F5F9", display: "flex", gap: 6 }}>
+        <input style={Object.assign({}, S.input, { flex: 1, fontSize: 13 })} value={input} onChange={function(e) { setInput(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") send(); }} placeholder="Intreaba ceva..." />
+        <button style={Object.assign({}, S.primBtn, { padding: "8px 14px" })} onClick={send} disabled={loading}>Trimite</button>
+      </div>
+    </div>}
+  </>;
 }
 
 var S = {
