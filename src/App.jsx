@@ -317,28 +317,30 @@ export default function App() {
     return function() { clearInterval(iv); };
   }, [loading, user, recurringTasks]);
 
-  // FEATURE 3: Deadline alerts - check every 5min, use ref to prevent duplicates
-  var alertedRef = useRef({});
+  // FEATURE 3: Deadline alerts - check every 5min, persist in localStorage
   useEffect(function() {
     if (loading || !user) return;
+    var SK = "s7_alerted_" + user;
+    var getA = function() { try { return JSON.parse(localStorage.getItem(SK) || "{}"); } catch(e) { return {}; } };
     var check = function() {
       var now = Date.now();
+      var a = getA();
+      var dirty = false;
       tasks.forEach(function(t) {
         if (t.status === "Done" || !t.deadline) return;
         var dl2 = new Date(t.deadline + "T23:59:59").getTime();
         var diff = dl2 - now;
-        var key2h = t.id + "_2h";
-        var key24h = t.id + "_24h";
-        if (diff > 0 && diff <= 2 * 3600000 && !alertedRef.current[key2h]) {
-          alertedRef.current[key2h] = true;
+        if (diff > 0 && diff <= 2 * 3600000 && !a[t.id + "_2h"]) {
+          a[t.id + "_2h"] = 1; dirty = true;
           addNotif("deadline", "URGENT: \"" + t.title + "\" expira in 2 ore!", t.id, t.assignee);
-        } else if (diff > 2 * 3600000 && diff <= 24 * 3600000 && !alertedRef.current[key24h]) {
-          alertedRef.current[key24h] = true;
+        } else if (diff > 2 * 3600000 && diff <= 24 * 3600000 && !a[t.id + "_24h"]) {
+          a[t.id + "_24h"] = 1; dirty = true;
           addNotif("deadline", "Reminder: \"" + t.title + "\" expira in 24 ore", t.id, t.assignee);
         }
       });
+      if (dirty) { try { localStorage.setItem(SK, JSON.stringify(a)); } catch(e) {} }
     };
-    var t1 = setTimeout(check, 10000);
+    var t1 = setTimeout(check, 15000);
     var iv = setInterval(check, 300000);
     return function() { clearTimeout(t1); clearInterval(iv); };
   }, [loading, user]);
@@ -536,7 +538,8 @@ export default function App() {
       var lastComment = (prevTask.comments || []).slice(-1)[0];
       var pipeDesc = prevTask.description || "";
       if (lastComment) pipeDesc = pipeDesc + "\n\nObservatii de la " + ((team[prevTask.assignee] || {}).name || "?") + ": " + lastComment.text;
-      var pipeTask = { id: gid(), title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: prevTask.deadline, links: (prevTask.links || []).slice(), subtasks: [], comments: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.assignee, createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id };
+      var pipeLinks = prevTask._replacedLink ? [prevTask._replacedLink] : (prevTask.links || []).slice();
+      var pipeTask = { id: gid(), title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: prevTask.deadline, links: pipeLinks, subtasks: [], comments: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.assignee, createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id, _replacedLink: prevTask._replacedLink || "", _replacedNote: prevTask._replacedNote || "", _replacedBy: prevTask._replacedBy || "", _originalLinks: prevTask._originalLinks || [] };
       setTasks(function(p) { return [pipeTask].concat(p); });
       setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTask.id] = [{ status: "To Do", at: ts() }]; return n; });
       addNotif("pipeline", "Task pipeline: \"" + pipeTask.title + "\" de la " + ((team[prevTask.assignee] || {}).name || "?"), pipeTask.id, prevTask._pipelineNext);
@@ -987,11 +990,50 @@ function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTi
   for (var i2 = 0; i2 < hist.length; i2++) { var nx = hist[i2 + 1]; var dur = nx ? hDiff(hist[i2].at, nx.at) : (t.status !== "Done" ? hDiff(hist[i2].at, ts()) : 0); tis[hist[i2].status] = (tis[hist[i2].status] || 0) + Math.round(dur); }
   // Feature 5: deps
   var deps = (t.dependsOn || []).map(function(depId) { return tasks.find(function(x) { return x.id === depId; }); }).filter(Boolean);
+  // Feature: product replacement
+  var [showReplace, setShowReplace] = useState(false);
+  var [replaceLink, setReplaceLink] = useState("");
+  var [replaceNote, setReplaceNote] = useState("");
+  var doReplace = function() {
+    if (!replaceLink.trim()) return;
+    setTasks(function(p) { return p.map(function(x) {
+      if (x.id !== t.id) return x;
+      var newLinks = (x.links || []).slice();
+      return Object.assign({}, x, {
+        _replacedLink: replaceLink.trim(),
+        _replacedNote: replaceNote.trim(),
+        _replacedBy: user,
+        _originalLinks: x._originalLinks || newLinks.slice(),
+        links: [replaceLink.trim()].concat(newLinks),
+        updatedAt: ts()
+      });
+    }); });
+    setShowReplace(false); setReplaceLink(""); setReplaceNote("");
+  };
+
   return <div style={S.modalOv} onClick={onClose}><div style={Object.assign({}, S.modalBox, { maxWidth: 640 })} onClick={function(e) { e.stopPropagation(); }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div><h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>{t.title}</h2><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{t.department && <Badge bg="#FFF7ED" color="#EA580C">{t.department}</Badge>}{isOv(t) && <Badge bg="#FEF2F2" color="#DC2626">OVERDUE</Badge>}</div></div><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
     {t.description && <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>{t.description}</div>}
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginBottom: 16 }}><div><strong>Asignat:</strong> {a.name || "-"}</div><div><strong>Deadline:</strong> {t.deadline ? fd(t.deadline) : "-"}</div><div><strong>Magazin:</strong> {t.shop || "-"}</div><div><strong>Timp:</strong> {ft(secs)}</div>{t.platform && <div><strong>Platforma:</strong> {t.platform}</div>}{t.taskType && <div><strong>Tip:</strong> {t.taskType}</div>}{t.productName && <div><strong>Produs:</strong> {t.productName}</div>}{t.department && <div><strong>Departament:</strong> {t.department}</div>}<div><strong>Creat:</strong> {ff(t.createdAt)}</div>{t._finalizedCount != null && <div><strong>Finalizate:</strong> {t._finalizedCount}/{(t.campaignItems || []).length}</div>}</div>
-    {t.links && t.links.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>Linkuri:</div>{t.links.map(function(l, i) { return <a key={i} href={l} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#2563EB", marginBottom: 2 }}><Ic d={Icons.ext} size={10} color="#2563EB" />{l}</a>; })}</div>}
+    {/* Replacement link - highlighted */}
+    {t._replacedLink && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}>
+      <div style={{ fontWeight: 600, fontSize: 12, color: GR, marginBottom: 4 }}>Link actualizat{t._replacedBy && team[t._replacedBy] ? " de " + team[t._replacedBy].name : ""}:</div>
+      <a href={t._replacedLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: GR, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Ic d={Icons.ext} size={12} color={GR} />{t._replacedLink}</a>
+      {t._replacedNote && <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>{t._replacedNote}</div>}
+    </div>}
+    {/* Original links */}
+    {t.links && t.links.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>{t._replacedLink ? "Linkuri (inclusiv original):" : "Linkuri:"}</div>{t.links.map(function(l, i) { var isReplaced = t._originalLinks && t._originalLinks.includes(l) && t._replacedLink && l !== t._replacedLink; return <a key={i} href={l} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: isReplaced ? "#94A3B8" : "#2563EB", marginBottom: 2, textDecoration: isReplaced ? "line-through" : "none" }}><Ic d={Icons.ext} size={10} color={isReplaced ? "#94A3B8" : "#2563EB"} />{l}{isReplaced && <span style={{ fontSize: 9, color: "#DC2626", marginLeft: 4 }}>(inlocuit)</span>}</a>; })}</div>}
+    {/* Replace product button */}
+    {t.assignee === user && t.status !== "Done" && <div style={{ marginBottom: 12 }}>
+      {!showReplace && <button style={Object.assign({}, S.primBtn, { background: "#D97706", fontSize: 12 })} onClick={function() { setShowReplace(true); }}>Am schimbat produsul / Link nou</button>}
+      {showReplace && <Card style={{ background: "#FFFBEB", borderLeft: "3px solid #D97706" }}>
+        <label style={S.label}>Link produs nou</label>
+        <input style={S.input} value={replaceLink} onChange={function(e) { setReplaceLink(e.target.value); }} placeholder="https://..." />
+        <label style={S.label}>Observatie (optional)</label>
+        <input style={S.input} value={replaceNote} onChange={function(e) { setReplaceNote(e.target.value); }} placeholder="Ex: Nu am gasit, am schimbat cu..." />
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}><button style={S.primBtn} onClick={doReplace}>Salveaza link nou</button><button style={S.cancelBtn} onClick={function() { setShowReplace(false); }}>Anuleaza</button></div>
+      </Card>}
+    </div>}
     {t.campaignItems && t.campaignItems.length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6 }}>Campaign ({t.campaignItems.length} produse){t._finalizedCount != null && <span style={{ marginLeft: 8, color: GR }}>- {t._finalizedCount} finalizate</span>}</div>{t.campaignItems.map(function(ci, i) { return <div key={ci.id || i} style={{ fontSize: 12, padding: "3px 0", display: "flex", alignItems: "center", gap: 6 }}><span style={{ color: "#94A3B8", width: 20 }}>{i + 1}.</span><span>{ci.name}</span></div>; })}</div>}
     {Object.keys(tis).length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F8FAFC", borderRadius: 8 }}><div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Timp per status:</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{Object.entries(tis).map(function(e) { return <Badge key={e[0]} bg={(SC[e[0]] || "#94A3B8") + "18"} color={SC[e[0]] || "#94A3B8"}>{e[0]}: {e[1]}h</Badge>; })}</div></div>}
     {deps.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Depinde de:</div>{deps.map(function(d) { return <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 0" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: SC[d.status] }} /><span>{d.title}</span><Badge bg={(SC[d.status] || "#94A3B8") + "18"} color={SC[d.status] || "#94A3B8"}>{d.status}</Badge></div>; })}</div>}
