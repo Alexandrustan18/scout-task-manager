@@ -276,7 +276,7 @@ export default function App() {
 
   // Auto-save to Supabase when data changes (debounced)
   useEffect(function() { if (!loading) debouncedSave("team", team, 1000); }, [team]);
-  useEffect(function() { if (!loading) debouncedSave("tasks", tasks, 500); }, [tasks]);
+  useEffect(function() { if (!loading && tasks.length > 0) debouncedSave("tasks", tasks, 500); }, [tasks]);
   useEffect(function() { if (!loading) debouncedSave("logs", logs, 2000); }, [logs]);
   useEffect(function() { if (!loading) debouncedSave("sessions", sessions, 5000); }, [sessions]);
   useEffect(function() { if (!loading) debouncedSave("shops", shops, 1000); }, [shops]);
