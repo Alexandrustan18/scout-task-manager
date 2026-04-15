@@ -317,7 +317,8 @@ export default function App() {
     return function() { clearInterval(iv); };
   }, [loading, user, recurringTasks]);
 
-  // FEATURE 3: Deadline alerts - check every 30s
+  // FEATURE 3: Deadline alerts - check every 30s (use ref to prevent duplicates)
+  var alertedRef = useRef({});
   useEffect(function() {
     if (loading || !user) return;
     var check = function() {
@@ -326,19 +327,21 @@ export default function App() {
         if (t.status === "Done" || !t.deadline) return;
         var dl2 = new Date(t.deadline + "T23:59:59").getTime();
         var diff = dl2 - now;
-        if (diff > 0 && diff <= 2 * 3600000 && !t._alert2h) {
+        var key2h = t.id + "_2h";
+        var key24h = t.id + "_24h";
+        if (diff > 0 && diff <= 2 * 3600000 && !alertedRef.current[key2h]) {
+          alertedRef.current[key2h] = true;
           addNotif("deadline", "URGENT: \"" + t.title + "\" expira in 2 ore!", t.id);
-          setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, x, { _alert2h: true }) : x; }); });
-        } else if (diff > 2 * 3600000 && diff <= 24 * 3600000 && !t._alert24h) {
+        } else if (diff > 2 * 3600000 && diff <= 24 * 3600000 && !alertedRef.current[key24h]) {
+          alertedRef.current[key24h] = true;
           addNotif("deadline", "Reminder: \"" + t.title + "\" expira in 24 ore", t.id);
-          setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, x, { _alert24h: true }) : x; }); });
         }
       });
     };
-    var iv = setInterval(check, 30000);
     check();
+    var iv = setInterval(check, 60000);
     return function() { clearInterval(iv); };
-  }, [loading, user, tasks.length]);
+  }, [loading, user]);
 
   useEffect(function() { var iv = setInterval(function() { setTick(function(t) { return t + 1; }); }, 1000); return function() { clearInterval(iv); }; }, []);
   useEffect(function() { if (!user) return; var fn = function() { setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); return n; }); }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
@@ -633,8 +636,6 @@ export default function App() {
         var tm = timers[tid]; if (tm && tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; setTimers(function(p2) { var n2 = Object.assign({}, p2); n2[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n2; }); }
         setShowFinalize(null);
       }} onClose={function() { setShowFinalize(null); }} />}
-      {/* Feature 3: AI Bot */}
-      <AIBot tasks={tasks} team={team} timers={timers} user={user} targets={targets} stats={stats} getPerf={getPerf} visUsers={visUsers} slaBreaches={slaBreaches} />
     </div>
   );
 }
@@ -1339,78 +1340,6 @@ function CampaignFinalizeModal({ task, onFinalize, onClose }) {
     <div style={{ fontSize: 12, color: "#64748B", marginTop: 8, marginBottom: 16 }}>{count} produse se adauga la targetul zilnic. {total - count > 0 ? (total - count) + " ramase." : "Toate finalizate!"}</div>
     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button><button style={S.primBtn} onClick={function() { onFinalize(count); }}>Finalizeaza ({count})</button></div>
   </div></div>;
-}
-
-// ═══ FEATURE 3: AI BOT ═══
-function AIBot({ tasks, team, timers, user, targets, stats, getPerf, visUsers, slaBreaches }) {
-  var [open, setOpen] = useState(false);
-  var [msgs, setMsgs] = useState([{ role: "assistant", text: "Sunt asistentul tau AI. Intreaba-ma orice despre taskuri, echipa, performance sau ce ai de facut azi." }]);
-  var [input, setInput] = useState("");
-  var [loading, setLoading] = useState(false);
-
-  var buildContext = function() {
-    var ctx = "Date curente S.C.O.U.T AI:\n";
-    ctx += "User logat: " + (team[user] || {}).name + " (" + user + ")\n";
-    ctx += "Total taskuri vizibile: " + tasks.length + "\n";
-    var byStatus = {}; tasks.forEach(function(t) { byStatus[t.status] = (byStatus[t.status] || 0) + 1; });
-    ctx += "Per status: " + Object.entries(byStatus).map(function(e) { return e[0] + "=" + e[1]; }).join(", ") + "\n";
-    var overdue = tasks.filter(function(t) { return t.deadline && t.deadline < TD && t.status !== "Done"; });
-    ctx += "Intarziate: " + overdue.length + "\n";
-    if (overdue.length > 0) ctx += "Intarziate: " + overdue.slice(0, 5).map(function(t) { return "\"" + t.title + "\" (" + (team[t.assignee] || {}).name + ")"; }).join(", ") + "\n";
-    var urgent = tasks.filter(function(t) { return t.priority === "Urgent" && t.status !== "Done"; });
-    if (urgent.length > 0) ctx += "Urgente: " + urgent.slice(0, 5).map(function(t) { return "\"" + t.title + "\""; }).join(", ") + "\n";
-    ctx += "\nEchipa:\n";
-    visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; }).forEach(function(u) {
-      var p = getPerf(u); var ut = tasks.filter(function(t) { return t.assignee === u; });
-      var active = ut.filter(function(t) { return t.status === "In Progress"; }).length;
-      var todo = ut.filter(function(t) { return t.status === "To Do"; }).length;
-      ctx += "- " + team[u].name + ": score=" + p.score + "%, active=" + active + ", todo=" + todo + ", done=" + p.done + ", overdue=" + p.overdue + "\n";
-    });
-    if (slaBreaches && slaBreaches.length > 0) ctx += "\nSLA Breaches: " + slaBreaches.length + "\n";
-    if (targets && targets.length > 0) ctx += "\nTargets active: " + targets.length + "\n";
-    return ctx;
-  };
-
-  var send = function() {
-    if (!input.trim() || loading) return;
-    var userMsg = { role: "user", text: input.trim() };
-    setMsgs(function(p) { return p.concat([userMsg]); });
-    setInput("");
-    setLoading(true);
-    var ctx = buildContext();
-    fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system: "Esti un asistent AI pentru platforma S.C.O.U.T AI - un task manager intern al agentiei de performance marketing HeyAds. Raspunzi scurt, direct, actionabil. Vorbesti in romana. Analizezi datele si dai recomandari concrete. Nu inventa date - foloseste doar ce primesti.\n\n" + ctx,
-        messages: [{ role: "user", content: input.trim() }]
-      })
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      var reply = (data.content || []).map(function(c) { return c.text || ""; }).join("");
-      setMsgs(function(p) { return p.concat([{ role: "assistant", text: reply || "Nu am putut procesa." }]); });
-      setLoading(false);
-    }).catch(function(err) {
-      setMsgs(function(p) { return p.concat([{ role: "assistant", text: "Eroare conexiune: " + err.message }]); });
-      setLoading(false);
-    });
-  };
-
-  return <>
-    <button onClick={function() { setOpen(!open); }} style={{ position: "fixed", bottom: 20, right: 20, width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, " + GR + ", #4ADE80)", border: "none", color: "#fff", fontSize: 22, fontWeight: 700, boxShadow: "0 4px 20px rgba(12,126,62,0.4)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>{open ? <Ic d={Icons.x} size={22} color="#fff" /> : "AI"}</button>
-    {open && <div style={{ position: "fixed", bottom: 80, right: 20, width: 380, maxHeight: 500, background: "#fff", borderRadius: 14, boxShadow: "0 8px 40px rgba(0,0,0,0.15)", zIndex: 400, display: "flex", flexDirection: "column", border: "1px solid hsl(214,18%,90%)", overflow: "hidden" }}>
-      <div style={{ padding: "14px 16px", background: "hsl(216,22%,11%)", color: "#4ADE80", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ADE80", animation: "pulse 2s infinite" }} />S.C.O.U.T AI Assistant</div>
-      <div style={{ flex: 1, overflowY: "auto", padding: 12, maxHeight: 340 }}>
-        {msgs.map(function(m, i) { return <div key={i} style={{ marginBottom: 10, display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}><div style={{ padding: "8px 12px", borderRadius: 10, maxWidth: "85%", background: m.role === "user" ? GR : "#F1F5F9", color: m.role === "user" ? "#fff" : "#1E293B", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.text}</div></div>; })}
-        {loading && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "#F1F5F9", borderRadius: 10, fontSize: 12, color: "#94A3B8", maxWidth: "60%" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: GR, animation: "pulse 1s infinite" }} />Se gandeste...</div>}
-      </div>
-      <div style={{ padding: 10, borderTop: "1px solid #F1F5F9", display: "flex", gap: 6 }}>
-        <input style={Object.assign({}, S.input, { flex: 1, fontSize: 13 })} value={input} onChange={function(e) { setInput(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") send(); }} placeholder="Intreaba ceva..." />
-        <button style={Object.assign({}, S.primBtn, { padding: "8px 14px" })} onClick={send} disabled={loading}>Trimite</button>
-      </div>
-    </div>}
-  </>;
 }
 
 var S = {
