@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 
-const DEF_TEAM = {
+var DEF_TEAM = {
   admin: { name: "Stan", role: "admin", password: "papagal", color: "#16A34A" },
   mara: { name: "Mara", role: "pm", password: "mara2024", color: "#2563EB", team: ["sonia", "denisa", "alexandra", "oana"] },
   carla: { name: "Carla", role: "pm", password: "carla2024", color: "#DB2777", team: ["dana", "mara_poze"] },
@@ -11,21 +11,28 @@ const DEF_TEAM = {
   dana: { name: "Dana", role: "member", password: "dana2024", color: "#DC2626", pm: "carla" },
   mara_poze: { name: "Mara Poze", role: "member", password: "marapoze2024", color: "#0891B2", pm: "carla" },
 };
-const DEF_SHOPS = ["Grandia", "Bonhaus", "Casa Ofertelor", "Gento", "MagDeal", "Reduceri Bune", "Apreciat"];
-const STATUSES = ["To Do", "In Progress", "Review", "Done"];
-const PRIORITIES = ["Low", "Normal", "High", "Urgent"];
-const PLATFORMS = ["Meta Ads", "TikTok Ads", "Google Ads", "Shopify", "Creativ", "UGC", "Foto Produs", "Altele"];
-const TASK_TYPES = ["Ad Creation", "Product Launch", "Creative", "Copy", "Landing Page", "Tracking/Pixel", "Raportare", "General"];
-const ROLES = ["admin", "pm", "member"];
-const COLORS = ["#16A34A", "#2563EB", "#DB2777", "#059669", "#D97706", "#7C3AED", "#EA580C", "#DC2626", "#0891B2", "#6366F1", "#EC4899", "#14B8A6"];
-const PC = { Low: "#94A3B8", Normal: "#2563EB", High: "#EA580C", Urgent: "#DC2626" };
-const SC = { "To Do": "#94A3B8", "In Progress": "#2563EB", Review: "#D97706", Done: "#16A34A" };
-const SI = { "To Do": "o", "In Progress": "~", Review: "?", Done: "*" };
-const GR = "#0C7E3E";
+var DEF_SHOPS = ["Grandia", "Bonhaus", "Casa Ofertelor", "Gento", "MagDeal", "Reduceri Bune", "Apreciat"];
+var STATUSES = ["To Do", "In Progress", "Review", "Done"];
+var PRIORITIES = ["Low", "Normal", "High", "Urgent"];
+var PLATFORMS = ["Meta Ads", "TikTok Ads", "Google Ads", "Shopify", "Creativ", "UGC", "Foto Produs", "Altele"];
+var TASK_TYPES = ["Ad Creation", "Product Launch", "Creative", "Copy", "Landing Page", "Tracking/Pixel", "Raportare", "General"];
+var ROLES = ["admin", "pm", "member"];
+var COLORS = ["#16A34A", "#2563EB", "#DB2777", "#059669", "#D97706", "#7C3AED", "#EA580C", "#DC2626", "#0891B2", "#6366F1", "#EC4899", "#14B8A6"];
+var PC = { Low: "#94A3B8", Normal: "#2563EB", High: "#EA580C", Urgent: "#DC2626" };
+var SC = { "To Do": "#94A3B8", "In Progress": "#2563EB", Review: "#D97706", Done: "#16A34A" };
+var SI = { "To Do": "o", "In Progress": "~", Review: "?", Done: "*" };
+var GR = "#0C7E3E";
 
-function ls(k, d) { try { var v = localStorage.getItem("s6_" + k); return v ? JSON.parse(v) : d; } catch(e) { return d; } }
-function ss(k, v) { localStorage.setItem("s6_" + k, JSON.stringify(v)); }
-function id() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+var DEF_TEMPLATES = [
+  { id: "tpl_1", name: "Product Launch", description: "Standard product launch workflow", subtasks: ["Cercetare competitor", "Creare listing produs", "Fotografii produs", "Creare ad copy (PAS + UGC + Storytime)", "Setup Meta Ads campaign", "Setup TikTok Ads campaign", "QA landing page", "Go Live + Monitor"] },
+  { id: "tpl_2", name: "Store Setup", description: "New Shopify store configuration", subtasks: ["Creare cont Shopify", "Configurare tema + branding", "Import produse", "Setup tracking (Meta Pixel + CAPI + TikTok)", "Configurare checkout + payment", "Setup email flows", "QA complet", "Launch"] },
+  { id: "tpl_3", name: "UGC Campaign", description: "UGC content creation flow", subtasks: ["Brief creativ", "Selectie creatori", "Trimitere produse", "Review continut primit", "Editare video", "Upload + catalogare", "Lansare ads"] },
+  { id: "tpl_4", name: "Creative Testing", description: "Ad creative testing workflow", subtasks: ["Analiza competitori", "Creare 5 variante copy", "Creare 3 variante vizual", "Setup A/B test", "Monitor 48h", "Analiza rezultate", "Scale winner"] },
+];
+
+function ls(k, d) { try { var v = localStorage.getItem("s7_" + k); return v ? JSON.parse(v) : d; } catch(e) { return d; } }
+function ss(k, v) { localStorage.setItem("s7_" + k, JSON.stringify(v)); }
+function gid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function ts() { return new Date().toISOString(); }
 function ds(d) { var x = typeof d === "string" ? new Date(d) : d; return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); }
 var TD = ds(new Date());
@@ -41,6 +48,13 @@ function isF(i) { return i && ds(i) > TM; }
 function isOv(t) { return isP(t.deadline) && t.status !== "Done"; }
 function ft(s) { if (!s) return "0:00"; var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60; return (h ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(sc).padStart(2, "0"); }
 function dl(i) { if (!i) return "Fara data"; if (isTd(i)) return "Azi"; if (isTm(i)) return "Maine"; if (isP(i)) return "Trecut"; return fd(i); }
+
+function canAccess(role, section) {
+  if (role === "admin") return true;
+  if (role === "pm") return !["manage_users", "log"].includes(section);
+  if (role === "member") return ["tasks", "kanban", "calendar"].includes(section);
+  return false;
+}
 
 function Ic({ d, size, color }) {
   return <svg width={size || 20} height={size || 20} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>;
@@ -70,29 +84,20 @@ var Icons = {
   menu: <><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>,
   ext: <><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></>,
   back: <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
+  cal: <><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+  tpl: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></>,
+  target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+  sheet: <><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></>,
+  bell: <><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></>,
+  comment: <><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></>,
+  check: <><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></>,
 };
 
-var CSS = [
-  "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}",
-  "body{margin:0;background:#FAFAFA;font-family:system-ui,-apple-system,sans-serif}",
-  "::selection{background:#0C7E3E22}",
-  "input:focus,select:focus,textarea:focus{border-color:#0C7E3E !important;outline:none;box-shadow:0 0 0 3px #0C7E3E18}",
-  "::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}",
-  "button{cursor:pointer;font-family:inherit}button:hover{opacity:0.9}",
-  "a{text-decoration:none}",
-  "@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}",
-  "@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}",
-].join("\n");
+var CSS = "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{margin:0;background:#FAFAFA;font-family:system-ui,-apple-system,sans-serif}::selection{background:#0C7E3E22}input:focus,select:focus,textarea:focus{border-color:#0C7E3E !important;outline:none;box-shadow:0 0 0 3px #0C7E3E18}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}button{cursor:pointer;font-family:inherit}button:hover{opacity:0.9}a{text-decoration:none}@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}";
 
-function Badge({ bg, color, children }) {
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 9px", borderRadius: 6, fontSize: 10, fontWeight: 600, background: bg, color: color, whiteSpace: "nowrap" }}>{children}</span>;
-}
-function Av({ color, size, fs, children }) {
-  return <div style={{ width: size || 32, height: size || 32, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{children}</div>;
-}
-function Card({ children, style }) {
-  return <div style={{ background: "#fff", border: "1px solid hsl(214,18%,90%)", borderRadius: 10, padding: 16, animation: "fadeUp 0.2s ease", ...style }}>{children}</div>;
-}
+function Badge({ bg, color, children }) { return <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 9px", borderRadius: 6, fontSize: 10, fontWeight: 600, background: bg, color: color, whiteSpace: "nowrap" }}>{children}</span>; }
+function Av({ color, size, fs, children }) { return <div style={{ width: size || 32, height: size || 32, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{children}</div>; }
+function Card({ children, style }) { return <div style={{ background: "#fff", border: "1px solid hsl(214,18%,90%)", borderRadius: 10, padding: 16, animation: "fadeUp 0.2s ease", ...style }}>{children}</div>; }
 
 export default function App() {
   var [team, setTeam] = useState(ls("team", DEF_TEAM));
@@ -103,9 +108,14 @@ export default function App() {
   var [shops, setShops] = useState(ls("shops", DEF_SHOPS));
   var [products, setProducts] = useState(ls("products", []));
   var [timers, setTimers] = useState(ls("timers", {}));
+  var [templates, setTemplates] = useState(ls("templates", DEF_TEMPLATES));
+  var [targets, setTargets] = useState(ls("targets", []));
+  var [sheets, setSheets] = useState(ls("sheets", []));
+  var [notifications, setNotifications] = useState(ls("notifs", []));
   var [page, setPage] = useState("dashboard");
   var [showAdd, setShowAdd] = useState(false);
   var [editTask, setEditTask] = useState(null);
+  var [viewTask, setViewTask] = useState(null);
   var [mobNav, setMobNav] = useState(false);
   var [isMob, setIsMob] = useState(typeof window !== "undefined" && window.innerWidth < 820);
   var [dateF, setDateF] = useState("all");
@@ -117,6 +127,8 @@ export default function App() {
   var [dragId, setDragId] = useState(null);
   var [profUser, setProfUser] = useState(null);
   var [profRange, setProfRange] = useState("all");
+  var [showNotifs, setShowNotifs] = useState(false);
+  var [calDate, setCalDate] = useState(new Date());
 
   useEffect(function() { var h = function() { setIsMob(window.innerWidth < 820); }; window.addEventListener("resize", h); return function() { window.removeEventListener("resize", h); }; }, []);
   useEffect(function() { ss("team", team); }, [team]);
@@ -126,17 +138,22 @@ export default function App() {
   useEffect(function() { ss("shops", shops); }, [shops]);
   useEffect(function() { ss("products", products); }, [products]);
   useEffect(function() { ss("timers", timers); }, [timers]);
+  useEffect(function() { ss("templates", templates); }, [templates]);
+  useEffect(function() { ss("targets", targets); }, [targets]);
+  useEffect(function() { ss("sheets", sheets); }, [sheets]);
+  useEffect(function() { ss("notifs", notifications); }, [notifications]);
   useEffect(function() { var iv = setInterval(function() { setTick(function(t) { return t + 1; }); }, 1000); return function() { clearInterval(iv); }; }, []);
   useEffect(function() { if (!user) return; var fn = function() { setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); ss("sessions", n); return n; }); }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
 
-  var addLog = useCallback(function(a, d) { setLogs(function(p) { return [{ id: id(), user: user || "?", action: a, detail: d, time: ts() }].concat(p).slice(0, 500); }); }, [user]);
+  var addLog = useCallback(function(a, d) { setLogs(function(p) { return [{ id: gid(), user: user || "?", action: a, detail: d, time: ts() }].concat(p).slice(0, 500); }); }, [user]);
+  var addNotif = function(type, message, taskId) { setNotifications(function(p) { return [{ id: gid(), type: type, taskId: taskId || null, message: message, time: ts(), read: false }].concat(p); }); };
 
-  var handleLogin = function(u, pw) { var t = team[u]; if (!t || t.password !== pw) return false; setUser(u); ss("user", u); addLog("LOGIN", t.name + " a intrat"); return true; };
+  var handleLogin = function(u, pw) { var t = team[u]; if (!t || t.password !== pw) return false; setUser(u); ss("user", u); addLog("LOGIN", t.name + " a intrat"); if (t.role === "member") setPage("tasks"); return true; };
   var handleLogout = function() { if (user) addLog("LOGOUT", (team[user] ? team[user].name : "") + " a iesit"); setUser(null); ss("user", null); setPage("dashboard"); };
 
   var visUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
   var assUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team).filter(function(k) { return k !== "admin"; }); if (m.role === "pm") return m.team || []; return [user]; }, [user, team]);
-  var visTasks = useMemo(function() { return tasks.filter(function(t) { return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy); }); }, [tasks, visUsers]);
+  var visTasks = useMemo(function() { if (!user) return []; return tasks.filter(function(t) { return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy); }); }, [tasks, visUsers, user]);
 
   var filtered = useMemo(function() {
     return visTasks.filter(function(t) {
@@ -184,74 +201,50 @@ export default function App() {
     setTimers(function(p) {
       var tm = p[tid] || { running: false, total: 0, startedAt: null };
       var n = Object.assign({}, p);
-      if (tm.running) {
-        var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0;
-        n[tid] = { running: false, total: tm.total + el, startedAt: null };
-      } else {
-        n[tid] = { running: true, total: tm.total, startedAt: ts() };
-      }
+      if (tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; n[tid] = { running: false, total: tm.total + el, startedAt: null }; }
+      else { n[tid] = { running: true, total: tm.total, startedAt: ts() }; }
       return n;
     });
-    var t = tasks.find(function(x) { return x.id === tid; });
-    var tm = timers[tid];
-    addLog("TIMER", (tm && tm.running ? "Stop" : "Start") + " timer: " + (t ? t.title : ""));
   };
 
   var saveTask = function(t) {
-    if (t.id) {
-      setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, t, { updatedAt: ts() }) : x; }); });
-      addLog("EDIT", (team[user] ? team[user].name : "") + " a editat \"" + t.title + "\"");
-    } else {
-      var nt = Object.assign({}, t, { id: id(), createdBy: user, createdAt: ts(), updatedAt: ts() });
-      setTasks(function(p) { return [nt].concat(p); });
-      addLog("NEW", (team[user] ? team[user].name : "") + " -> \"" + t.title + "\" -> " + (team[t.assignee] ? team[t.assignee].name : ""));
-    }
+    if (t.id) { setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, t, { updatedAt: ts() }) : x; }); }); addLog("EDIT", (team[user] ? team[user].name : "") + " a editat \"" + t.title + "\""); }
+    else { var nt = Object.assign({}, t, { id: gid(), createdBy: user, createdAt: ts(), updatedAt: ts() }); setTasks(function(p) { return [nt].concat(p); }); addLog("NEW", (team[user] ? team[user].name : "") + " -> \"" + t.title + "\""); if (t.assignee && t.assignee !== user) addNotif("assigned", "Task nou: \"" + t.title + "\"", nt.id); }
     setShowAdd(false); setEditTask(null);
   };
-
-  var delTask = function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) addLog("DELETE", (team[user] ? team[user].name : "") + " a sters \"" + t.title + "\""); setTasks(function(p) { return p.filter(function(x) { return x.id !== tid; }); }); };
-
-  var dupTask = function(t) {
-    var nt = Object.assign({}, t, { id: id(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts() });
-    setTasks(function(p) { return [nt].concat(p); });
-    addLog("DUPLICATE", (team[user] ? team[user].name : "") + " a duplicat \"" + t.title + "\"");
-  };
-
-  var chgSt = function(tid, st) {
-    setTasks(function(p) { return p.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts() }) : x; }); });
-    var t = tasks.find(function(x) { return x.id === tid; }); if (t) addLog("STATUS", "\"" + t.title + "\" -> " + st);
-    if (st === "Done") { var tm = timers[tid]; if (tm && tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; setTimers(function(p) { var n = Object.assign({}, p); n[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n; }); } }
-  };
-
+  var delTask = function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) addLog("DELETE", "Sters \"" + t.title + "\""); setTasks(function(p) { return p.filter(function(x) { return x.id !== tid; }); }); };
+  var dupTask = function(t) { var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) }); setTasks(function(p) { return [nt].concat(p); }); addLog("DUPLICATE", "Duplicat \"" + t.title + "\""); };
+  var chgSt = function(tid, st) { setTasks(function(p) { return p.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts() }) : x; }); }); var t = tasks.find(function(x) { return x.id === tid; }); if (t) addLog("STATUS", "\"" + t.title + "\" -> " + st); if (st === "Done") { var tm = timers[tid]; if (tm && tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; setTimers(function(p) { var n = Object.assign({}, p); n[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n; }); } } };
   var handleDrop = function(st) { if (!dragId) return; chgSt(dragId, st); setDragId(null); };
+
+  var unreadNotifs = useMemo(function() { return notifications.filter(function(n) { return !n.read; }); }, [notifications]);
 
   if (!user) return <LoginScreen team={team} onLogin={handleLogin} />;
   var me = team[user]; if (!me) { setUser(null); ss("user", null); return null; }
   var canCreate = me.role === "admin" || me.role === "pm";
   var isAdmin = me.role === "admin";
 
-  if (profUser) {
-    return (
-      <div style={S.app}><style>{CSS}</style>
-        <ProfileView pu={profUser} team={team} tasks={tasks} timers={timers} getTS={getTS} logs={logs} sessions={sessions} getPerf={getPerf} range={profRange} setRange={setProfRange} onBack={function() { setProfUser(null); }} isMob={isMob} />
-      </div>
-    );
-  }
+  if (profUser) return <div style={S.app}><style>{CSS}</style><ProfileView pu={profUser} team={team} tasks={tasks} timers={timers} getTS={getTS} logs={logs} sessions={sessions} getPerf={getPerf} range={profRange} setRange={setProfRange} onBack={function() { setProfUser(null); }} isMob={isMob} /></div>;
 
   var fProps = { stats: stats, dateF: dateF, setDateF: setDateF, statusF: statusF, setStatusF: setStatusF, prioF: prioF, setPrioF: setPrioF, assignF: assignF, setAssignF: setAssignF, shopF: shopF, setShopF: setShopF, visUsers: visUsers, shops: shops, count: filtered.length, team: team };
 
   var navItems = [
-    { id: "dashboard", label: "Dashboard", icon: Icons.dash, onlyAdmin: true },
-    { id: "tasks", label: "Taskuri", icon: Icons.tasks, count: stats.total },
-    { id: "kanban", label: "Kanban Board", icon: Icons.kanban },
-    { id: "workload", label: "Workload", icon: Icons.work },
-    { id: "team", label: "Echipa", icon: Icons.team },
-    { id: "performance", label: "Performance", icon: Icons.perf },
-    { id: "log", label: "Activity Log", icon: Icons.log },
-    { id: "shops", label: "Magazine", icon: Icons.shops },
-    { id: "products", label: "Produse", icon: Icons.prod },
+    { id: "dashboard", label: "Dashboard", icon: Icons.dash, section: "dashboard" },
+    { id: "tasks", label: "Taskuri", icon: Icons.tasks, count: stats.total, section: "tasks" },
+    { id: "kanban", label: "Kanban Board", icon: Icons.kanban, section: "kanban" },
+    { id: "calendar", label: "Calendar", icon: Icons.cal, section: "calendar" },
+    { id: "targets", label: "Targets", icon: Icons.target, section: "targets" },
+    { id: "templates", label: "Templates", icon: Icons.tpl, section: "templates" },
+    { id: "workload", label: "Workload", icon: Icons.work, section: "workload" },
+    { id: "team", label: "Echipa", icon: Icons.team, section: "team" },
+    { id: "performance", label: "Performance", icon: Icons.perf, section: "performance" },
+    { id: "log", label: "Activity Log", icon: Icons.log, section: "log" },
+    { id: "shops", label: "Magazine", icon: Icons.shops, section: "shops" },
+    { id: "products", label: "Produse", icon: Icons.prod, section: "products" },
+    { id: "sheets", label: "Sheets", icon: Icons.sheet, section: "sheets" },
+    { id: "manage_users", label: "Manage Users", icon: Icons.usrs, section: "manage_users" },
   ];
-  if (isAdmin) navItems.push({ id: "manage_users", label: "Manage Users", icon: Icons.usrs });
+  var accessibleNav = navItems.filter(function(n) { return canAccess(me.role, n.section); });
 
   return (
     <div style={S.app}><style>{CSS}</style>
@@ -260,475 +253,225 @@ export default function App() {
         <div style={S.logoArea}><span style={S.logoH}>HeyAds</span><span style={S.logoSub}>TASK MANAGER</span></div>
         {canCreate && <div style={{ padding: "0 16px", marginBottom: 4 }}><button style={S.newBtn} onClick={function() { setEditTask(null); setShowAdd(true); setMobNav(false); }}><Ic d={Icons.plus} size={16} color="#fff" /> New Task</button></div>}
         <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
-          {navItems.filter(function(n) { return !n.onlyAdmin || isAdmin; }).map(function(n) {
-            return (
-              <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}>
-                <Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} />
-                <span style={{ flex: 1 }}>{n.label}</span>
-                {n.count != null && <span style={S.navBadge}>{n.count}</span>}
-              </div>
-            );
-          })}
+          {accessibleNav.map(function(n) { return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}><Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} /><span style={{ flex: 1 }}>{n.label}</span>{n.count != null && <span style={S.navBadge}>{n.count}</span>}</div>; })}
         </nav>
         <div style={S.sidebarUser}><Av color={me.color} size={32}>{me.name[0]}</Av><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#D1D9E6" }}>{me.name}</div><div style={{ fontSize: 10, color: "#7A8BA0", textTransform: "capitalize" }}>{me.role === "pm" ? "Project Manager" : me.role}</div></div></div>
         <div style={{ padding: "0 16px 16px" }}><button style={S.logoutBtn} onClick={handleLogout}><Ic d={Icons.out} size={15} color="#7A8BA0" /> Sign out</button></div>
       </aside>
-
       <main style={S.main}>
         <header style={S.topbar}>
           {isMob && <button style={S.menuBtn} onClick={function() { setMobNav(true); }}><Ic d={Icons.menu} size={22} color="#475569" /></button>}
-          <h1 style={S.pageTitle}>{(navItems.find(function(n) { return n.id === page; }) || {}).label || ""}</h1>
+          <h1 style={S.pageTitle}>{(accessibleNav.find(function(n) { return n.id === page; }) || {}).label || ""}</h1>
           <div style={{ flex: 1 }} />
-          {(page === "tasks" || page === "kanban") && canCreate && <button style={S.primBtn} onClick={function() { setEditTask(null); setShowAdd(true); }}><Ic d={Icons.plus} size={15} color="#fff" /> New Task</button>}
+          <div style={{ position: "relative" }}>
+            <button style={S.iconBtn} onClick={function() { setShowNotifs(!showNotifs); }}><Ic d={Icons.bell} size={20} color="#475569" /></button>
+            {unreadNotifs.length > 0 && <span style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, borderRadius: "50%", background: "#DC2626", color: "#fff", fontSize: 9, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{unreadNotifs.length}</span>}
+            {showNotifs && <div style={{ position: "absolute", top: 36, right: 0, width: 340, background: "#fff", borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 100, padding: 12, maxHeight: 360, overflowY: "auto", border: "1px solid hsl(214,18%,90%)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><span style={{ fontWeight: 700, fontSize: 13 }}>Notificari</span><button style={{ border: "none", background: "none", fontSize: 11, color: "#94A3B8", cursor: "pointer" }} onClick={function() { setNotifications(function(p) { return p.map(function(n) { return Object.assign({}, n, { read: true }); }); }); }}>Citite</button></div>
+              {notifications.slice(0, 20).map(function(n) { return <div key={n.id} style={{ padding: "8px 10px", borderRadius: 8, marginBottom: 4, cursor: "pointer", background: n.read ? "#F8FAFC" : GR + "12", border: "1px solid " + (n.read ? "#F1F5F9" : GR + "30"), fontSize: 12 }} onClick={function() { setNotifications(function(p) { return p.map(function(nn) { return nn.id === n.id ? Object.assign({}, nn, { read: true }) : nn; }); }); setShowNotifs(false); }}><div>{n.message}</div><div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{fr(n.time)}</div></div>; })}
+              {notifications.length === 0 && <div style={{ textAlign: "center", color: "#94A3B8", padding: 16, fontSize: 12 }}>Nicio notificare</div>}
+            </div>}
+          </div>
+          {(page === "tasks" || page === "kanban") && canCreate && <button style={Object.assign({}, S.primBtn, { marginLeft: 8 })} onClick={function() { setEditTask(null); setShowAdd(true); }}><Ic d={Icons.plus} size={15} color="#fff" /> New Task</button>}
         </header>
         <div style={S.content}>
           {page === "dashboard" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
-          {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
+          {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
+          {page === "calendar" && <CalendarPage tasks={visTasks} user={user} team={team} calDate={calDate} setCalDate={setCalDate} onView={setViewTask} isMob={isMob} me={me} />}
+          {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} />}
+          {page === "templates" && <TemplatesPage templates={templates} setTemplates={setTemplates} canEdit={canCreate} isAdmin={isAdmin} onCreateFromTpl={function(tpl) { setEditTask({ title: tpl.name, description: tpl.description, subtasks: tpl.subtasks.map(function(s) { return { id: gid(), text: s, done: false }; }) }); setShowAdd(true); }} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
           {page === "performance" && <PerfPage users={visUsers} team={team} getPerf={getPerf} isMob={isMob} />}
           {page === "log" && <LogPage logs={logs} visUsers={visUsers} isMob={isMob} />}
           {page === "shops" && <ListPage title="Magazine" items={shops} setItems={setShops} ph="Magazin nou..." />}
-          {page === "products" && <ProdsPage products={products} setProducts={setProducts} />}
+          {page === "products" && <ProdsPage products={products} setProducts={setProducts} shops={shops} />}
+          {page === "sheets" && <SheetsPage sheets={sheets} setSheets={setSheets} shops={shops} />}
           {page === "manage_users" && <UsersPage team={team} setTeam={setTeam} addLog={addLog} />}
         </div>
       </main>
       {showAdd && <TaskModal task={editTask} team={team} assUsers={assUsers} shops={shops} products={products} onSave={saveTask} onClose={function() { setShowAdd(false); setEditTask(null); }} />}
+      {viewTask && <ViewTaskModal task={viewTask} team={team} user={user} tasks={tasks} setTasks={setTasks} timers={timers} getTS={getTS} togTimer={togTimer} products={products} onClose={function() { setViewTask(null); }} onEdit={function() { setEditTask(viewTask); setViewTask(null); setShowAdd(true); }} />}
     </div>
   );
 }
 
-/* ═══ LOGIN ═══ */
 function LoginScreen({ team, onLogin }) {
   var [u, setU] = useState(""); var [p, setP] = useState(""); var [show, setShow] = useState(false); var [err, setErr] = useState("");
   var go = function() { if (!onLogin(u.toLowerCase().trim(), p)) setErr("Username sau parola gresita"); };
-  return (
-    <div style={S.loginWrap}><style>{CSS}</style><div style={S.loginCard}>
-      <div style={{ textAlign: "center", marginBottom: 28 }}><div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>HeyAds</div><div style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 2, marginTop: 4, textTransform: "uppercase" }}>Task Manager</div></div>
-      <label style={S.label}>Username</label><input style={S.input} value={u} onChange={function(e) { setU(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") go(); }} placeholder="ex: mara, carla, admin" />
-      <label style={Object.assign({}, S.label, { marginTop: 14 })}>Parola</label>
-      <div style={{ position: "relative" }}><input style={Object.assign({}, S.input, { paddingRight: 42 })} type={show ? "text" : "password"} value={p} onChange={function(e) { setP(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") go(); }} placeholder="Introdu parola" /><button type="button" style={S.eyeBtn} onClick={function() { setShow(!show); }}><Ic d={show ? Icons.eyeX : Icons.eye} size={16} color="#94A3B8" /></button></div>
-      {err && <div style={{ color: "#DC2626", fontSize: 12, marginTop: 10, textAlign: "center" }}>{err}</div>}
-      <button style={Object.assign({}, S.primBtn, { width: "100%", marginTop: 20, padding: "12px 0", fontSize: 14 })} onClick={go}>Intra in platforma</button>
-    </div></div>
-  );
+  return <div style={S.loginWrap}><style>{CSS}</style><div style={S.loginCard}><div style={{ textAlign: "center", marginBottom: 28 }}><div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>HeyAds</div><div style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 2, marginTop: 4, textTransform: "uppercase" }}>Task Manager</div></div><label style={S.label}>Username</label><input style={S.input} value={u} onChange={function(e) { setU(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") go(); }} placeholder="ex: mara, carla, admin" /><label style={Object.assign({}, S.label, { marginTop: 14 })}>Parola</label><div style={{ position: "relative" }}><input style={Object.assign({}, S.input, { paddingRight: 42 })} type={show ? "text" : "password"} value={p} onChange={function(e) { setP(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") go(); }} placeholder="Introdu parola" /><button type="button" style={S.eyeBtn} onClick={function() { setShow(!show); }}><Ic d={show ? Icons.eyeX : Icons.eye} size={16} color="#94A3B8" /></button></div>{err && <div style={{ color: "#DC2626", fontSize: 12, marginTop: 10, textAlign: "center" }}>{err}</div>}<button style={Object.assign({}, S.primBtn, { width: "100%", marginTop: 20, padding: "12px 0", fontSize: 14 })} onClick={go}>Intra in platforma</button></div></div>;
 }
 
-/* ═══ FILTERS ═══ */
 function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPrioF, assignF, setAssignF, shopF, setShopF, visUsers, shops, count, team, noStatus }) {
   var chips = [{ id: "all", l: "Toate" }, { id: "today", l: "Azi", n: stats.today }, { id: "tomorrow", l: "Maine" }, { id: "overdue", l: "Intarziate", n: stats.overdue }, { id: "upcoming", l: "Viitoare" }, { id: "nodate", l: "Fara data" }];
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-        {chips.map(function(c) { return <button key={c.id} onClick={function() { setDateF(c.id); }} style={Object.assign({}, S.chip, { background: dateF === c.id ? GR : "#F1F5F9", color: dateF === c.id ? "#fff" : "#475569", fontWeight: dateF === c.id ? 600 : 400 })}>{c.l}{c.n > 0 && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>({c.n})</span>}</button>; })}
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
-        {!noStatus && <select style={S.fSel} value={statusF} onChange={function(e) { setStatusF(e.target.value); }}><option value="all">Status: Toate</option>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>}
-        <select style={S.fSel} value={prioF} onChange={function(e) { setPrioF(e.target.value); }}><option value="all">Prioritate: Toate</option>{PRIORITIES.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select>
-        <select style={S.fSel} value={assignF} onChange={function(e) { setAssignF(e.target.value); }}><option value="all">Persoana: Toti</option>{visUsers.filter(function(u) { return u !== "admin"; }).map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select>
-        <select style={S.fSel} value={shopF} onChange={function(e) { setShopF(e.target.value); }}><option value="all">Magazin: Toate</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
-        <span style={{ fontSize: 12, color: "#94A3B8" }}>{count} taskuri</span>
-      </div>
-    </div>
-  );
+  return <div><div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{chips.map(function(c) { return <button key={c.id} onClick={function() { setDateF(c.id); }} style={Object.assign({}, S.chip, { background: dateF === c.id ? GR : "#F1F5F9", color: dateF === c.id ? "#fff" : "#475569", fontWeight: dateF === c.id ? 600 : 400 })}>{c.l}{c.n > 0 && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>({c.n})</span>}</button>; })}</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>{!noStatus && <select style={S.fSel} value={statusF} onChange={function(e) { setStatusF(e.target.value); }}><option value="all">Status: Toate</option>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>}<select style={S.fSel} value={prioF} onChange={function(e) { setPrioF(e.target.value); }}><option value="all">Prioritate: Toate</option>{PRIORITIES.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select><select style={S.fSel} value={assignF} onChange={function(e) { setAssignF(e.target.value); }}><option value="all">Persoana: Toti</option>{visUsers.filter(function(u) { return u !== "admin"; }).map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select><select style={S.fSel} value={shopF} onChange={function(e) { setShopF(e.target.value); }}><option value="all">Magazin: Toate</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select><span style={{ fontSize: 12, color: "#94A3B8" }}>{count} taskuri</span></div></div>;
 }
 
-/* ═══ DASHBOARD ═══ */
 function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser }) {
   var activeTimers = tasks.filter(function(t) { return timers[t.id] && timers[t.id].running; });
-  var ppl = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) {
-    var ut = tasks.filter(function(t) { return t.assignee === u; });
-    var lss = sessions[u]; var on = lss && (Date.now() - new Date(lss).getTime()) < 120000;
-    var act = ut.filter(function(t) { return timers[t.id] && timers[t.id].running; });
-    return { key: u, name: team[u].name, color: team[u].color, role: team[u].role, online: on, lastSeen: lss, act: act, perf: getPerf(u), total: ut.length };
-  });
-  return (
-    <div>
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>
-        {[{ l: "Total", v: stats.total, c: "#475569" }, { l: "Azi", v: stats.today, c: "#2563EB" }, { l: "In Progress", v: stats.inProg, c: "#D97706" }, { l: "Review", v: stats.review, c: "#7C3AED" }, { l: "Intarziate", v: stats.overdue, c: "#DC2626" }, { l: "Done", v: stats.done, c: GR }].map(function(s) {
-          return <Card key={s.l} style={{ borderTop: "3px solid " + s.c }}><div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div></Card>;
-        })}
-      </div>
-      {activeTimers.length > 0 && <Card style={{ marginBottom: 20, borderLeft: "3px solid #DC2626" }}>
-        <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1E293B", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live Acum ({activeTimers.length})</h3>
-        {activeTimers.map(function(t) { var a = team[t.assignee]; var secs = getTS(t.id); return (
-          <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>
-            {a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#1E293B", flex: 1 }}>{t.title}</span>
-            {t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(secs)}</span>
-          </div>
-        ); })}
-      </Card>}
-      <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>Echipa</h3>
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(320,1fr))", gap: 12 }}>
-        {ppl.map(function(d) { return (
-          <Card key={d.key} style={{ cursor: "pointer" }}>
-            <div onClick={function() { onClickUser(d.key); }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <div style={{ position: "relative" }}><Av color={d.color} size={38}>{d.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: d.online ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div>
-                <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"} {d.online ? "- Online" : ""}</div></div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div>
-              </div>
-              {d.act.length > 0 && <div style={{ marginBottom: 6 }}>{d.act.map(function(t) { return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#DC2626", padding: "2px 0" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />{t.title} - {ft(getTS(t.id))}</div>; })}</div>}
-              <div style={{ display: "flex", gap: 8, fontSize: 11, color: "#94A3B8" }}><span>{d.total} taskuri</span><span>{d.perf.done} done</span>{d.perf.overdue > 0 && <span style={{ color: "#DC2626" }}>{d.perf.overdue} overdue</span>}</div>
-            </div>
-          </Card>
-        ); })}
-      </div>
-    </div>
-  );
+  var ppl = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) { var ut = tasks.filter(function(t) { return t.assignee === u; }); var lss = sessions[u]; var on = lss && (Date.now() - new Date(lss).getTime()) < 120000; var act = ut.filter(function(t) { return timers[t.id] && timers[t.id].running; }); return { key: u, name: team[u].name, color: team[u].color, role: team[u].role, online: on, act: act, perf: getPerf(u), total: ut.length }; });
+  return <div>
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[{ l: "Total", v: stats.total, c: "#475569" }, { l: "Azi", v: stats.today, c: "#2563EB" }, { l: "In Progress", v: stats.inProg, c: "#D97706" }, { l: "Review", v: stats.review, c: "#7C3AED" }, { l: "Intarziate", v: stats.overdue, c: "#DC2626" }, { l: "Done", v: stats.done, c: GR }].map(function(s) { return <Card key={s.l} style={{ borderTop: "3px solid " + s.c }}><div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div></Card>; })}</div>
+    {activeTimers.length > 0 && <Card style={{ marginBottom: 20, borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card>}
+    <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(320,1fr))", gap: 12 }}>{ppl.map(function(d) { return <Card key={d.key} style={{ cursor: "pointer" }}><div onClick={function() { onClickUser(d.key); }}><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}><div style={{ position: "relative" }}><Av color={d.color} size={38}>{d.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: d.online ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"}</div></div><div style={{ fontSize: 18, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div></div>{d.act.length > 0 && <div style={{ marginBottom: 6 }}>{d.act.map(function(t) { return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#DC2626", padding: "2px 0" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />{t.title} - {ft(getTS(t.id))}</div>; })}</div>}<div style={{ display: "flex", gap: 8, fontSize: 11, color: "#94A3B8" }}><span>{d.total} taskuri</span><span>{d.perf.done} done</span>{d.perf.overdue > 0 && <span style={{ color: "#DC2626" }}>{d.perf.overdue} overdue</span>}</div></div></Card>; })}</div>
+  </div>;
 }
 
-/* ═══ PROFILE ═══ */
 function ProfileView({ pu, team, tasks, timers, getTS, logs, sessions, getPerf, range, setRange, onBack, isMob }) {
-  var m = team[pu]; if (!m) return null;
-  var ut = tasks.filter(function(t) { return t.assignee === pu; });
-  var lss = sessions[pu]; var on = lss && (Date.now() - new Date(lss).getTime()) < 120000;
-  var perf = getPerf(pu);
-  var uLogs = logs.filter(function(l) { return l.user === pu; }).slice(0, 50);
-  var actNow = ut.filter(function(t) { return timers[t.id] && timers[t.id].running; });
-  var filt = ut.filter(function(t) {
-    if (range === "all") return true;
-    if (range === "today") return isTd(t.deadline) || isTd(t.createdAt);
-    if (range === "week") return new Date(t.createdAt || t.deadline || 0).getTime() > Date.now() - 7 * 86400000;
-    if (range === "month") return new Date(t.createdAt || t.deadline || 0).getTime() > Date.now() - 30 * 86400000;
-    return true;
-  });
-  return (
-    <div style={{ minHeight: "100vh", background: "#FAFAFA", padding: isMob ? 16 : 32 }}>
-      <button style={Object.assign({}, S.cancelBtn, { marginBottom: 20, display: "flex", alignItems: "center", gap: 6 })} onClick={onBack}><Ic d={Icons.back} size={16} color="#64748B" /> Inapoi</button>
-      <Card style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ position: "relative" }}><Av color={m.color} size={56} fs={22}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2.5px solid #fff" }} /></div>
-        <div style={{ flex: 1 }}><div style={{ fontSize: 20, fontWeight: 700 }}>{m.name}</div><div style={{ fontSize: 12, color: "#94A3B8" }}>{m.role === "pm" ? "Project Manager" : m.role} | {on ? "Online" : "Offline - Last: " + fr(lss)}</div></div>
-        <div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 700, color: perf.score >= 70 ? GR : perf.score >= 40 ? "#D97706" : "#DC2626" }}>{perf.score}%</div><div style={{ fontSize: 10, color: "#94A3B8" }}>Performance</div></div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {[{ l: "Done", v: perf.done, c: GR }, { l: "Active", v: perf.active, c: "#2563EB" }, { l: "Review", v: perf.review, c: "#D97706" }, { l: "Overdue", v: perf.overdue, c: "#DC2626" }].map(function(x) { return <div key={x.l} style={{ textAlign: "center", padding: "4px 12px", background: x.c + "12", borderRadius: 8 }}><div style={{ fontSize: 18, fontWeight: 700, color: x.c }}>{x.v}</div><div style={{ fontSize: 9, color: "#94A3B8" }}>{x.l}</div></div>; })}
-        </div>
-      </Card>
-      {actNow.length > 0 && <Card style={{ marginBottom: 16, borderLeft: "3px solid #DC2626" }}>
-        <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: "#DC2626" }}>Lucreaza acum</h3>
-        {actNow.map(function(t) { return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", fontSize: 12 }}><span style={{ fontWeight: 600, color: "#1E293B" }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ marginLeft: "auto", fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}
-      </Card>}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-        {[{ id: "all", l: "Toate" }, { id: "today", l: "Azi" }, { id: "week", l: "7 zile" }, { id: "month", l: "30 zile" }].map(function(r) { return <button key={r.id} onClick={function() { setRange(r.id); }} style={Object.assign({}, S.chip, { background: range === r.id ? GR : "#F1F5F9", color: range === r.id ? "#fff" : "#475569", fontWeight: range === r.id ? 600 : 400 })}>{r.l}</button>; })}
-      </div>
-      <Card><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Taskuri ({filt.length})</h3>
-        {filt.length === 0 ? <div style={{ color: "#94A3B8", padding: 16, textAlign: "center" }}>Niciun task.</div> :
-          filt.map(function(t) { return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid #F8FAFC", flexWrap: "wrap" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: SC[t.status], flexShrink: 0 }} /><span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{t.title}</span><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.deadline && <span style={{ fontSize: 11, color: isOv(t) ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{getTS(t.id) > 0 && <span style={{ fontSize: 11, color: "#64748B", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span>}</div>; })}
-      </Card>
-      <Card style={{ marginTop: 16 }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Activitate Recenta</h3>
-        {uLogs.length === 0 ? <div style={{ color: "#94A3B8", padding: 16, textAlign: "center" }}>Nicio activitate.</div> :
-          uLogs.map(function(l) { return <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #F8FAFC", fontSize: 12 }}><span style={{ color: "#CBD5E1", minWidth: 100 }}>{ff(l.time)}</span><span style={{ fontWeight: 600, color: "#64748B" }}>{l.action}</span><span style={{ color: "#94A3B8" }}>{l.detail}</span></div>; })}
-      </Card>
+  var m = team[pu]; if (!m) return null; var ut = tasks.filter(function(t) { return t.assignee === pu; }); var lss = sessions[pu]; var on = lss && (Date.now() - new Date(lss).getTime()) < 120000; var perf = getPerf(pu); var uLogs = logs.filter(function(l) { return l.user === pu; }).slice(0, 50); var actNow = ut.filter(function(t) { return timers[t.id] && timers[t.id].running; });
+  var filt = ut.filter(function(t) { if (range === "all") return true; if (range === "today") return isTd(t.deadline) || isTd(t.createdAt); if (range === "week") return new Date(t.createdAt || t.deadline || 0).getTime() > Date.now() - 7 * 86400000; if (range === "month") return new Date(t.createdAt || t.deadline || 0).getTime() > Date.now() - 30 * 86400000; return true; });
+  return <div style={{ minHeight: "100vh", background: "#FAFAFA", padding: isMob ? 16 : 32 }}>
+    <button style={Object.assign({}, S.cancelBtn, { marginBottom: 20, display: "flex", alignItems: "center", gap: 6 })} onClick={onBack}><Ic d={Icons.back} size={16} color="#64748B" /> Inapoi</button>
+    <Card style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}><div style={{ position: "relative" }}><Av color={m.color} size={56} fs={22}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2.5px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 20, fontWeight: 700 }}>{m.name}</div><div style={{ fontSize: 12, color: "#94A3B8" }}>{m.role === "pm" ? "PM" : m.role} | {on ? "Online" : "Offline - " + fr(lss)}</div></div><div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 700, color: perf.score >= 70 ? GR : perf.score >= 40 ? "#D97706" : "#DC2626" }}>{perf.score}%</div><div style={{ fontSize: 10, color: "#94A3B8" }}>Performance</div></div><div style={{ display: "flex", gap: 8 }}>{[{ l: "Done", v: perf.done, c: GR }, { l: "Active", v: perf.active, c: "#2563EB" }, { l: "Review", v: perf.review, c: "#D97706" }, { l: "Overdue", v: perf.overdue, c: "#DC2626" }].map(function(x) { return <div key={x.l} style={{ textAlign: "center", padding: "4px 12px", background: x.c + "12", borderRadius: 8 }}><div style={{ fontSize: 18, fontWeight: 700, color: x.c }}>{x.v}</div><div style={{ fontSize: 9, color: "#94A3B8" }}>{x.l}</div></div>; })}</div></Card>
+    {actNow.length > 0 && <Card style={{ marginBottom: 16, borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: "#DC2626" }}>Lucreaza acum</h3>{actNow.map(function(t) { return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", fontSize: 12 }}><span style={{ fontWeight: 600 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ marginLeft: "auto", fontWeight: 700, color: "#DC2626" }}>{ft(getTS(t.id))}</span></div>; })}</Card>}
+    <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>{[{ id: "all", l: "Toate" }, { id: "today", l: "Azi" }, { id: "week", l: "7 zile" }, { id: "month", l: "30 zile" }].map(function(r) { return <button key={r.id} onClick={function() { setRange(r.id); }} style={Object.assign({}, S.chip, { background: range === r.id ? GR : "#F1F5F9", color: range === r.id ? "#fff" : "#475569", fontWeight: range === r.id ? 600 : 400 })}>{r.l}</button>; })}</div>
+    <Card><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Taskuri ({filt.length})</h3>{filt.length === 0 ? <div style={{ color: "#94A3B8", padding: 16, textAlign: "center" }}>Niciun task.</div> : filt.map(function(t) { return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid #F8FAFC", flexWrap: "wrap" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: SC[t.status] }} /><span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{t.title}</span><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.deadline && <span style={{ fontSize: 11, color: isOv(t) ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{getTS(t.id) > 0 && <span style={{ fontSize: 11, color: "#64748B" }}>{ft(getTS(t.id))}</span>}</div>; })}</Card>
+    <Card style={{ marginTop: 16 }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Activitate</h3>{uLogs.length === 0 ? <div style={{ color: "#94A3B8", padding: 16, textAlign: "center" }}>Nicio activitate.</div> : uLogs.map(function(l) { return <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #F8FAFC", fontSize: 12 }}><span style={{ color: "#CBD5E1", minWidth: 100 }}>{ff(l.time)}</span><span style={{ fontWeight: 600, color: "#64748B" }}>{l.action}</span><span style={{ color: "#94A3B8" }}>{l.detail}</span></div>; })}</Card>
+  </div>;
+}
+
+function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, secs, running, togTimer }) {
+  var me = team[user] || {}; var a = team[t.assignee] || {}; var ov = isOv(t); var can = me.role === "admin" || me.role === "pm" || t.assignee === user;
+  var doneS = (t.subtasks || []).filter(function(s) { return s.done; }).length; var totalS = (t.subtasks || []).length;
+  return <Card style={{ display: "flex", flexDirection: isMob ? "column" : "row", alignItems: isMob ? "stretch" : "center", gap: 10, marginBottom: 6, borderLeft: "3px solid " + (ov ? "#EF4444" : SC[t.status] || "#E2E8F0"), background: ov ? "#FFFBFB" : "#fff" }}>
+    {can && <button style={Object.assign({}, S.stDot, { color: SC[t.status], background: SC[t.status] + "12", border: "1.5px solid " + SC[t.status] + "40" })} onClick={function() { var i = STATUSES.indexOf(t.status); onChgSt(t.id, STATUSES[(i + 1) % STATUSES.length]); }}>{SI[t.status]}</button>}
+    <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={function() { if (onView) onView(t); }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 3 }}><span style={{ fontSize: 14, fontWeight: 600 }}>{t.title}</span><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{t.platform && <Badge bg="#F1F5F9" color="#475569">{t.platform}</Badge>}{t.taskType && <Badge bg="#F5F3FF" color="#7C3AED">{t.taskType}</Badge>}{ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}</div>
+      {t.description && <div style={{ fontSize: 12, color: "#94A3B8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: isMob ? "100%" : 400, marginBottom: 3 }}>{t.description}</div>}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={16} fs={8}>{a.name[0]}</Av>{a.name}</span>}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.productName && <Badge bg="#EFF6FF" color="#2563EB">{t.productName}</Badge>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{t.links && t.links.length > 0 && <span><Ic d={Icons.link} size={10} color="#94A3B8" /> {t.links.length}</span>}{totalS > 0 && <span><Ic d={Icons.check} size={10} color="#94A3B8" /> {doneS}/{totalS}</span>}{(t.comments || []).length > 0 && <span><Ic d={Icons.comment} size={10} color="#94A3B8" /> {t.comments.length}</span>}</div>
     </div>
-  );
+    <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+      {can && t.status !== "Done" && <button onClick={togTimer} style={Object.assign({}, S.timerBtn, { background: running ? "#FEF2F2" : "#F8FAFC", color: running ? "#DC2626" : GR, borderColor: running ? "#FECACA" : "#E2E8F0" })}><Ic d={running ? Icons.stop : Icons.play} size={12} color={running ? "#DC2626" : GR} />{secs > 0 && <span style={{ fontVariantNumeric: "tabular-nums" }}>{ft(secs)}</span>}</button>}
+      {t.status === "Done" && secs > 0 && <span style={{ fontSize: 11, color: "#94A3B8" }}>{ft(secs)}</span>}
+      <select style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 6px" })} value={t.status} onChange={function(e) { onChgSt(t.id, e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
+      <button style={S.iconBtn} onClick={function() { onDup(t); }}><Ic d={Icons.copy} size={14} color="#94A3B8" /></button>
+      <button style={S.iconBtn} onClick={function() { onEdit(t); }}><Ic d={Icons.edit} size={14} color="#94A3B8" /></button>
+      {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) onDel(t.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
+    </div>
+  </Card>;
 }
 
-/* ═══ TASK ROW ═══ */
-function TRow({ t, user, team, onEdit, onDel, onDup, onChgSt, isMob, secs, running, togTimer }) {
-  var me = team[user] || {}; var a = team[t.assignee] || {}; var ov = isOv(t);
-  var can = me.role === "admin" || me.role === "pm" || t.assignee === user;
-  return (
-    <Card style={{ display: "flex", flexDirection: isMob ? "column" : "row", alignItems: isMob ? "stretch" : "center", gap: 10, marginBottom: 6, borderLeft: "3px solid " + (ov ? "#EF4444" : SC[t.status] || "#E2E8F0"), background: ov ? "#FFFBFB" : "#fff" }}>
-      {can && <button style={Object.assign({}, S.stDot, { color: SC[t.status], background: SC[t.status] + "12", border: "1.5px solid " + SC[t.status] + "40" })} onClick={function() { var i = STATUSES.indexOf(t.status); onChgSt(t.id, STATUSES[(i + 1) % STATUSES.length]); }}>{SI[t.status]}</button>}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 3 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#1E293B" }}>{t.title}</span>
-          <Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>
-          {t.platform && <Badge bg="#F1F5F9" color="#475569">{t.platform}</Badge>}
-          {t.taskType && <Badge bg="#F5F3FF" color="#7C3AED">{t.taskType}</Badge>}
-          {ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}
-        </div>
-        {t.description && <div style={{ fontSize: 12, color: "#94A3B8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: isMob ? "100%" : 400, marginBottom: 3 }}>{t.description}</div>}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>
-          {a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={16} fs={8}>{a.name[0]}</Av>{a.name}</span>}
-          {t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}
-          {t.productName && <Badge bg="#EFF6FF" color="#2563EB">{t.productName}</Badge>}
-          {t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}
-          {t.links && t.links.length > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2 }}><Ic d={Icons.link} size={10} color="#94A3B8" />{t.links.length}</span>}
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-        {can && t.status !== "Done" && <button onClick={togTimer} style={Object.assign({}, S.timerBtn, { background: running ? "#FEF2F2" : "#F8FAFC", color: running ? "#DC2626" : GR, borderColor: running ? "#FECACA" : "#E2E8F0" })}><Ic d={running ? Icons.stop : Icons.play} size={12} color={running ? "#DC2626" : GR} />{secs > 0 && <span style={{ fontVariantNumeric: "tabular-nums" }}>{ft(secs)}</span>}</button>}
-        {t.status === "Done" && secs > 0 && <span style={{ fontSize: 11, color: "#94A3B8", fontVariantNumeric: "tabular-nums" }}>{ft(secs)}</span>}
-        <select style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 6px" })} value={t.status} onChange={function(e) { onChgSt(t.id, e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
-        <button style={S.iconBtn} onClick={function() { onDup(t); }} title="Duplica"><Ic d={Icons.copy} size={14} color="#94A3B8" /></button>
-        <button style={S.iconBtn} onClick={function() { onEdit(t); }}><Ic d={Icons.edit} size={14} color="#94A3B8" /></button>
-        {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) onDel(t.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
-      </div>
-    </Card>
-  );
-}
-
-/* ═══ TASKS LIST ═══ */
-function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer }) {
+function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer }) {
   var st = fProps.stats;
-  return (
-    <div>
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>
-        {[{ l: "Total", v: st.total, c: "#475569", i: Icons.tasks }, { l: "Azi", v: st.today, c: "#2563EB", i: Icons.work }, { l: "In Progress", v: st.inProg, c: "#D97706", i: Icons.work }, { l: "Intarziate", v: st.overdue, c: "#DC2626", i: Icons.work }, { l: "Finalizate", v: st.done, c: GR, i: Icons.tasks }].map(function(s) {
-          return <Card key={s.l} style={{ display: "flex", alignItems: "center", gap: 12, background: s.c + "08" }}><div style={{ width: 40, height: 40, borderRadius: 10, background: s.c + "18", display: "flex", alignItems: "center", justifyContent: "center" }}><Ic d={s.i} size={20} color={s.c} /></div><div><div style={{ fontSize: 22, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: s.c + "99" }}>{s.l}</div></div></Card>;
-        })}
-      </div>
-      <FiltersBar {...fProps} />
-      {grouped.length === 0 ? <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>Niciun task gasit.</Card> :
-        grouped.map(function(g) { return (
-          <div key={g.key} style={{ marginBottom: 20 }}>
-            <div style={S.groupHdr}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: g.date === "nodate" ? "#CBD5E1" : isP(g.date + "T00:00:00") ? "#EF4444" : isTd(g.date + "T00:00:00") ? "#16A34A" : isTm(g.date + "T00:00:00") ? "#2563EB" : "#94A3B8" }} />{g.label}</span><span style={S.countBadge}>{g.tasks.length}</span></div>
-            {g.tasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} />; })}
-          </div>
-        ); })}
-    </div>
-  );
+  return <div>
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>{[{ l: "Total", v: st.total, c: "#475569", i: Icons.tasks }, { l: "Azi", v: st.today, c: "#2563EB", i: Icons.work }, { l: "In Progress", v: st.inProg, c: "#D97706", i: Icons.work }, { l: "Intarziate", v: st.overdue, c: "#DC2626", i: Icons.work }, { l: "Finalizate", v: st.done, c: GR, i: Icons.tasks }].map(function(s) { return <Card key={s.l} style={{ display: "flex", alignItems: "center", gap: 12, background: s.c + "08" }}><div style={{ width: 40, height: 40, borderRadius: 10, background: s.c + "18", display: "flex", alignItems: "center", justifyContent: "center" }}><Ic d={s.i} size={20} color={s.c} /></div><div><div style={{ fontSize: 22, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: s.c + "99" }}>{s.l}</div></div></Card>; })}</div>
+    <FiltersBar {...fProps} />
+    {grouped.length === 0 ? <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>Niciun task.</Card> : grouped.map(function(g) { return <div key={g.key} style={{ marginBottom: 20 }}><div style={S.groupHdr}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: g.date === "nodate" ? "#CBD5E1" : isP(g.date + "T00:00:00") ? "#EF4444" : isTd(g.date + "T00:00:00") ? "#16A34A" : isTm(g.date + "T00:00:00") ? "#2563EB" : "#94A3B8" }} />{g.label}</span><span style={S.countBadge}>{g.tasks.length}</span></div>{g.tasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} />; })}</div>; })}
+  </div>;
 }
 
-/* ═══ KANBAN ═══ */
 function KanbanPage({ fProps, tasks, user, team, onEdit, onDel, onDup, onChgSt, dragId, setDragId, handleDrop, isMob, timers, getTS, togTimer }) {
-  return (
-    <div>
-      <FiltersBar {...fProps} noStatus />
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(4,1fr)", gap: 14, alignItems: "start" }}>
-        {STATUSES.map(function(st) { var col = tasks.filter(function(t) { return t.status === st; }); return (
-          <div key={st} onDragOver={function(e) { e.preventDefault(); e.currentTarget.style.background = "#F0FDF4"; }} onDragLeave={function(e) { e.currentTarget.style.background = "#FAFBFC"; }} onDrop={function(e) { e.preventDefault(); e.currentTarget.style.background = "#FAFBFC"; handleDrop(st); }} style={{ background: "#FAFBFC", borderRadius: 12, padding: 12, minHeight: 200 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[st] }} /><span style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{st}</span></div><span style={S.countBadge}>{col.length}</span></div>
-            {col.map(function(t) { var a = team[t.assignee] || {}; var ov = isOv(t); var me = team[user] || {}; var can = me.role === "admin" || me.role === "pm" || t.assignee === user; var secs = getTS(t.id); var run = timers[t.id] && timers[t.id].running;
-              return (
-                <Card key={t.id} style={{ padding: 12, cursor: can ? "grab" : "default", opacity: dragId === t.id ? 0.4 : 1, borderLeft: "3px solid " + (ov ? "#EF4444" : SC[st]), marginBottom: 8 }}>
-                  <div draggable={can} onDragStart={function() { setDragId(t.id); }} onDragEnd={function() { setDragId(null); }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B", marginBottom: 6 }}>{t.title}</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}</div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "#94A3B8" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={18} fs={9}>{a.name[0]}</Av>{a.name}</span>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}</div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>
-                      {can && st !== "Done" ? <button onClick={function() { togTimer(t.id); }} style={Object.assign({}, S.timerBtn, { fontSize: 10, padding: "2px 8px", background: run ? "#FEF2F2" : "#F8FAFC", color: run ? "#DC2626" : GR, borderColor: run ? "#FECACA" : "#E2E8F0" })}><Ic d={run ? Icons.stop : Icons.play} size={10} color={run ? "#DC2626" : GR} />{secs > 0 && <span style={{ fontVariantNumeric: "tabular-nums" }}>{ft(secs)}</span>}</button> : <span style={{ fontSize: 10 }}>{secs > 0 ? ft(secs) : ""}</span>}
-                      <div style={{ display: "flex", gap: 2 }}><button style={S.iconBtn} onClick={function() { onDup(t); }}><Ic d={Icons.copy} size={12} color="#94A3B8" /></button><button style={S.iconBtn} onClick={function() { onEdit(t); }}><Ic d={Icons.edit} size={12} color="#94A3B8" /></button></div>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        ); })}
-      </div>
-    </div>
-  );
+  return <div><FiltersBar {...fProps} noStatus /><div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(4,1fr)", gap: 14, alignItems: "start" }}>{STATUSES.map(function(st) { var col = tasks.filter(function(t) { return t.status === st; }); return <div key={st} onDragOver={function(e) { e.preventDefault(); }} onDrop={function(e) { e.preventDefault(); handleDrop(st); }} style={{ background: "#FAFBFC", borderRadius: 12, padding: 12, minHeight: 200 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[st] }} /><span style={{ fontSize: 13, fontWeight: 700 }}>{st}</span></div><span style={S.countBadge}>{col.length}</span></div>{col.map(function(t) { var a = team[t.assignee] || {}; var ov = isOv(t); var me = team[user] || {}; var can = me.role === "admin" || me.role === "pm" || t.assignee === user; var secs = getTS(t.id); var run = timers[t.id] && timers[t.id].running; return <Card key={t.id} style={{ padding: 12, cursor: can ? "grab" : "default", opacity: dragId === t.id ? 0.4 : 1, borderLeft: "3px solid " + (ov ? "#EF4444" : SC[st]), marginBottom: 8 }}><div draggable={can} onDragStart={function() { setDragId(t.id); }} onDragEnd={function() { setDragId(null); }}><div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t.title}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}</div><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "#94A3B8" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={18} fs={9}>{a.name[0]}</Av>{a.name}</span>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}</div><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>{can && st !== "Done" ? <button onClick={function() { togTimer(t.id); }} style={Object.assign({}, S.timerBtn, { fontSize: 10, padding: "2px 8px", background: run ? "#FEF2F2" : "#F8FAFC", color: run ? "#DC2626" : GR, borderColor: run ? "#FECACA" : "#E2E8F0" })}><Ic d={run ? Icons.stop : Icons.play} size={10} color={run ? "#DC2626" : GR} />{secs > 0 && <span>{ft(secs)}</span>}</button> : <span style={{ fontSize: 10 }}>{secs > 0 ? ft(secs) : ""}</span>}<div style={{ display: "flex", gap: 2 }}><button style={S.iconBtn} onClick={function() { onDup(t); }}><Ic d={Icons.copy} size={12} color="#94A3B8" /></button><button style={S.iconBtn} onClick={function() { onEdit(t); }}><Ic d={Icons.edit} size={12} color="#94A3B8" /></button></div></div></div></Card>; })}</div>; })}</div></div>;
 }
 
-/* ═══ WORKLOAD ═══ */
+function CalendarPage({ tasks, user, team, calDate, setCalDate, onView, isMob, me }) {
+  var y = calDate.getFullYear(), m = calDate.getMonth(); var dim = new Date(y, m + 1, 0).getDate(); var fd1 = new Date(y, m, 1).getDay(); var today = new Date();
+  var myTasks = me.role === "member" ? tasks.filter(function(t) { return t.assignee === user; }) : tasks;
+  var days = []; for (var i = 0; i < (fd1 === 0 ? 6 : fd1 - 1); i++) days.push(null); for (var i2 = 1; i2 <= dim; i2++) days.push(i2);
+  var mNames = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
+  return <div><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><button style={S.cancelBtn} onClick={function() { setCalDate(new Date(y, m - 1, 1)); }}>Prev</button><span style={{ fontSize: 16, fontWeight: 700 }}>{mNames[m]} {y}</span><button style={S.cancelBtn} onClick={function() { setCalDate(new Date(y, m + 1, 1)); }}>Next</button></div><div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>{["Lun", "Mar", "Mie", "Joi", "Vin", "Sam", "Dum"].map(function(d) { return <div key={d} style={{ textAlign: "center", fontWeight: 700, fontSize: 11, padding: 6, color: "#94A3B8" }}>{d}</div>; })}{days.map(function(day, i) { if (!day) return <div key={"e" + i} />; var dateStr = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(day).padStart(2, "0"); var dayTasks = myTasks.filter(function(t) { return t.deadline === dateStr; }); var isToday2 = today.getFullYear() === y && today.getMonth() === m && today.getDate() === day; return <div key={day} style={{ padding: 4, minHeight: isMob ? 50 : 80, border: "1px solid hsl(214,18%,90%)", borderRadius: 4, background: isToday2 ? GR + "12" : "#fff", fontSize: 11 }}><div style={{ fontWeight: isToday2 ? 700 : 400, marginBottom: 2, fontSize: 12, color: isToday2 ? GR : "#475569" }}>{day}</div>{dayTasks.slice(0, 3).map(function(t) { return <div key={t.id} style={{ fontSize: 10, padding: "1px 4px", borderRadius: 3, marginBottom: 1, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", background: t.status === "Done" ? GR + "18" : isOv(t) ? "#FEF2F2" : "#EFF6FF", color: t.status === "Done" ? GR : isOv(t) ? "#DC2626" : "#2563EB" }} onClick={function() { onView(t); }}>{t.title}</div>; })}{dayTasks.length > 3 && <div style={{ fontSize: 9, color: "#94A3B8" }}>+{dayTasks.length - 3}</div>}</div>; })}</div></div>;
+}
+
+function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUsers }) {
+  var [showForm, setShowForm] = useState(false); var [form, setForm] = useState({ userId: "", metric: "", target: 25, daysPerWeek: 5 });
+  var save = function() { if (!form.userId || !form.metric.trim()) return; setTargets(function(p) { return p.concat([Object.assign({}, form, { id: gid() })]); }); setShowForm(false); setForm({ userId: "", metric: "", target: 25, daysPerWeek: 5 }); };
+  return <div style={{ maxWidth: 700 }}>{canEdit && <div style={{ marginBottom: 16 }}><button style={S.primBtn} onClick={function() { setShowForm(!showForm); }}><Ic d={Icons.plus} size={14} color="#fff" /> Target nou</button></div>}{showForm && <Card style={{ marginBottom: 16 }}><div style={S.fRow}><div style={S.fCol}><label style={S.label}>User</label><select style={S.fSelF} value={form.userId} onChange={function(e) { setForm(Object.assign({}, form, { userId: e.target.value })); }}><option value="">--</option>{visUsers.filter(function(u) { return u !== "admin"; }).map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Metric</label><input style={S.input} value={form.metric} onChange={function(e) { setForm(Object.assign({}, form, { metric: e.target.value })); }} placeholder="ex: Product Launch" /></div></div><div style={S.fRow}><div style={S.fCol}><label style={S.label}>Target zilnic</label><input style={S.input} type="number" value={form.target} onChange={function(e) { setForm(Object.assign({}, form, { target: parseInt(e.target.value) || 0 })); }} /></div><div style={S.fCol}><label style={S.label}>Zile/sapt</label><input style={S.input} type="number" min="1" max="7" value={form.daysPerWeek} onChange={function(e) { setForm(Object.assign({}, form, { daysPerWeek: parseInt(e.target.value) || 5 })); }} /></div></div><div style={{ marginTop: 12, display: "flex", gap: 8 }}><button style={S.primBtn} onClick={save}>Salveaza</button><button style={S.cancelBtn} onClick={function() { setShowForm(false); }}>Anuleaza</button></div></Card>}{targets.map(function(tgt) { var u = team[tgt.userId]; if (!u) return null; var todayDone = tasks.filter(function(t) { return t.assignee === tgt.userId && t.status === "Done"; }).length; var pct = tgt.target > 0 ? (todayDone / tgt.target) * 100 : 0; var rem = Math.max(0, tgt.target - todayDone); return <Card key={tgt.id} style={{ marginBottom: 12, borderLeft: "3px solid " + (pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626") }}><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}><Av color={u.color} size={32}>{u.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontWeight: 700 }}>{u.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{tgt.metric} | {tgt.target}/zi | {tgt.daysPerWeek} zile/sapt</div></div>{canEdit && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) setTargets(function(p) { return p.filter(function(x) { return x.id !== tgt.id; }); }); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}</div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span>Done: {todayDone}/{tgt.target}</span><span style={{ fontWeight: 700, color: pct >= 100 ? GR : "#DC2626" }}>{Math.round(pct)}%</span></div><div style={S.progBg}><div style={S.progBar(pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626", Math.min(pct, 100))} /></div>{rem > 0 && <div style={{ marginTop: 6, fontSize: 12, color: "#DC2626", fontWeight: 600 }}>Ramas: {rem}</div>}</Card>; })}{targets.length === 0 && <Card style={{ textAlign: "center", color: "#94A3B8", padding: 30 }}>Niciun target.</Card>}</div>;
+}
+
+function TemplatesPage({ templates, setTemplates, canEdit, isAdmin, onCreateFromTpl }) {
+  var [showForm, setShowForm] = useState(false); var [form, setForm] = useState({ name: "", description: "", subtasks: [] }); var [newSt, setNewSt] = useState("");
+  var save = function() { if (!form.name.trim()) return; setTemplates(function(p) { return p.concat([Object.assign({}, form, { id: gid() })]); }); setShowForm(false); setForm({ name: "", description: "", subtasks: [] }); };
+  return <div>{canEdit && <div style={{ marginBottom: 16 }}><button style={S.primBtn} onClick={function() { setShowForm(!showForm); }}><Ic d={Icons.plus} size={14} color="#fff" /> Template nou</button></div>}{showForm && <Card style={{ marginBottom: 16, maxWidth: 500 }}><label style={S.label}>Nume</label><input style={S.input} value={form.name} onChange={function(e) { setForm(Object.assign({}, form, { name: e.target.value })); }} /><label style={S.label}>Descriere</label><input style={S.input} value={form.description} onChange={function(e) { setForm(Object.assign({}, form, { description: e.target.value })); }} /><label style={S.label}>Subtaskuri</label>{form.subtasks.map(function(s, i) { return <div key={i} style={{ display: "flex", gap: 6, marginBottom: 4 }}><span style={{ fontSize: 11, color: "#94A3B8", width: 20 }}>{i + 1}.</span><span style={{ flex: 1, fontSize: 13 }}>{s}</span><button style={S.iconBtn} onClick={function() { setForm(Object.assign({}, form, { subtasks: form.subtasks.filter(function(_, j) { return j !== i; }) })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}<div style={{ display: "flex", gap: 6, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={newSt} onChange={function(e) { setNewSt(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter" && newSt.trim()) { setForm(Object.assign({}, form, { subtasks: form.subtasks.concat([newSt.trim()]) })); setNewSt(""); } }} placeholder="Subtask..." /><button style={S.primBtn} onClick={function() { if (newSt.trim()) { setForm(Object.assign({}, form, { subtasks: form.subtasks.concat([newSt.trim()]) })); setNewSt(""); } }}><Ic d={Icons.plus} size={14} color="#fff" /></button></div><div style={{ marginTop: 12, display: "flex", gap: 8 }}><button style={S.primBtn} onClick={save}>Salveaza</button><button style={S.cancelBtn} onClick={function() { setShowForm(false); }}>Anuleaza</button></div></Card>}<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300,1fr))", gap: 14 }}>{templates.map(function(tpl) { return <Card key={tpl.id}><div style={{ fontWeight: 700, marginBottom: 4 }}>{tpl.name}</div><div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 8 }}>{tpl.description}</div><div style={{ fontSize: 12 }}>{tpl.subtasks.map(function(s, i) { return <div key={i} style={{ padding: "2px 0" }}>o {s}</div>; })}</div><div style={{ marginTop: 10, display: "flex", gap: 6 }}><button style={S.primBtn} onClick={function() { onCreateFromTpl(tpl); }}>Creeaza task</button>{isAdmin && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) setTemplates(function(p) { return p.filter(function(x) { return x.id !== tpl.id; }); }); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}</div></Card>; })}</div></div>;
+}
+
+function SheetsPage({ sheets, setSheets, shops }) {
+  var [form, setForm] = useState({ name: "", url: "", store: "All", description: "" });
+  var save = function() { if (!form.name.trim() || !form.url.trim()) return; setSheets(function(p) { return p.concat([Object.assign({}, form, { id: gid() })]); }); setForm({ name: "", url: "", store: "All", description: "" }); };
+  return <div style={{ maxWidth: 700 }}><Card style={{ marginBottom: 16 }}><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Adauga Sheet</h3><div style={S.fRow}><div style={S.fCol}><label style={S.label}>Nume</label><input style={S.input} value={form.name} onChange={function(e) { setForm(Object.assign({}, form, { name: e.target.value })); }} /></div><div style={S.fCol}><label style={S.label}>Magazin</label><select style={S.fSelF} value={form.store} onChange={function(e) { setForm(Object.assign({}, form, { store: e.target.value })); }}><option value="All">Toate</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div></div><label style={S.label}>URL</label><input style={S.input} value={form.url} onChange={function(e) { setForm(Object.assign({}, form, { url: e.target.value })); }} placeholder="https://docs.google.com/..." /><label style={S.label}>Descriere</label><input style={S.input} value={form.description} onChange={function(e) { setForm(Object.assign({}, form, { description: e.target.value })); }} /><button style={Object.assign({}, S.primBtn, { marginTop: 12 })} onClick={save}><Ic d={Icons.plus} size={14} color="#fff" /> Adauga</button></Card>{sheets.map(function(s) { return <Card key={s.id} style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}><div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{s.store} | {s.description}</div></div><a href={s.url} target="_blank" rel="noopener noreferrer" style={Object.assign({}, S.primBtn, { fontSize: 11, padding: "4px 12px" })}>Deschide</a><button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) setSheets(function(p) { return p.filter(function(x) { return x.id !== s.id; }); }); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button></Card>; })}{sheets.length === 0 && <Card style={{ textAlign: "center", color: "#94A3B8", padding: 30 }}>Niciun sheet.</Card>}</div>;
+}
+
+function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTimer, products, onClose, onEdit }) {
+  var [commentText, setCommentText] = useState(""); var t = tasks.find(function(x) { return x.id === task.id; }) || task; var a = team[t.assignee] || {}; var secs = getTS(t.id); var subtasks = t.subtasks || []; var comments = t.comments || []; var doneS = subtasks.filter(function(s) { return s.done; }).length;
+  var addComment = function() { if (!commentText.trim()) return; setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, x, { comments: (x.comments || []).concat([{ id: gid(), userId: user, text: commentText.trim(), time: ts() }]) }) : x; }); }); setCommentText(""); };
+  var toggleSub = function(stId) { setTasks(function(p) { return p.map(function(x) { if (x.id !== t.id) return x; return Object.assign({}, x, { subtasks: (x.subtasks || []).map(function(s) { return s.id === stId ? Object.assign({}, s, { done: !s.done }) : s; }) }); }); });  };
+  return <div style={S.modalOv} onClick={onClose}><div style={Object.assign({}, S.modalBox, { maxWidth: 640 })} onClick={function(e) { e.stopPropagation(); }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div><h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>{t.title}</h2><div style={{ display: "flex", gap: 6 }}><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{isOv(t) && <Badge bg="#FEF2F2" color="#DC2626">OVERDUE</Badge>}</div></div><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
+    {t.description && <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>{t.description}</div>}
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginBottom: 16 }}><div><strong>Asignat:</strong> {a.name || "-"}</div><div><strong>Deadline:</strong> {t.deadline ? fd(t.deadline) : "-"}</div><div><strong>Magazin:</strong> {t.shop || "-"}</div><div><strong>Produs:</strong> {t.productName || "-"}</div><div><strong>Timp:</strong> {ft(secs)}</div><div><strong>Creat:</strong> {ff(t.createdAt)}</div></div>
+    {t.links && t.links.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>Linkuri:</div>{t.links.map(function(l, i) { return <a key={i} href={l} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#2563EB", marginBottom: 2 }}><Ic d={Icons.ext} size={10} color="#2563EB" />{l}</a>; })}</div>}
+    {subtasks.length > 0 && <div style={{ marginBottom: 12, borderTop: "1px solid #F1F5F9", paddingTop: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8 }}>Subtaskuri ({doneS}/{subtasks.length})</div><div style={Object.assign({}, S.progBg, { marginBottom: 8 })}><div style={S.progBar(doneS === subtasks.length ? GR : "#D97706", subtasks.length > 0 ? (doneS / subtasks.length) * 100 : 0)} /></div>{subtasks.map(function(st) { return <div key={st.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0", fontSize: 13, cursor: "pointer" }} onClick={function() { toggleSub(st.id); }}><span style={{ width: 18, height: 18, borderRadius: 4, border: "1.5px solid " + (st.done ? GR : "#CBD5E1"), background: st.done ? GR : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, flexShrink: 0 }}>{st.done ? "*" : ""}</span><span style={{ textDecoration: st.done ? "line-through" : "none", color: st.done ? "#94A3B8" : "#1E293B" }}>{st.text}</span></div>; })}</div>}
+    <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}><Ic d={Icons.comment} size={14} color="#64748B" /> Comentarii ({comments.length})</div><div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 8 }}>{comments.map(function(c) { var cu = team[c.userId] || {}; var isMine = c.userId === user; return <div key={c.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", marginBottom: 6 }}><div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>{cu.name || "?"} | {fr(c.time)}</div><div style={{ padding: "6px 12px", borderRadius: 10, maxWidth: "80%", background: isMine ? GR : "#F1F5F9", color: isMine ? "#fff" : "#1E293B", fontSize: 13 }}>{c.text}</div></div>; })}</div><div style={{ display: "flex", gap: 6 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={commentText} onChange={function(e) { setCommentText(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addComment(); }} placeholder="Comentariu..." /><button style={S.primBtn} onClick={addComment}>Trimite</button></div></div>
+    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}><button style={S.cancelBtn} onClick={onEdit}>Editeaza</button><button style={S.primBtn} onClick={onClose}>Inchide</button></div>
+  </div></div>;
+}
+
 function WorkPage({ users, team, tasks, getPerf, timers, getTS, isMob, onClickUser }) {
-  var data = users.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) {
-    var ut = tasks.filter(function(t) { return t.assignee === u; }); var byS = {}; STATUSES.forEach(function(s) { byS[s] = ut.filter(function(t) { return t.status === s; }).length; });
-    var od = ut.filter(function(t) { return isOv(t); }).length; var actT = ut.filter(function(t) { return timers[t.id] && timers[t.id].running; }).length;
-    var tT = 0; ut.forEach(function(t) { tT += getTS(t.id); });
-    return { key: u, name: team[u].name, color: team[u].color, role: team[u].role, total: ut.length, byS: byS, od: od, actT: actT, tT: tT, perf: getPerf(u) };
-  }).sort(function(a, b) { return b.total - a.total; });
+  var data = users.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) { var ut = tasks.filter(function(t) { return t.assignee === u; }); var byS = {}; STATUSES.forEach(function(s) { byS[s] = ut.filter(function(t) { return t.status === s; }).length; }); var od = ut.filter(function(t) { return isOv(t); }).length; var actT = ut.filter(function(t) { return timers[t.id] && timers[t.id].running; }).length; var tT = 0; ut.forEach(function(t) { tT += getTS(t.id); }); return { key: u, name: team[u].name, color: team[u].color, role: team[u].role, total: ut.length, byS: byS, od: od, actT: actT, tT: tT, perf: getPerf(u) }; }).sort(function(a, b) { return b.total - a.total; });
   var mx = Math.max.apply(null, data.map(function(d) { return d.total; }).concat([1]));
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(340,1fr))", gap: 14 }}>
-      {data.map(function(d) { return (
-        <Card key={d.key} style={{ cursor: "pointer" }}>
-          <div onClick={function() { onClickUser(d.key); }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}><Av color={d.color} size={42}>{d.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"}</div></div>{d.actT > 0 && <Badge bg="#FEF2F2" color="#DC2626"><span style={{ animation: "pulse 2s infinite" }}>{d.actT} active</span></Badge>}<div style={{ fontSize: 20, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div></div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748B", marginBottom: 4 }}><span>{d.total} taskuri</span><span>Tracked: {ft(d.tT)}</span></div>
-            <div style={{ height: 8, borderRadius: 8, background: "#F1F5F9", overflow: "hidden", display: "flex", marginBottom: 10 }}>{STATUSES.map(function(s) { var w = (d.byS[s] / mx) * 100; return w > 0 ? <div key={s} style={{ width: w + "%", height: "100%", background: SC[s] }} /> : null; })}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 4, textAlign: "center", fontSize: 10 }}>
-              {STATUSES.map(function(s) { return <div key={s} style={{ background: SC[s] + "12", borderRadius: 6, padding: "4px 2px" }}><div style={{ fontSize: 14, fontWeight: 700, color: SC[s] }}>{d.byS[s]}</div><div style={{ color: "#94A3B8" }}>{s === "In Progress" ? "Active" : s}</div></div>; })}
-              <div style={{ background: d.od ? "#FEF2F2" : "#F8FAFC", borderRadius: 6, padding: "4px 2px" }}><div style={{ fontSize: 14, fontWeight: 700, color: d.od ? "#DC2626" : "#94A3B8" }}>{d.od}</div><div style={{ color: "#94A3B8" }}>Overdue</div></div>
-            </div>
-          </div>
-        </Card>
-      ); })}
-    </div>
-  );
+  return <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(340,1fr))", gap: 14 }}>{data.map(function(d) { return <Card key={d.key} style={{ cursor: "pointer" }}><div onClick={function() { onClickUser(d.key); }}><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}><Av color={d.color} size={42}>{d.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"}</div></div>{d.actT > 0 && <Badge bg="#FEF2F2" color="#DC2626"><span style={{ animation: "pulse 2s infinite" }}>{d.actT} active</span></Badge>}<div style={{ fontSize: 20, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div></div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748B", marginBottom: 4 }}><span>{d.total} taskuri</span><span>Tracked: {ft(d.tT)}</span></div><div style={{ height: 8, borderRadius: 8, background: "#F1F5F9", overflow: "hidden", display: "flex", marginBottom: 10 }}>{STATUSES.map(function(s) { var w = (d.byS[s] / mx) * 100; return w > 0 ? <div key={s} style={{ width: w + "%", height: "100%", background: SC[s] }} /> : null; })}</div><div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 4, textAlign: "center", fontSize: 10 }}>{STATUSES.map(function(s) { return <div key={s} style={{ background: SC[s] + "12", borderRadius: 6, padding: "4px 2px" }}><div style={{ fontSize: 14, fontWeight: 700, color: SC[s] }}>{d.byS[s]}</div><div style={{ color: "#94A3B8" }}>{s === "In Progress" ? "Active" : s}</div></div>; })}<div style={{ background: d.od ? "#FEF2F2" : "#F8FAFC", borderRadius: 6, padding: "4px 2px" }}><div style={{ fontSize: 14, fontWeight: 700, color: d.od ? "#DC2626" : "#94A3B8" }}>{d.od}</div><div style={{ color: "#94A3B8" }}>Overdue</div></div></div></div></Card>; })}</div>;
 }
 
-/* ═══ TEAM ═══ */
 function TeamPage({ users, team, sessions, getPerf, isMob, onClickUser }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(300,1fr))", gap: 14 }}>
-      {users.map(function(u) { var m = team[u]; if (!m) return null; var p = getPerf(u); var lss = sessions[u]; var on = lss && (Date.now() - new Date(lss).getTime()) < 120000;
-        return (
-          <Card key={u} style={{ cursor: "pointer" }}>
-            <div onClick={function() { onClickUser(u); }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}><div style={{ position: "relative" }}><Av color={m.color} size={42}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 600 }}>{m.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{m.role === "pm" ? "PM" : m.role === "admin" ? "Admin" : "Member"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: 11, fontWeight: 600, color: on ? "#16A34A" : "#94A3B8" }}>{on ? "Online" : "Offline"}</div><div style={{ fontSize: 10, color: "#CBD5E1" }}>Last: {fr(lss)}</div></div></div>
-              {m.role !== "admin" && <div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}><span style={{ color: "#64748B" }}>Performance</span><span style={{ fontWeight: 700, color: p.score >= 70 ? GR : p.score >= 40 ? "#D97706" : "#DC2626" }}>{p.score}%</span></div><div style={S.progBg}><div style={S.progBar(p.score >= 70 ? GR : p.score >= 40 ? "#D97706" : "#DC2626", p.score)} /></div></div>}
-            </div>
-          </Card>
-        );
-      })}
-    </div>
-  );
+  return <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(300,1fr))", gap: 14 }}>{users.map(function(u) { var m = team[u]; if (!m) return null; var p = getPerf(u); var lss = sessions[u]; var on = lss && (Date.now() - new Date(lss).getTime()) < 120000; return <Card key={u} style={{ cursor: "pointer" }}><div onClick={function() { onClickUser(u); }}><div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}><div style={{ position: "relative" }}><Av color={m.color} size={42}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 600 }}>{m.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{m.role === "pm" ? "PM" : m.role === "admin" ? "Admin" : "Member"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: 11, fontWeight: 600, color: on ? "#16A34A" : "#94A3B8" }}>{on ? "Online" : "Offline"}</div><div style={{ fontSize: 10, color: "#CBD5E1" }}>Last: {fr(lss)}</div></div></div>{m.role !== "admin" && <div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}><span style={{ color: "#64748B" }}>Performance</span><span style={{ fontWeight: 700, color: p.score >= 70 ? GR : p.score >= 40 ? "#D97706" : "#DC2626" }}>{p.score}%</span></div><div style={S.progBg}><div style={S.progBar(p.score >= 70 ? GR : p.score >= 40 ? "#D97706" : "#DC2626", p.score)} /></div></div>}</div></Card>; })}</div>;
 }
 
-/* ═══ PERFORMANCE ═══ */
 function PerfPage({ users, team, getPerf, isMob }) {
   var data = users.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) { return Object.assign({ key: u }, team[u], getPerf(u)); }).sort(function(a, b) { return b.score - a.score; });
-  return (
-    <Card>
-      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Clasament Echipa</h3>
-      {data.map(function(d, i) { return (
-        <div key={d.key} style={{ display: "flex", alignItems: isMob ? "flex-start" : "center", gap: 12, padding: "12px 0", borderBottom: i < data.length - 1 ? "1px solid #F1F5F9" : "none", flexDirection: isMob ? "column" : "row" }}>
-          <span style={{ fontSize: 16, width: 28, textAlign: "center", fontWeight: 700, color: i < 3 ? GR : "#94A3B8" }}>#{i + 1}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 120 }}><Av color={d.color} size={30}>{d.name[0]}</Av><span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span></div>
-          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, width: "100%" }}><div style={Object.assign({}, S.progBg, { flex: 1 })}><div style={S.progBar(d.score >= 70 ? GR : d.score >= 40 ? "#D97706" : "#DC2626", d.score)} /></div><span style={{ fontSize: 14, fontWeight: 700, minWidth: 40, textAlign: "right", color: d.score >= 70 ? GR : d.score >= 40 ? "#D97706" : "#DC2626" }}>{d.score}%</span></div>
-          <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#94A3B8" }}><span>{d.done}/{d.total}</span>{d.overdue > 0 && <span style={{ color: "#DC2626" }}>{d.overdue} ovd</span>}{d.avgTime > 0 && <span>avg {ft(d.avgTime)}</span>}</div>
-        </div>
-      ); })}
-    </Card>
-  );
+  return <Card><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Clasament Echipa</h3>{data.map(function(d, i) { return <div key={d.key} style={{ display: "flex", alignItems: isMob ? "flex-start" : "center", gap: 12, padding: "12px 0", borderBottom: i < data.length - 1 ? "1px solid #F1F5F9" : "none", flexDirection: isMob ? "column" : "row" }}><span style={{ fontSize: 16, width: 28, textAlign: "center", fontWeight: 700, color: i < 3 ? GR : "#94A3B8" }}>#{i + 1}</span><div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 120 }}><Av color={d.color} size={30}>{d.name[0]}</Av><span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span></div><div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, width: "100%" }}><div style={Object.assign({}, S.progBg, { flex: 1 })}><div style={S.progBar(d.score >= 70 ? GR : d.score >= 40 ? "#D97706" : "#DC2626", d.score)} /></div><span style={{ fontSize: 14, fontWeight: 700, minWidth: 40, textAlign: "right", color: d.score >= 70 ? GR : d.score >= 40 ? "#D97706" : "#DC2626" }}>{d.score}%</span></div><div style={{ display: "flex", gap: 10, fontSize: 11, color: "#94A3B8" }}><span>{d.done}/{d.total}</span>{d.overdue > 0 && <span style={{ color: "#DC2626" }}>{d.overdue} ovd</span>}{d.avgTime > 0 && <span>avg {ft(d.avgTime)}</span>}</div></div>; })}</Card>;
 }
 
-/* ═══ LOG ═══ */
 function LogPage({ logs, visUsers, isMob }) {
-  var vis = logs.filter(function(l) { return visUsers.includes(l.user); });
-  var aC = { LOGIN: { bg: "#ECFDF5", c: "#16A34A" }, LOGOUT: { bg: "#FEF2F2", c: "#DC2626" }, NEW: { bg: "#EFF6FF", c: "#2563EB" }, EDIT: { bg: "#FFFBEB", c: "#D97706" }, DELETE: { bg: "#FEF2F2", c: "#DC2626" }, STATUS: { bg: "#F5F3FF", c: "#7C3AED" }, TIMER: { bg: "#FFF7ED", c: "#EA580C" }, DUPLICATE: { bg: "#EFF6FF", c: "#2563EB" }, USER_ADD: { bg: "#ECFDF5", c: GR }, USER_DEL: { bg: "#FEF2F2", c: "#DC2626" } };
-  return (
-    <Card>
-      {vis.length === 0 ? <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nicio activitate.</div> :
-        vis.slice(0, 150).map(function(l) { var cfg = aC[l.action] || { bg: "#F8FAFC", c: "#64748B" }; return (
-          <div key={l.id} style={{ display: "flex", alignItems: isMob ? "flex-start" : "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F8FAFC", flexDirection: isMob ? "column" : "row" }}>
-            <span style={{ fontSize: 11, color: "#CBD5E1", minWidth: 120 }}>{ff(l.time)}</span>
-            <Badge bg={cfg.bg} color={cfg.c}>{l.action}</Badge>
-            <span style={{ fontSize: 12, color: "#64748B" }}>{l.detail}</span>
-          </div>
-        ); })}
-    </Card>
-  );
+  var vis = logs.filter(function(l) { return visUsers.includes(l.user); }); var aC = { LOGIN: { bg: "#ECFDF5", c: "#16A34A" }, LOGOUT: { bg: "#FEF2F2", c: "#DC2626" }, NEW: { bg: "#EFF6FF", c: "#2563EB" }, EDIT: { bg: "#FFFBEB", c: "#D97706" }, DELETE: { bg: "#FEF2F2", c: "#DC2626" }, STATUS: { bg: "#F5F3FF", c: "#7C3AED" }, TIMER: { bg: "#FFF7ED", c: "#EA580C" }, DUPLICATE: { bg: "#EFF6FF", c: "#2563EB" }, USER_ADD: { bg: "#ECFDF5", c: GR }, USER_DEL: { bg: "#FEF2F2", c: "#DC2626" } };
+  return <Card>{vis.length === 0 ? <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nicio activitate.</div> : vis.slice(0, 150).map(function(l) { var cfg = aC[l.action] || { bg: "#F8FAFC", c: "#64748B" }; return <div key={l.id} style={{ display: "flex", alignItems: isMob ? "flex-start" : "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F8FAFC", flexDirection: isMob ? "column" : "row" }}><span style={{ fontSize: 11, color: "#CBD5E1", minWidth: 120 }}>{ff(l.time)}</span><Badge bg={cfg.bg} color={cfg.c}>{l.action}</Badge><span style={{ fontSize: 12, color: "#64748B" }}>{l.detail}</span></div>; })}</Card>;
 }
 
-/* ═══ LIST PAGE (shops) ═══ */
 function ListPage({ title, items, setItems, ph }) {
-  var [v, setV] = useState("");
-  var add = function() { var s = v.trim(); if (s && !items.includes(s)) { setItems(function(p) { return p.concat([s]); }); setV(""); } };
-  return (
-    <div style={{ maxWidth: 500 }}><Card>
-      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{title}</h3>
-      <p style={{ fontSize: 12, color: "#94A3B8", marginBottom: 16 }}>Apar automat in dropdown la creare task.</p>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={v} onChange={function(e) { setV(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") add(); }} placeholder={ph} /><button style={S.primBtn} onClick={add}><Ic d={Icons.plus} size={14} color="#fff" /> Adauga</button></div>
-      {items.map(function(s) { return <div key={s} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "#F8FAFC", borderRadius: 8, marginBottom: 4 }}><span style={{ fontSize: 13, fontWeight: 500 }}>{s}</span><button style={S.iconBtn} onClick={function() { setItems(function(p) { return p.filter(function(x) { return x !== s; }); }); }}><Ic d={Icons.x} size={14} color="#EF4444" /></button></div>; })}
-    </Card></div>
-  );
+  var [v, setV] = useState(""); var add = function() { var s = v.trim(); if (s && !items.includes(s)) { setItems(function(p) { return p.concat([s]); }); setV(""); } };
+  return <div style={{ maxWidth: 500 }}><Card><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{title}</h3><p style={{ fontSize: 12, color: "#94A3B8", marginBottom: 16 }}>Apar automat in dropdown.</p><div style={{ display: "flex", gap: 8, marginBottom: 16 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={v} onChange={function(e) { setV(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") add(); }} placeholder={ph} /><button style={S.primBtn} onClick={add}><Ic d={Icons.plus} size={14} color="#fff" /> Adauga</button></div>{items.map(function(s) { return <div key={s} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "#F8FAFC", borderRadius: 8, marginBottom: 4 }}><span style={{ fontSize: 13, fontWeight: 500 }}>{s}</span><button style={S.iconBtn} onClick={function() { setItems(function(p) { return p.filter(function(x) { return x !== s; }); }); }}><Ic d={Icons.x} size={14} color="#EF4444" /></button></div>; })}</Card></div>;
 }
 
-/* ═══ PRODUCTS ═══ */
-function ProdsPage({ products, setProducts }) {
-  var [name, setName] = useState(""); var [url, setUrl] = useState("");
-  var add = function() { var n = name.trim(); if (n) { setProducts(function(p) { return p.concat([{ id: id(), name: n, url: url.trim() }]); }); setName(""); setUrl(""); } };
-  return (
-    <div style={{ maxWidth: 600 }}><Card>
-      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Produse</h3>
-      <p style={{ fontSize: 12, color: "#94A3B8", marginBottom: 16 }}>Adauga produse cu link - echipa le identifica rapid la creare task.</p>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <input style={Object.assign({}, S.input, { flex: 1, minWidth: 150 })} value={name} onChange={function(e) { setName(e.target.value); }} placeholder="Nume produs" />
-        <input style={Object.assign({}, S.input, { flex: 1, minWidth: 200 })} value={url} onChange={function(e) { setUrl(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") add(); }} placeholder="Link (Shopify, Drive, etc.)" />
-        <button style={S.primBtn} onClick={add}><Ic d={Icons.plus} size={14} color="#fff" /> Adauga</button>
-      </div>
-      {products.map(function(p) { return (
-        <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#F8FAFC", borderRadius: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
-          {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#2563EB" }}><Ic d={Icons.ext} size={12} color="#2563EB" />Link</a>}
-          <div style={{ flex: 1 }} />
-          <button style={S.iconBtn} onClick={function() { setProducts(function(pr) { return pr.filter(function(x) { return x.id !== p.id; }); }); }}><Ic d={Icons.x} size={14} color="#EF4444" /></button>
-        </div>
-      ); })}
-    </Card></div>
-  );
+function ProdsPage({ products, setProducts, shops }) {
+  var [name, setName] = useState(""); var [url, setUrl] = useState(""); var [store, setStore] = useState(""); var [sku, setSku] = useState("");
+  var add = function() { var n = name.trim(); if (n) { setProducts(function(p) { return p.concat([{ id: gid(), name: n, url: url.trim(), store: store, sku: sku.trim() }]); }); setName(""); setUrl(""); setSku(""); } };
+  return <div style={{ maxWidth: 700 }}><Card><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Produse</h3><p style={{ fontSize: 12, color: "#94A3B8", marginBottom: 16 }}>Produse cu link si SKU.</p><div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}><input style={Object.assign({}, S.input, { flex: 1, minWidth: 150 })} value={name} onChange={function(e) { setName(e.target.value); }} placeholder="Nume produs" /><select style={Object.assign({}, S.fSel, { minWidth: 120 })} value={store} onChange={function(e) { setStore(e.target.value); }}><option value="">Magazin</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select><input style={Object.assign({}, S.input, { width: 100 })} value={sku} onChange={function(e) { setSku(e.target.value); }} placeholder="SKU" /></div><div style={{ display: "flex", gap: 8, marginBottom: 16 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={url} onChange={function(e) { setUrl(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") add(); }} placeholder="Link" /><button style={S.primBtn} onClick={add}><Ic d={Icons.plus} size={14} color="#fff" /> Adauga</button></div><div style={{ marginBottom: 16 }}><label style={S.label}>Import CSV (Nume,Magazin,SKU)</label><textarea id="csvImp" style={S.ta} placeholder="Laveta,Bonhaus,BH-01" /><button style={Object.assign({}, S.primBtn, { marginTop: 6, fontSize: 11 })} onClick={function() { var el = document.getElementById("csvImp"); var lines = el.value.trim().split("\n").filter(function(l) { return l.trim(); }); var np = lines.map(function(l) { var p = l.split(",").map(function(s) { return s.trim(); }); return { id: gid(), name: p[0] || "?", store: p[1] || "", sku: p[2] || "", url: "" }; }); setProducts(function(p) { return p.concat(np); }); el.value = ""; }}>Import</button></div>{products.map(function(p) { return <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#F8FAFC", borderRadius: 8, marginBottom: 4 }}><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{p.name}</span>{p.store && <Badge bg="#ECFDF5" color={GR}>{p.store}</Badge>}{p.sku && <span style={{ fontSize: 10, color: "#94A3B8" }}>{p.sku}</span>}{p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#2563EB" }}>Link</a>}<button style={S.iconBtn} onClick={function() { setProducts(function(pr) { return pr.filter(function(x) { return x.id !== p.id; }); }); }}><Ic d={Icons.x} size={14} color="#EF4444" /></button></div>; })}</Card></div>;
 }
 
-/* ═══ MANAGE USERS ═══ */
 function UsersPage({ team, setTeam, addLog }) {
-  var [name, setName] = useState(""); var [key, setKey] = useState(""); var [pw, setPw] = useState(""); var [role, setRole] = useState("member"); var [pm, setPm] = useState(""); var [color, setColor] = useState(COLORS[0]);
+  var [name, setName] = useState(""); var [key, setKey] = useState(""); var [pw, setPw] = useState(""); var [role, setRole] = useState("member"); var [pm, setPm] = useState(""); var [color, setColor] = useState(COLORS[0]); var [editKey, setEditKey] = useState(null);
   var pms = Object.keys(team).filter(function(k) { return team[k].role === "pm"; });
-  var go = function() {
-    var k2 = key.trim().toLowerCase().replace(/\s+/g, "_"); if (!k2 || !name.trim() || team[k2]) return;
-    var data = { name: name.trim(), role: role, password: pw || k2 + "2024", color: color };
-    if (role === "member" && pm) {
-      data.pm = pm;
-      setTeam(function(prev) { var n = Object.assign({}, prev); if (n[pm] && n[pm].team) { n[pm] = Object.assign({}, n[pm], { team: n[pm].team.concat([k2]) }); } n[k2] = data; return n; });
-    } else {
-      setTeam(function(prev) { var n = Object.assign({}, prev); n[k2] = data; return n; });
-    }
-    addLog("USER_ADD", "Adaugat: " + name.trim());
-    setName(""); setKey(""); setPw("");
-  };
+  var go = function() { var k2 = key.trim().toLowerCase().replace(/\s+/g, "_"); if (!k2 || !name.trim() || team[k2]) return; var data = { name: name.trim(), role: role, password: pw || k2 + "2024", color: color }; if (role === "member" && pm) { data.pm = pm; setTeam(function(prev) { var n = Object.assign({}, prev); if (n[pm] && n[pm].team) n[pm] = Object.assign({}, n[pm], { team: n[pm].team.concat([k2]) }); n[k2] = data; return n; }); } else { setTeam(function(prev) { var n = Object.assign({}, prev); n[k2] = data; return n; }); } addLog("USER_ADD", "Adaugat: " + name.trim()); setName(""); setKey(""); setPw(""); };
   var del = function(k2) { if (k2 === "admin") return; setTeam(function(prev) { var n = Object.assign({}, prev); delete n[k2]; Object.keys(n).forEach(function(k3) { if (n[k3].team) n[k3] = Object.assign({}, n[k3], { team: n[k3].team.filter(function(t) { return t !== k2; }) }); if (n[k3].pm === k2) n[k3] = Object.assign({}, n[k3], { pm: "" }); }); return n; }); addLog("USER_DEL", "Sters: " + k2); };
-  return (
-    <div style={{ maxWidth: 600 }}><Card>
-      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Manage Users</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <div><label style={S.label}>Nume</label><input style={S.input} value={name} onChange={function(e) { setName(e.target.value); if (!key) setKey(e.target.value.toLowerCase().replace(/\s+/g, "_")); }} placeholder="ex: Alex" /></div>
-        <div><label style={S.label}>Username</label><input style={S.input} value={key} onChange={function(e) { setKey(e.target.value); }} placeholder="ex: alex" /></div>
-        <div><label style={S.label}>Parola</label><input style={S.input} value={pw} onChange={function(e) { setPw(e.target.value); }} placeholder="default: key+2024" /></div>
-        <div><label style={S.label}>Rol</label><select style={S.fSelF} value={role} onChange={function(e) { setRole(e.target.value); }}>{ROLES.map(function(r) { return <option key={r} value={r}>{r}</option>; })}</select></div>
-        {role === "member" && <div><label style={S.label}>PM</label><select style={S.fSelF} value={pm} onChange={function(e) { setPm(e.target.value); }}><option value="">--</option>{pms.map(function(p) { return <option key={p} value={p}>{team[p].name}</option>; })}</select></div>}
-        <div><label style={S.label}>Culoare</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{COLORS.map(function(c) { return <div key={c} onClick={function() { setColor(c); }} style={{ width: 24, height: 24, borderRadius: 6, background: c, cursor: "pointer", border: color === c ? "2px solid #1E293B" : "2px solid transparent" }} />; })}</div></div>
-      </div>
-      <button style={S.primBtn} onClick={go}><Ic d={Icons.plus} size={14} color="#fff" /> Adauga User</button>
-      <div style={{ marginTop: 20 }}>
-        {Object.entries(team).map(function(entry) { var k2 = entry[0]; var u = entry[1]; return (
-          <div key={k2} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>
-            <Av color={u.color} size={28}>{u.name[0]}</Av><span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{u.name}</span><span style={{ fontSize: 11, color: "#94A3B8" }}>{u.role}</span><span style={{ fontSize: 10, color: "#CBD5E1" }}>{k2}</span>
-            {k2 !== "admin" && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi " + u.name + "?")) del(k2); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
-          </div>
-        ); })}
-      </div>
-    </Card></div>
-  );
+  return <div style={{ maxWidth: 700 }}><Card><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Manage Users</h3><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}><div><label style={S.label}>Nume</label><input style={S.input} value={name} onChange={function(e) { setName(e.target.value); if (!key) setKey(e.target.value.toLowerCase().replace(/\s+/g, "_")); }} placeholder="ex: Alex" /></div><div><label style={S.label}>Username</label><input style={S.input} value={key} onChange={function(e) { setKey(e.target.value); }} placeholder="ex: alex" /></div><div><label style={S.label}>Parola</label><input style={S.input} value={pw} onChange={function(e) { setPw(e.target.value); }} placeholder="default: key+2024" /></div><div><label style={S.label}>Rol</label><select style={S.fSelF} value={role} onChange={function(e) { setRole(e.target.value); }}>{ROLES.map(function(r) { return <option key={r} value={r}>{r}</option>; })}</select></div>{role === "member" && <div><label style={S.label}>PM</label><select style={S.fSelF} value={pm} onChange={function(e) { setPm(e.target.value); }}><option value="">--</option>{pms.map(function(p) { return <option key={p} value={p}>{team[p].name}</option>; })}</select></div>}<div><label style={S.label}>Culoare</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{COLORS.map(function(c) { return <div key={c} onClick={function() { setColor(c); }} style={{ width: 24, height: 24, borderRadius: 6, background: c, cursor: "pointer", border: color === c ? "2px solid #1E293B" : "2px solid transparent" }} />; })}</div></div></div><button style={S.primBtn} onClick={go}><Ic d={Icons.plus} size={14} color="#fff" /> Adauga User</button><div style={{ marginTop: 20 }}>{Object.entries(team).map(function(entry) { var k2 = entry[0]; var u = entry[1]; return <div key={k2} style={{ padding: "10px 0", borderBottom: "1px solid #F1F5F9" }}><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Av color={u.color} size={28}>{u.name[0]}</Av><span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{u.name}</span><span style={{ fontSize: 11, color: "#94A3B8" }}>{u.role}</span><span style={{ fontSize: 10, color: "#CBD5E1", fontFamily: "monospace" }}>{u.password}</span><button style={S.iconBtn} onClick={function() { setEditKey(editKey === k2 ? null : k2); }}><Ic d={Icons.edit} size={14} color="#94A3B8" /></button>{k2 !== "admin" && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi " + u.name + "?")) del(k2); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}</div>{editKey === k2 && <EditUserInline user={u} onSave={function(updates) { setTeam(function(prev) { var n = Object.assign({}, prev); n[k2] = Object.assign({}, n[k2], updates); return n; }); setEditKey(null); addLog("EDIT", "Editat: " + k2); }} onCancel={function() { setEditKey(null); }} />}</div>; })}</div></Card></div>;
 }
 
-/* ═══ TASK MODAL ═══ */
+function EditUserInline({ user, onSave, onCancel }) {
+  var [name, setName] = useState(user.name); var [pw, setPw] = useState(user.password); var [role, setRole] = useState(user.role); var [color, setColor] = useState(user.color);
+  return <div style={{ marginTop: 8, padding: 12, background: "#F8FAFC", borderRadius: 8 }}><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}><div><label style={S.label}>Nume</label><input style={S.input} value={name} onChange={function(e) { setName(e.target.value); }} /></div><div><label style={S.label}>Parola</label><input style={S.input} value={pw} onChange={function(e) { setPw(e.target.value); }} /></div><div><label style={S.label}>Rol</label><select style={S.fSelF} value={role} onChange={function(e) { setRole(e.target.value); }}>{ROLES.map(function(r) { return <option key={r} value={r}>{r}</option>; })}</select></div><div><label style={S.label}>Culoare</label><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{COLORS.map(function(c) { return <div key={c} onClick={function() { setColor(c); }} style={{ width: 20, height: 20, borderRadius: 4, background: c, cursor: "pointer", border: color === c ? "2px solid #1E293B" : "2px solid transparent" }} />; })}</div></div></div><div style={{ display: "flex", gap: 8, marginTop: 10 }}><button style={S.primBtn} onClick={function() { onSave({ name: name, password: pw, role: role, color: color }); }}>Salveaza</button><button style={S.cancelBtn} onClick={onCancel}>Anuleaza</button></div></div>;
+}
+
 function TaskModal({ task, team, assUsers, shops, products, onSave, onClose }) {
-  var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", shop: "", product: "", productName: "", deadline: TD, links: [] });
-  var [newLink, setNewLink] = useState("");
+  var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", shop: "", product: "", productName: "", deadline: TD, links: [], subtasks: [], comments: [] });
+  var [newLink, setNewLink] = useState(""); var [newSub, setNewSub] = useState("");
   var set = function(k, v) { setF(function(p) { var n = Object.assign({}, p); n[k] = v; return n; }); };
   var addLink = function() { var l = newLink.trim(); if (l) { set("links", (f.links || []).concat([l])); setNewLink(""); } };
-  var remLink = function(i) { set("links", (f.links || []).filter(function(_, idx) { return idx !== i; })); };
-  var selProd = function(pid) { var p = products.find(function(x) { return x.id === pid; }); if (p) { set("product", p.id); set("productName", p.name); if (p.url) { set("links", (f.links || []).concat([p.url])); } } };
-
-  return (
-    <div style={S.modalOv} onClick={onClose}><div style={S.modalBox} onClick={function(e) { e.stopPropagation(); }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontSize: 17, fontWeight: 700 }}>{task ? "Editeaza Task" : "Task Nou"}</h2><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
-
-      <label style={S.label}>Titlu *</label>
-      <input style={S.input} value={f.title} onChange={function(e) { set("title", e.target.value); }} placeholder="Ce trebuie facut?" autoFocus />
-
-      <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Persoana</label><select style={S.fSelF} value={f.assignee} onChange={function(e) { set("assignee", e.target.value); }}>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Magazin</label><select style={S.fSelF} value={f.shop} onChange={function(e) { set("shop", e.target.value); }}><option value="">--</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div></div>
-
-      <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Platforma</label><select style={S.fSelF} value={f.platform} onChange={function(e) { set("platform", e.target.value); }}><option value="">--</option>{PLATFORMS.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Tip Task</label><select style={S.fSelF} value={f.taskType} onChange={function(e) { set("taskType", e.target.value); }}><option value="">--</option>{TASK_TYPES.map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select></div></div>
-
-      <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Prioritate</label><select style={S.fSelF} value={f.priority} onChange={function(e) { set("priority", e.target.value); }}>{PRIORITIES.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Status</label><select style={S.fSelF} value={f.status} onChange={function(e) { set("status", e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Deadline</label><input style={S.fSelF} type="date" value={f.deadline} onChange={function(e) { set("deadline", e.target.value); }} /></div></div>
-
-      {products.length > 0 && <div><label style={S.label}>Produs (din lista)</label><select style={S.fSelF} value={f.product || ""} onChange={function(e) { selProd(e.target.value); }}><option value="">-- Selecteaza --</option>{products.map(function(p) { return <option key={p.id} value={p.id}>{p.name}</option>; })}</select></div>}
-
-      <label style={S.label}>Produs (manual)</label>
-      <input style={S.input} value={f.productName || ""} onChange={function(e) { set("productName", e.target.value); }} placeholder="Nume produs" />
-
-      <label style={S.label}>Linkuri (Drive, poze, URL)</label>
-      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-        <input style={Object.assign({}, S.input, { flex: 1 })} value={newLink} onChange={function(e) { setNewLink(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addLink(); }} placeholder="https://..." />
-        <button style={S.primBtn} onClick={addLink}><Ic d={Icons.plus} size={14} color="#fff" /></button>
-      </div>
-      {(f.links || []).map(function(l, i) { return (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 12 }}>
-          <Ic d={Icons.link} size={12} color="#2563EB" />
-          <a href={l} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l}</a>
-          <button style={S.iconBtn} onClick={function() { remLink(i); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button>
-        </div>
-      ); })}
-
-      <label style={Object.assign({}, S.label, { marginTop: 12 })}>Descriere</label>
-      <textarea style={S.ta} value={f.description} onChange={function(e) { set("description", e.target.value); }} placeholder="Detalii, note..." />
-
-      <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
-        <button style={S.cancelBtn} onClick={onClose}>Anuleaza</button>
-        <button style={S.primBtn} onClick={function() { if (f.title.trim()) onSave(f); }}>{task ? "Salveaza" : "Creeaza"}</button>
-      </div>
-    </div></div>
-  );
+  var selProd = function(pid) { var p = products.find(function(x) { return x.id === pid; }); if (p) { set("product", p.id); set("productName", p.name); if (p.url) set("links", (f.links || []).concat([p.url])); } };
+  return <div style={S.modalOv} onClick={onClose}><div style={S.modalBox} onClick={function(e) { e.stopPropagation(); }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontSize: 17, fontWeight: 700 }}>{task ? "Editeaza Task" : "Task Nou"}</h2><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
+    <label style={S.label}>Titlu *</label><input style={S.input} value={f.title} onChange={function(e) { set("title", e.target.value); }} placeholder="Ce trebuie facut?" autoFocus />
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Persoana</label><select style={S.fSelF} value={f.assignee} onChange={function(e) { set("assignee", e.target.value); }}>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Magazin</label><select style={S.fSelF} value={f.shop} onChange={function(e) { set("shop", e.target.value); }}><option value="">--</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div></div>
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Platforma</label><select style={S.fSelF} value={f.platform} onChange={function(e) { set("platform", e.target.value); }}><option value="">--</option>{PLATFORMS.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Tip Task</label><select style={S.fSelF} value={f.taskType} onChange={function(e) { set("taskType", e.target.value); }}><option value="">--</option>{TASK_TYPES.map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select></div></div>
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Prioritate</label><select style={S.fSelF} value={f.priority} onChange={function(e) { set("priority", e.target.value); }}>{PRIORITIES.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Status</label><select style={S.fSelF} value={f.status} onChange={function(e) { set("status", e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Deadline</label><input style={S.fSelF} type="date" value={f.deadline} onChange={function(e) { set("deadline", e.target.value); }} /></div></div>
+    {products.length > 0 && <div><label style={S.label}>Produs (lista)</label><select style={S.fSelF} value={f.product || ""} onChange={function(e) { selProd(e.target.value); }}><option value="">--</option>{products.map(function(p) { return <option key={p.id} value={p.id}>{p.name}{p.store ? " (" + p.store + ")" : ""}</option>; })}</select></div>}
+    <label style={S.label}>Produs (manual)</label><input style={S.input} value={f.productName || ""} onChange={function(e) { set("productName", e.target.value); }} placeholder="Nume produs" />
+    <label style={S.label}>Linkuri</label><div style={{ display: "flex", gap: 6, marginBottom: 8 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={newLink} onChange={function(e) { setNewLink(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addLink(); }} placeholder="https://..." /><button style={S.primBtn} onClick={addLink}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>{(f.links || []).map(function(l, i) { return <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 12 }}><Ic d={Icons.link} size={12} color="#2563EB" /><a href={l} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l}</a><button style={S.iconBtn} onClick={function() { set("links", (f.links || []).filter(function(_, idx) { return idx !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
+    <label style={S.label}>Subtaskuri</label>{(f.subtasks || []).map(function(st, i) { return <div key={st.id || i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}><input type="checkbox" checked={st.done} onChange={function() { var ns = (f.subtasks || []).map(function(s, j) { return j === i ? Object.assign({}, s, { done: !s.done }) : s; }); set("subtasks", ns); }} /><input style={Object.assign({}, S.input, { flex: 1 })} value={st.text} onChange={function(e) { var ns = (f.subtasks || []).map(function(s, j) { return j === i ? Object.assign({}, s, { text: e.target.value }) : s; }); set("subtasks", ns); }} /><button style={S.iconBtn} onClick={function() { set("subtasks", (f.subtasks || []).filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}<div style={{ display: "flex", gap: 6, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1 })} placeholder="Subtask nou..." value={newSub} onChange={function(e) { setNewSub(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter" && newSub.trim()) { set("subtasks", (f.subtasks || []).concat([{ id: gid(), text: newSub.trim(), done: false }])); setNewSub(""); } }} /><button style={S.primBtn} onClick={function() { if (newSub.trim()) { set("subtasks", (f.subtasks || []).concat([{ id: gid(), text: newSub.trim(), done: false }])); setNewSub(""); } }}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
+    <label style={Object.assign({}, S.label, { marginTop: 12 })}>Descriere</label><textarea style={S.ta} value={f.description} onChange={function(e) { set("description", e.target.value); }} placeholder="Detalii..." />
+    <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button><button style={S.primBtn} onClick={function() { if (f.title.trim()) onSave(f); }}>{task ? "Salveaza" : "Creeaza"}</button></div>
+  </div></div>;
 }
 
-/* ═══ STYLES ═══ */
 var S = {
   app: { display: "flex", minHeight: "100vh", width: "100%", background: "#FAFAFA", color: "#1E293B", fontSize: 14, fontFamily: "system-ui,-apple-system,sans-serif" },
   sidebar: { width: 256, minHeight: "100vh", background: "hsl(216,22%,11%)", display: "flex", flexDirection: "column", flexShrink: 0 },
