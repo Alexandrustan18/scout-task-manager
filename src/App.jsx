@@ -317,7 +317,7 @@ export default function App() {
     return function() { clearInterval(iv); };
   }, [loading, user, recurringTasks]);
 
-  // FEATURE 3: Deadline alerts - check every 30s (use ref to prevent duplicates)
+  // FEATURE 3: Deadline alerts - check every 5min, use ref to prevent duplicates
   var alertedRef = useRef({});
   useEffect(function() {
     if (loading || !user) return;
@@ -331,26 +331,25 @@ export default function App() {
         var key24h = t.id + "_24h";
         if (diff > 0 && diff <= 2 * 3600000 && !alertedRef.current[key2h]) {
           alertedRef.current[key2h] = true;
-          addNotif("deadline", "URGENT: \"" + t.title + "\" expira in 2 ore!", t.id);
+          addNotif("deadline", "URGENT: \"" + t.title + "\" expira in 2 ore!", t.id, t.assignee);
         } else if (diff > 2 * 3600000 && diff <= 24 * 3600000 && !alertedRef.current[key24h]) {
           alertedRef.current[key24h] = true;
-          addNotif("deadline", "Reminder: \"" + t.title + "\" expira in 24 ore", t.id);
+          addNotif("deadline", "Reminder: \"" + t.title + "\" expira in 24 ore", t.id, t.assignee);
         }
       });
     };
-    check();
-    var iv = setInterval(check, 60000);
-    return function() { clearInterval(iv); };
+    var t1 = setTimeout(check, 10000);
+    var iv = setInterval(check, 300000);
+    return function() { clearTimeout(t1); clearInterval(iv); };
   }, [loading, user]);
 
   useEffect(function() { var iv = setInterval(function() { setTick(function(t) { return t + 1; }); }, 1000); return function() { clearInterval(iv); }; }, []);
   useEffect(function() { if (!user) return; var fn = function() { setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); return n; }); }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
 
   var addLog = useCallback(function(a, d) { setLogs(function(p) { return [{ id: gid(), user: user || "?", action: a, detail: d, time: ts() }].concat(p).slice(0, 500); }); }, [user]);
-  var addNotif = function(type, message, taskId) {
-    var notif = { id: gid(), type: type, taskId: taskId || null, message: message, time: ts(), read: false };
+  var addNotif = function(type, message, taskId, forUser) {
+    var notif = { id: gid(), type: type, taskId: taskId || null, message: message, time: ts(), read: false, forUser: forUser || null };
     setNotifications(function(p) { return [notif].concat(p); });
-    // Feature 11: show toast
     setToasts(function(p) { return p.concat([notif]).slice(-5); });
     setTimeout(function() { setToasts(function(p) { return p.filter(function(x) { return x.id !== notif.id; }); }); }, 6000);
   };
@@ -444,8 +443,43 @@ export default function App() {
 
   var saveTask = function(t) {
     if (t.id) { setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, t, { updatedAt: ts() }) : x; }); }); addLog("EDIT", (team[user] ? team[user].name : "") + " a editat \"" + t.title + "\""); }
-    else { var nt = Object.assign({}, t, { id: gid(), createdBy: user, createdAt: ts(), updatedAt: ts() }); setTasks(function(p) { return [nt].concat(p); }); addLog("NEW", (team[user] ? team[user].name : "") + " -> \"" + t.title + "\""); if (t.assignee && t.assignee !== user) addNotif("assigned", "Task nou: \"" + t.title + "\"", nt.id);
-      setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[nt.id] = [{ status: "To Do", at: ts() }]; return n; });
+    else {
+      // Feature 2: multi-assign - if assignees array has multiple, create one task per person
+      var assignees = t.assignees && t.assignees.length > 0 ? t.assignees : [t.assignee];
+      // Feature 3: campaign auto-split - if campaignItems, create individual tasks per item
+      if (t.campaignItems && t.campaignItems.length > 0 && !t._isCampaignChild) {
+        var parentId = gid();
+        var parentTask = Object.assign({}, t, { id: parentId, createdBy: user, createdAt: ts(), updatedAt: ts(), _campaignParent: true });
+        var childTasks = [];
+        t.campaignItems.forEach(function(ci) {
+          assignees.forEach(function(asg) {
+            var child = { id: gid(), title: ci.name, description: t.description || "", assignee: asg, status: "To Do", priority: t.priority, platform: t.platform, taskType: t.taskType, department: t.department, shop: t.shop, product: "", productName: ci.name, deadline: t.deadline, links: t.links ? t.links.slice() : [], subtasks: [], comments: [], dependsOn: [], campaignItems: [], createdBy: user, createdAt: ts(), updatedAt: ts(), _campaignParentId: parentId, _pipelineNext: t._pipelineNext || "" };
+            childTasks.push(child);
+            setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[child.id] = [{ status: "To Do", at: ts() }]; return n; });
+            if (asg !== user) addNotif("assigned", "Task nou: \"" + ci.name + "\"", child.id, asg);
+          });
+        });
+        setTasks(function(p) { return [parentTask].concat(childTasks).concat(p); });
+        addLog("CAMPAIGN", "Campaign \"" + t.title + "\" creat cu " + t.campaignItems.length + " produse x " + assignees.length + " persoane = " + childTasks.length + " taskuri");
+        setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[parentId] = [{ status: "To Do", at: ts() }]; return n; });
+      } else if (assignees.length > 1) {
+        // Multi-assign without campaign: create copies
+        var newTasks = [];
+        assignees.forEach(function(asg) {
+          var nt = Object.assign({}, t, { id: gid(), assignee: asg, createdBy: user, createdAt: ts(), updatedAt: ts() });
+          newTasks.push(nt);
+          setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[nt.id] = [{ status: "To Do", at: ts() }]; return n; });
+          if (asg !== user) addNotif("assigned", "Task nou: \"" + t.title + "\"", nt.id, asg);
+        });
+        setTasks(function(p) { return newTasks.concat(p); });
+        addLog("NEW", "Multi-assign \"" + t.title + "\" -> " + assignees.map(function(a) { return (team[a] || {}).name; }).join(", "));
+      } else {
+        var nt = Object.assign({}, t, { id: gid(), createdBy: user, createdAt: ts(), updatedAt: ts() });
+        setTasks(function(p) { return [nt].concat(p); });
+        addLog("NEW", (team[user] ? team[user].name : "") + " -> \"" + t.title + "\"");
+        if (t.assignee && t.assignee !== user) addNotif("assigned", "Task nou: \"" + t.title + "\"", nt.id, t.assignee);
+        setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[nt.id] = [{ status: "To Do", at: ts() }]; return n; });
+      }
     }
     setShowAdd(false); setEditTask(null);
   };
@@ -496,6 +530,17 @@ export default function App() {
         setTimers(function(p) { var n = Object.assign({}, p); n[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n; });
       }
     }
+    // Feature 3: Pipeline - when Done, create task for next person in pipeline
+    if (st === "Done" && prevTask && prevTask._pipelineNext) {
+      var lastComment = (prevTask.comments || []).slice(-1)[0];
+      var pipeDesc = prevTask.description || "";
+      if (lastComment) pipeDesc = pipeDesc + "\n\nObservatii de la " + ((team[prevTask.assignee] || {}).name || "?") + ": " + lastComment.text;
+      var pipeTask = { id: gid(), title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: prevTask.deadline, links: (prevTask.links || []).slice(), subtasks: [], comments: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.assignee, createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id };
+      setTasks(function(p) { return [pipeTask].concat(p); });
+      setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTask.id] = [{ status: "To Do", at: ts() }]; return n; });
+      addNotif("pipeline", "Task pipeline: \"" + pipeTask.title + "\" de la " + ((team[prevTask.assignee] || {}).name || "?"), pipeTask.id, prevTask._pipelineNext);
+      addLog("PIPELINE", "\"" + prevTask.title + "\" Done -> creat \"" + pipeTask.title + "\" pentru " + ((team[prevTask._pipelineNext] || {}).name || "?"));
+    }
   };
 
   var handleDrop = function(st) { if (!dragId) return; chgSt(dragId, st); setDragId(null); };
@@ -506,7 +551,9 @@ export default function App() {
   var bulkChgPrio = function(np) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { priority: np, updatedAt: ts() }) : x; }); }); setSelectedTasks([]); setBulkMode(false); };
   var toggleSel = function(tid) { setSelectedTasks(function(p) { return p.includes(tid) ? p.filter(function(x) { return x !== tid; }) : p.concat([tid]); }); };
 
-  var unreadNotifs = useMemo(function() { return notifications.filter(function(n) { return !n.read; }); }, [notifications]);
+  // Notifications filtered per user: admin sees all, others see only theirs
+  var myNotifs = useMemo(function() { if (!user) return []; var r = team[user] ? team[user].role : ""; return notifications.filter(function(n) { if (r === "admin") return true; return !n.forUser || n.forUser === user; }); }, [notifications, user, team]);
+  var unreadNotifs = useMemo(function() { return myNotifs.filter(function(n) { return !n.read; }); }, [myNotifs]);
 
   // Feature 9: SLA breach
   var slaBreaches = useMemo(function() {
@@ -588,7 +635,7 @@ export default function App() {
             {unreadNotifs.length > 0 && <span style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, borderRadius: "50%", background: "#DC2626", color: "#fff", fontSize: 9, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{unreadNotifs.length}</span>}
             {showNotifs && <div style={{ position: "absolute", top: 36, right: 0, width: 340, background: "#fff", borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 100, padding: 12, maxHeight: 360, overflowY: "auto", border: "1px solid hsl(214,18%,90%)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><span style={{ fontWeight: 700, fontSize: 13 }}>Notificari</span><button style={{ border: "none", background: "none", fontSize: 11, color: "#94A3B8", cursor: "pointer" }} onClick={function() { setNotifications(function(p) { return p.map(function(n) { return Object.assign({}, n, { read: true }); }); }); }}>Citite</button></div>
-              {notifications.slice(0, 20).map(function(n) { return <div key={n.id} style={{ padding: "8px 10px", borderRadius: 8, marginBottom: 4, cursor: "pointer", background: n.read ? "#F8FAFC" : GR + "12", border: "1px solid " + (n.read ? "#F1F5F9" : GR + "30"), fontSize: 12 }} onClick={function() { setNotifications(function(p) { return p.map(function(nn) { return nn.id === n.id ? Object.assign({}, nn, { read: true }) : nn; }); }); setShowNotifs(false); }}><div>{n.message}</div><div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{fr(n.time)}</div></div>; })}
+              {myNotifs.slice(0, 20).map(function(n) { return <div key={n.id} style={{ padding: "8px 10px", borderRadius: 8, marginBottom: 4, cursor: "pointer", background: n.read ? "#F8FAFC" : GR + "12", border: "1px solid " + (n.read ? "#F1F5F9" : GR + "30"), fontSize: 12 }} onClick={function() { setNotifications(function(p) { return p.map(function(nn) { return nn.id === n.id ? Object.assign({}, nn, { read: true }) : nn; }); }); setShowNotifs(false); }}><div>{n.message}</div><div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{fr(n.time)}</div></div>; })}
               {notifications.length === 0 && <div style={{ textAlign: "center", color: "#94A3B8", padding: 16, fontSize: 12 }}>Nicio notificare</div>}
             </div>}
           </div>
@@ -1197,10 +1244,11 @@ function EditUserInline({ user, onSave, onCancel }) {
 
 // Feature 6 + 12: Task modal with custom types and departments
 function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, taskTypes, departments, allTasks }) {
-  var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", department: "", shop: "", product: "", productName: "", deadline: TD, links: [], subtasks: [], comments: [], dependsOn: [], campaignItems: [] });
+  var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", department: "", shop: "", product: "", productName: "", deadline: TD, links: [], subtasks: [], comments: [], dependsOn: [], campaignItems: [], assignees: [], _pipelineNext: "" });
   var [newLink, setNewLink] = useState(""); var [newSub, setNewSub] = useState("");
   // Feature 6: custom task type input
   var [customType, setCustomType] = useState("");
+  var [multiAssign, setMultiAssign] = useState(f.assignees && f.assignees.length > 0 ? f.assignees : []);
   var [showCustomType, setShowCustomType] = useState(false);
 
   var set = function(k, v) { setF(function(p) { var n = Object.assign({}, p); n[k] = v; return n; }); };
@@ -1212,7 +1260,15 @@ function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, tas
   return <div style={S.modalOv} onClick={onClose}><div style={S.modalBox} onClick={function(e) { e.stopPropagation(); }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontSize: 17, fontWeight: 700 }}>{task ? "Editeaza Task" : "Task Nou"}</h2><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
     <label style={S.label}>Titlu *</label><input style={S.input} value={f.title} onChange={function(e) { set("title", e.target.value); }} placeholder="Ce trebuie facut?" autoFocus />
-    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Persoana</label><select style={S.fSelF} value={f.assignee} onChange={function(e) { set("assignee", e.target.value); }}>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Magazin</label><select style={S.fSelF} value={f.shop} onChange={function(e) { set("shop", e.target.value); }}><option value="">--</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div></div>
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Persoana</label><select style={S.fSelF} value={f.assignee} onChange={function(e) { set("assignee", e.target.value); }}>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select>
+    <label style={Object.assign({}, S.label, { marginTop: 6 })}>Multi-assign (optional)</label>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>{assUsers.map(function(u) { var active = multiAssign.includes(u); return <button key={u} type="button" onClick={function() { var na = active ? multiAssign.filter(function(x) { return x !== u; }) : multiAssign.concat([u]); setMultiAssign(na); set("assignees", na); }} style={Object.assign({}, S.chip, { background: active ? GR : "#F1F5F9", color: active ? "#fff" : "#475569", fontSize: 10, padding: "3px 8px" })}>{(team[u] || {}).name}</button>; })}</div>
+    {multiAssign.length > 1 && <div style={{ fontSize: 10, color: GR }}>Se vor crea {multiAssign.length} taskuri separate.</div>}
+    </div><div style={S.fCol}><label style={S.label}>Magazin</label><select style={S.fSelF} value={f.shop} onChange={function(e) { set("shop", e.target.value); }}><option value="">--</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
+    <label style={Object.assign({}, S.label, { marginTop: 6 })}>Pipeline: urmatorul (foto produs)</label>
+    <select style={S.fSelF} value={f._pipelineNext || ""} onChange={function(e) { set("_pipelineNext", e.target.value); }}><option value="">Fara pipeline</option>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select>
+    {f._pipelineNext && <div style={{ fontSize: 10, color: "#2563EB", marginTop: 2 }}>La Done, se creaza automat task pentru {(team[f._pipelineNext] || {}).name}.</div>}
+    </div></div>
     <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Platforma</label><select style={S.fSelF} value={f.platform} onChange={function(e) { set("platform", e.target.value); }}><option value="">--</option>{PLATFORMS.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Tip Task</label><select style={S.fSelF} value={f.taskType} onChange={function(e) { set("taskType", e.target.value); }}><option value="">--</option>{allTypes.map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select>{/* Feature 6: add custom type inline */}<div style={{ display: "flex", gap: 4, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1, fontSize: 11, padding: "4px 8px" })} value={customType} onChange={function(e) { setCustomType(e.target.value); }} placeholder="Tip nou..." /><button style={Object.assign({}, S.primBtn, { fontSize: 10, padding: "4px 8px" })} onClick={function() { if (customType.trim()) { set("taskType", customType.trim()); setCustomType(""); } }}>+</button></div></div></div>
     {/* Feature 12: Department dropdown */}
     <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Departament</label><select style={S.fSelF} value={f.department || ""} onChange={function(e) { set("department", e.target.value); }}><option value="">--</option>{(departments || DEF_DEPARTMENTS).map(function(d) { return <option key={d} value={d}>{d}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Prioritate</label><select style={S.fSelF} value={f.priority} onChange={function(e) { set("priority", e.target.value); }}>{PRIORITIES.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div></div>
