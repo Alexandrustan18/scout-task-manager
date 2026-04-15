@@ -783,7 +783,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
               </div>;
             })}</div>}
             {d.assignedTasks.length > 8 && <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>+{d.assignedTasks.length - 8} altele</div>}
-            {d.assignedTasks.length === 0 && d.workingTasks.length === 0 && <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 600 }}>Fara taskuri active - atribuie taskuri noi!</div>}
+            {me && me.role === "admin" && d.assignedTasks.length === 0 && d.workingTasks.length === 0 && <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 600 }}>Fara taskuri active - atribuie taskuri noi!</div>}
           </div>
         </div>
       </Card>;
