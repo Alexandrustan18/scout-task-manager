@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -781,7 +780,7 @@ export default function App() {
       {achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}
       {isMob && mobNav && <div style={S.overlay} onClick={function() { setMobNav(false); }} />}
       <aside style={Object.assign({}, S.sidebar, isMob ? { position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 200, transform: mobNav ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.2s" } : {})}>
-        <div style={S.logoArea}><span style={S.logoH}>HeyAds</span><span style={S.logoSub}>S.C.O.U.T AI</span></div>
+        <div style={S.logoArea}><span style={S.logoH}>Scout</span><span style={S.logoSub}>Task Manager</span></div>
         {canCreate && <div style={{ padding: "0 16px", marginBottom: 4 }}><button style={S.newBtn} onClick={function() { setEditTask(null); setShowAdd(true); setMobNav(false); }}><Ic d={Icons.plus} size={16} color="#fff" /> New Task</button></div>}
         <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
           {accessibleNav.map(function(n) { return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}><Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} /><span style={{ flex: 1 }}>{n.label}</span>{n.count != null && <span style={S.navBadge}>{n.count}</span>}{n.id === "anomalies" && anomalies.length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626" }} />}{n.id === "announce" && announcements.filter(function(a) { return !a.readBy || !a.readBy.includes(user); }).length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB" }} />}</div>; })}
@@ -868,7 +867,7 @@ function LoginScreen({ team, onLogin, announcements }) {
   var go = function() { if (!onLogin(u.toLowerCase().trim(), p)) setErr("Username sau parola gresita"); };
   var pubAnn = (announcements || []).filter(function(a) { return a.public; }).slice(0, 3);
   return <div style={S.loginWrap}><style>{CSS}</style><div style={S.loginCard}>
-    <div style={{ textAlign: "center", marginBottom: 28 }}><div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>HeyAds</div><div style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 2, marginTop: 4, textTransform: "uppercase" }}>S.C.O.U.T AI</div></div>
+    <div style={{ textAlign: "center", marginBottom: 28 }}><div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>Scout</div><div style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 2, marginTop: 4, textTransform: "uppercase" }}>Task Manager</div></div>
     {pubAnn.length > 0 && <div style={{ marginBottom: 16 }}>{pubAnn.map(function(a) { return <div key={a.id} style={{ padding: "8px 12px", borderRadius: 8, background: "#ECFDF5", border: "1px solid " + GR + "40", fontSize: 12, marginBottom: 6, color: GR }}><span style={{ fontWeight: 700 }}>📢 {a.title}:</span> {a.body}</div>; })}</div>}
     <label style={S.label}>Username</label><input style={S.input} value={u} onChange={function(e) { setU(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") go(); }} placeholder="User" />
     <label style={Object.assign({}, S.label, { marginTop: 14 })}>Parola</label><div style={{ position: "relative" }}><input style={Object.assign({}, S.input, { paddingRight: 42 })} type={show ? "text" : "password"} value={p} onChange={function(e) { setP(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") go(); }} placeholder="Introdu parola" /><button type="button" style={S.eyeBtn} onClick={function() { setShow(!show); }}><Ic d={show ? Icons.eyeX : Icons.eye} size={16} color="#94A3B8" /></button></div>
@@ -972,10 +971,27 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
             {d.lastLogin && <span>Ultima: {new Date(d.lastLogin).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}</span>}
           </div>}
           {d.userTargets.length > 0 && d.userTargets.map(function(tgt) {
-            var pct = tgt.target > 0 ? Math.min(100, (d.todayDone / tgt.target) * 100) : 0;
-            return <div key={tgt.id} style={{ marginBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}><span style={{ color: "#64748B" }}>Target: {tgt.metric === "all" ? "Toate" : (tgt.metric || "").replace(/^(type:|dept:|plat:)/, "")}</span><span style={{ fontWeight: 700, color: pct >= 100 ? GR : "#DC2626" }}>{d.todayDone}/{tgt.target}</span></div>
+            var normM = tgt.metric;
+            if (normM && normM !== "all" && !normM.startsWith("type:") && !normM.startsWith("dept:") && !normM.startsWith("plat:")) normM = "type:" + normM;
+            var tgtDoneToday = allTasks.filter(function(t) {
+              if (t.assignee !== d.key || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
+              if (!normM || normM === "all") return true;
+              if (normM.startsWith("type:") && t.taskType === normM.replace("type:", "")) return true;
+              if (normM.startsWith("dept:") && t.department === normM.replace("dept:", "")) return true;
+              if (normM.startsWith("plat:") && t.platform === normM.replace("plat:", "")) return true;
+              return false;
+            }).length;
+            var pct = tgt.target > 0 ? Math.min(100, (tgtDoneToday / tgt.target) * 100) : 0;
+            var rem = Math.max(0, tgt.target - tgtDoneToday);
+            var mLabel = normM === "all" ? "Toate" : (normM || "").replace(/^(type:|dept:|plat:)/, "");
+            return <div key={tgt.id} style={{ marginBottom: 8, padding: "8px 10px", borderRadius: 8, background: pct >= 100 ? "#ECFDF5" : rem > 0 ? "#FFF8F8" : "#F8FAFC", border: "1px solid " + (pct >= 100 ? GR + "30" : "#F1F5F9") }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+                <span style={{ color: "#64748B", fontWeight: 600 }}>{mLabel}</span>
+                <span style={{ fontWeight: 700, color: pct >= 100 ? GR : "#DC2626" }}>{tgtDoneToday}/{tgt.target}</span>
+              </div>
               <div style={S.progBg}><div style={S.progBar(pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626", pct)} /></div>
+              {rem > 0 && <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 700, marginTop: 4 }}>Ramas azi: {rem}</div>}
+              {pct >= 100 && <div style={{ fontSize: 11, color: GR, fontWeight: 700, marginTop: 4 }}>✓ Target atins!</div>}
             </div>;
           })}
           {d.act.length > 0 && <div style={{ marginBottom: 6 }}>{d.act.map(function(t) { return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#DC2626", padding: "2px 0" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />{t.title} - {ft(getTS(t.id))}</div>; })}</div>}
