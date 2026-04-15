@@ -317,33 +317,6 @@ export default function App() {
     return function() { clearInterval(iv); };
   }, [loading, user, recurringTasks]);
 
-  // FEATURE 3: Deadline alerts - check every 5min, persist in localStorage
-  useEffect(function() {
-    if (loading || !user) return;
-    var SK = "s7_alerted_" + user;
-    var getA = function() { try { return JSON.parse(localStorage.getItem(SK) || "{}"); } catch(e) { return {}; } };
-    var check = function() {
-      var now = Date.now();
-      var a = getA();
-      var dirty = false;
-      tasks.forEach(function(t) {
-        if (t.status === "Done" || !t.deadline) return;
-        var dl2 = new Date(t.deadline + "T23:59:59").getTime();
-        var diff = dl2 - now;
-        if (diff > 0 && diff <= 2 * 3600000 && !a[t.id + "_2h"]) {
-          a[t.id + "_2h"] = 1; dirty = true;
-          addNotif("deadline", "URGENT: \"" + t.title + "\" expira in 2 ore!", t.id, t.assignee);
-        } else if (diff > 2 * 3600000 && diff <= 24 * 3600000 && !a[t.id + "_24h"]) {
-          a[t.id + "_24h"] = 1; dirty = true;
-          addNotif("deadline", "Reminder: \"" + t.title + "\" expira in 24 ore", t.id, t.assignee);
-        }
-      });
-      if (dirty) { try { localStorage.setItem(SK, JSON.stringify(a)); } catch(e) {} }
-    };
-    var t1 = setTimeout(check, 15000);
-    var iv = setInterval(check, 300000);
-    return function() { clearTimeout(t1); clearInterval(iv); };
-  }, [loading, user]);
 
   useEffect(function() { var iv = setInterval(function() { setTick(function(t) { return t + 1; }); }, 1000); return function() { clearInterval(iv); }; }, []);
   useEffect(function() { if (!user) return; var fn = function() { setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); return n; }); }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
