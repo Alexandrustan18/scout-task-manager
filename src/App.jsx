@@ -780,7 +780,7 @@ export default function App() {
       {achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}
       {isMob && mobNav && <div style={S.overlay} onClick={function() { setMobNav(false); }} />}
       <aside style={Object.assign({}, S.sidebar, isMob ? { position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 200, transform: mobNav ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.2s" } : {})}>
-        <div style={S.logoArea}><span style={S.logoH}>Scout</span><span style={S.logoSub}>Task Manager</span></div>
+        <div style={S.logoArea}><span style={S.logoH}>HeyAds</span><span style={S.logoSub}>Task Manager</span></div>
         {canCreate && <div style={{ padding: "0 16px", marginBottom: 4 }}><button style={S.newBtn} onClick={function() { setEditTask(null); setShowAdd(true); setMobNav(false); }}><Ic d={Icons.plus} size={16} color="#fff" /> New Task</button></div>}
         <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
           {accessibleNav.map(function(n) { return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}><Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} /><span style={{ flex: 1 }}>{n.label}</span>{n.count != null && <span style={S.navBadge}>{n.count}</span>}{n.id === "anomalies" && anomalies.length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626" }} />}{n.id === "announce" && announcements.filter(function(a) { return !a.readBy || !a.readBy.includes(user); }).length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB" }} />}</div>; })}
@@ -867,7 +867,7 @@ function LoginScreen({ team, onLogin, announcements }) {
   var go = function() { if (!onLogin(u.toLowerCase().trim(), p)) setErr("Username sau parola gresita"); };
   var pubAnn = (announcements || []).filter(function(a) { return a.public; }).slice(0, 3);
   return <div style={S.loginWrap}><style>{CSS}</style><div style={S.loginCard}>
-    <div style={{ textAlign: "center", marginBottom: 28 }}><div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>Scout</div><div style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 2, marginTop: 4, textTransform: "uppercase" }}>Task Manager</div></div>
+    <div style={{ textAlign: "center", marginBottom: 28 }}><div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>HeyAds</div><div style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 2, marginTop: 4, textTransform: "uppercase" }}>Task Manager</div></div>
     {pubAnn.length > 0 && <div style={{ marginBottom: 16 }}>{pubAnn.map(function(a) { return <div key={a.id} style={{ padding: "8px 12px", borderRadius: 8, background: "#ECFDF5", border: "1px solid " + GR + "40", fontSize: 12, marginBottom: 6, color: GR }}><span style={{ fontWeight: 700 }}>📢 {a.title}:</span> {a.body}</div>; })}</div>}
     <label style={S.label}>Username</label><input style={S.input} value={u} onChange={function(e) { setU(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") go(); }} placeholder="User" />
     <label style={Object.assign({}, S.label, { marginTop: 14 })}>Parola</label><div style={{ position: "relative" }}><input style={Object.assign({}, S.input, { paddingRight: 42 })} type={show ? "text" : "password"} value={p} onChange={function(e) { setP(e.target.value); setErr(""); }} onKeyDown={function(e) { if (e.key === "Enter") go(); }} placeholder="Introdu parola" /><button type="button" style={S.eyeBtn} onClick={function() { setShow(!show); }}><Ic d={show ? Icons.eyeX : Icons.eye} size={16} color="#94A3B8" /></button></div>
@@ -980,7 +980,10 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
               if (normM.startsWith("dept:") && t.department === normM.replace("dept:", "")) return true;
               if (normM.startsWith("plat:") && t.platform === normM.replace("plat:", "")) return true;
               return false;
-            }).length;
+            }).reduce(function(acc, t) {
+              // Campaign tasks count by number of finalized products, not 1 per task
+              return acc + (t._finalizedCount && t._finalizedCount > 0 ? t._finalizedCount : 1);
+            }, 0);
             var pct = tgt.target > 0 ? Math.min(100, (tgtDoneToday / tgt.target) * 100) : 0;
             var rem = Math.max(0, tgt.target - tgtDoneToday);
             var mLabel = normM === "all" ? "Toate" : (normM || "").replace(/^(type:|dept:|plat:)/, "");
@@ -1345,37 +1348,139 @@ function LoginHistoryPage({ loginHistory, team, isMob }) {
 
 function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUsers, taskTypes, departments }) {
   var [showForm, setShowForm] = useState(false);
+  var [editId, setEditId] = useState(null);
+  var [editForm, setEditForm] = useState({});
   var [form, setForm] = useState({ userId: "", metric: "all", target: 25, daysPerWeek: 5 });
+
   var metricOptions = [{ id: "all", l: "Toate taskurile" }].concat(
     (taskTypes || DEF_TASK_TYPES).map(function(t) { return { id: "type:" + t, l: "Tip: " + t }; }),
     (departments || DEF_DEPARTMENTS).map(function(d) { return { id: "dept:" + d, l: "Dept: " + d }; }),
     PLATFORMS.map(function(p) { return { id: "plat:" + p, l: "Platforma: " + p }; })
   );
-  var save = function() { if (!form.userId || !form.metric) return; setTargets(function(p) { return p.concat([Object.assign({}, form, { id: gid() })]); }); setShowForm(false); setForm({ userId: "", metric: "all", target: 25, daysPerWeek: 5 }); };
-  return <div style={{ maxWidth: 800 }}>{canEdit && <div style={{ marginBottom: 16 }}><button style={S.primBtn} onClick={function() { setShowForm(!showForm); }}><Ic d={Icons.plus} size={14} color="#fff" /> Target nou</button></div>}{showForm && <Card style={{ marginBottom: 16 }}><div style={S.fRow}><div style={S.fCol}><label style={S.label}>User</label><select style={S.fSelF} value={form.userId} onChange={function(e) { setForm(Object.assign({}, form, { userId: e.target.value })); }}><option value="">--</option>{visUsers.filter(function(u) { return u !== "admin"; }).map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Metric</label><select style={S.fSelF} value={form.metric} onChange={function(e) { setForm(Object.assign({}, form, { metric: e.target.value })); }}>{metricOptions.map(function(o) { return <option key={o.id} value={o.id}>{o.l}</option>; })}</select></div></div><div style={S.fRow}><div style={S.fCol}><label style={S.label}>Target zilnic</label><input style={S.input} type="number" value={form.target} onChange={function(e) { setForm(Object.assign({}, form, { target: parseInt(e.target.value) || 0 })); }} /></div><div style={S.fCol}><label style={S.label}>Zile/sapt</label><input style={S.input} type="number" min="1" max="7" value={form.daysPerWeek} onChange={function(e) { setForm(Object.assign({}, form, { daysPerWeek: parseInt(e.target.value) || 5 })); }} /></div></div><div style={{ marginTop: 12, display: "flex", gap: 8 }}><button style={S.primBtn} onClick={save}>Salveaza</button><button style={S.cancelBtn} onClick={function() { setShowForm(false); }}>Anuleaza</button></div></Card>}
-  {targets.map(function(tgt) {
-    var u = team[tgt.userId]; if (!u) return null;
-    // Normalize metric: backward compat - old targets saved plain "Product Launch" without prefix
-    var normMetric = tgt.metric;
-    if (normMetric && normMetric !== "all" && !normMetric.startsWith("type:") && !normMetric.startsWith("dept:") && !normMetric.startsWith("plat:")) {
-      // Try to detect old format: check if it matches a taskType, department or platform
-      if ((taskTypes || DEF_TASK_TYPES).includes(normMetric)) normMetric = "type:" + normMetric;
-      else if ((departments || DEF_DEPARTMENTS).includes(normMetric)) normMetric = "dept:" + normMetric;
-      else if (PLATFORMS.includes(normMetric)) normMetric = "plat:" + normMetric;
-      else normMetric = "type:" + normMetric; // fallback: assume type
-    }
-    var todayDone = tasks.filter(function(t) { if (t.assignee !== tgt.userId || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false; if (normMetric === "all") return true; if (normMetric.startsWith("type:") && t.taskType === normMetric.replace("type:", "")) return true; if (normMetric.startsWith("dept:") && t.department === normMetric.replace("dept:", "")) return true; if (normMetric.startsWith("plat:") && t.platform === normMetric.replace("plat:", "")) return true; return false; }).length;
-    var pct = tgt.target > 0 ? (todayDone / tgt.target) * 100 : 0;
-    var rem = Math.max(0, tgt.target - todayDone);
-    var metricLabel = (metricOptions.find(function(o) { return o.id === normMetric; }) || {}).l || tgt.metric;
-    return <Card key={tgt.id} style={{ marginBottom: 16, borderLeft: "3px solid " + (pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626") }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}><Av color={u.color} size={32}>{u.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontWeight: 700 }}>{u.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{metricLabel} | {tgt.target}/zi | {tgt.daysPerWeek} zile/sapt</div></div>
-      {canEdit && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) setTargets(function(p) { return p.filter(function(x) { return x.id !== tgt.id; }); }); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}</div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span>Done azi: {todayDone}/{tgt.target}</span><span style={{ fontWeight: 700, color: pct >= 100 ? GR : "#DC2626" }}>{Math.round(pct)}%</span></div>
-      <div style={S.progBg}><div style={S.progBar(pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626", Math.min(pct, 100))} /></div>
-      {rem > 0 && <div style={{ marginTop: 6, fontSize: 12, color: "#DC2626", fontWeight: 600 }}>Ramas azi: {rem}</div>}
-    </Card>;
-  })}{targets.length === 0 && <Card style={{ textAlign: "center", color: "#94A3B8", padding: 30 }}>Niciun target.</Card>}</div>;
+
+  var normM = function(metric) {
+    if (!metric || metric === "all") return "all";
+    if (metric.startsWith("type:") || metric.startsWith("dept:") || metric.startsWith("plat:")) return metric;
+    if ((taskTypes || DEF_TASK_TYPES).includes(metric)) return "type:" + metric;
+    if ((departments || DEF_DEPARTMENTS).includes(metric)) return "dept:" + metric;
+    if (PLATFORMS.includes(metric)) return "plat:" + metric;
+    return "type:" + metric;
+  };
+
+  var calcDone = function(userId, metric) {
+    var nm = normM(metric);
+    return tasks.filter(function(t) {
+      if (t.assignee !== userId || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
+      if (nm === "all") return true;
+      if (nm.startsWith("type:") && t.taskType === nm.replace("type:", "")) return true;
+      if (nm.startsWith("dept:") && t.department === nm.replace("dept:", "")) return true;
+      if (nm.startsWith("plat:") && t.platform === nm.replace("plat:", "")) return true;
+      return false;
+    }).reduce(function(acc, t) {
+      // Campaign tasks: count finalized products, not 1 per task
+      return acc + (t._finalizedCount && t._finalizedCount > 0 ? t._finalizedCount : 1);
+    }, 0);
+  };
+
+  var save = function() {
+    if (!form.userId || !form.metric) return;
+    setTargets(function(p) { return p.concat([Object.assign({}, form, { id: gid() })]); });
+    setShowForm(false);
+    setForm({ userId: "", metric: "all", target: 25, daysPerWeek: 5 });
+  };
+
+  var saveEdit = function(id) {
+    setTargets(function(p) { return p.map(function(x) { return x.id === id ? Object.assign({}, x, editForm) : x; }); });
+    setEditId(null);
+  };
+
+  return <div style={{ maxWidth: 800 }}>
+    {canEdit && <div style={{ marginBottom: 16 }}>
+      <button style={S.primBtn} onClick={function() { setShowForm(!showForm); }}><Ic d={Icons.plus} size={14} color="#fff" /> Target nou</button>
+    </div>}
+
+    {showForm && <Card style={{ marginBottom: 16 }}>
+      <div style={S.fRow}>
+        <div style={S.fCol}><label style={S.label}>User</label><select style={S.fSelF} value={form.userId} onChange={function(e) { setForm(Object.assign({}, form, { userId: e.target.value })); }}><option value="">--</option>{visUsers.filter(function(u) { return u !== "admin"; }).map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select></div>
+        <div style={S.fCol}><label style={S.label}>Metric</label><select style={S.fSelF} value={form.metric} onChange={function(e) { setForm(Object.assign({}, form, { metric: e.target.value })); }}>{metricOptions.map(function(o) { return <option key={o.id} value={o.id}>{o.l}</option>; })}</select></div>
+      </div>
+      <div style={S.fRow}>
+        <div style={S.fCol}><label style={S.label}>Target zilnic</label><input style={S.input} type="number" min="1" value={form.target} onChange={function(e) { setForm(Object.assign({}, form, { target: parseInt(e.target.value) || 1 })); }} /></div>
+        <div style={S.fCol}><label style={S.label}>Zile/sapt</label><input style={S.input} type="number" min="1" max="7" value={form.daysPerWeek} onChange={function(e) { setForm(Object.assign({}, form, { daysPerWeek: parseInt(e.target.value) || 5 })); }} /></div>
+      </div>
+      <div style={{ marginTop: 12, display: "flex", gap: 8 }}><button style={S.primBtn} onClick={save}>Salveaza</button><button style={S.cancelBtn} onClick={function() { setShowForm(false); }}>Anuleaza</button></div>
+    </Card>}
+
+    {targets.map(function(tgt) {
+      var u = team[tgt.userId]; if (!u) return null;
+      var nm = normM(tgt.metric);
+      var todayDone = calcDone(tgt.userId, tgt.metric);
+      var pct = tgt.target > 0 ? (todayDone / tgt.target) * 100 : 0;
+      var rem = Math.max(0, tgt.target - todayDone);
+      var supliment = rem > 0 ? Math.ceil(rem * 1.2) : 0;
+      var metricLabel = (metricOptions.find(function(o) { return o.id === nm; }) || {}).l || tgt.metric;
+      var borderC = pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626";
+      var isEd = editId === tgt.id;
+
+      return <Card key={tgt.id} style={{ marginBottom: 14, borderLeft: "4px solid " + borderC }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <Av color={u.color} size={36}>{u.name[0]}</Av>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{u.name}</div>
+            <div style={{ fontSize: 11, color: "#94A3B8" }}>{metricLabel} | {tgt.daysPerWeek} zile/sapt</div>
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {canEdit && <button style={S.iconBtn} onClick={function() { setEditId(isEd ? null : tgt.id); setEditForm({ target: tgt.target, daysPerWeek: tgt.daysPerWeek, metric: tgt.metric }); }}><Ic d={Icons.edit} size={15} color={isEd ? GR : "#94A3B8"} /></button>}
+            {canEdit && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi targetul?")) setTargets(function(p) { return p.filter(function(x) { return x.id !== tgt.id; }); }); }}><Ic d={Icons.del} size={15} color="#EF4444" /></button>}
+          </div>
+        </div>
+
+        {/* Edit form inline */}
+        {isEd && <div style={{ background: "#F8FAFC", borderRadius: 8, padding: "10px 12px", marginBottom: 12, border: "1px solid hsl(214,18%,90%)" }}>
+          <div style={S.fRow}>
+            <div style={S.fCol}><label style={S.label}>Target zilnic</label><input style={S.input} type="number" min="1" value={editForm.target} onChange={function(e) { setEditForm(Object.assign({}, editForm, { target: parseInt(e.target.value) || 1 })); }} /></div>
+            <div style={S.fCol}><label style={S.label}>Zile/sapt</label><input style={S.input} type="number" min="1" max="7" value={editForm.daysPerWeek} onChange={function(e) { setEditForm(Object.assign({}, editForm, { daysPerWeek: parseInt(e.target.value) || 5 })); }} /></div>
+          </div>
+          <div style={S.fCol}><label style={S.label}>Metric</label><select style={S.fSelF} value={normM(editForm.metric)} onChange={function(e) { setEditForm(Object.assign({}, editForm, { metric: e.target.value })); }}>{metricOptions.map(function(o) { return <option key={o.id} value={o.id}>{o.l}</option>; })}</select></div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button style={S.primBtn} onClick={function() { saveEdit(tgt.id); }}>Salveaza</button><button style={S.cancelBtn} onClick={function() { setEditId(null); }}>Anuleaza</button></div>
+        </div>}
+
+        {/* Progress section */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
+          <div style={{ textAlign: "center", padding: "8px 6px", borderRadius: 8, background: "#ECFDF5" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: GR }}>{todayDone}</div>
+            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>FINALIZATE AZI</div>
+          </div>
+          <div style={{ textAlign: "center", padding: "8px 6px", borderRadius: 8, background: "#F8FAFC" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#475569" }}>{tgt.target}</div>
+            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>TARGET / ZI</div>
+          </div>
+          <div style={{ textAlign: "center", padding: "8px 6px", borderRadius: 8, background: rem > 0 ? "#FEF2F2" : "#ECFDF5" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: rem > 0 ? "#DC2626" : GR }}>{rem > 0 ? rem : "✓"}</div>
+            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>{rem > 0 ? "LIPSA AZI" : "ATINS!"}</div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+            <span style={{ color: "#64748B" }}>Progres: {todayDone}/{tgt.target}</span>
+            <span style={{ fontWeight: 700, color: borderC }}>{Math.round(Math.min(pct, 100))}%</span>
+          </div>
+          <div style={S.progBg}><div style={S.progBar(borderC, Math.min(pct, 100))} /></div>
+        </div>
+
+        {rem > 0 && <div style={{ background: "#FFF8F8", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626" }}>Deficit: {rem} taskuri</div>
+            <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Supliment recomandat: <b style={{ color: "#EA580C" }}>{supliment} taskuri</b> (120% din lipsa)</div>
+          </div>
+          <div style={{ fontSize: 24 }}>⚠️</div>
+        </div>}
+      </Card>;
+    })}
+    {targets.length === 0 && <Card style={{ textAlign: "center", color: "#94A3B8", padding: 30 }}>Niciun target setat.</Card>}
+  </div>;
 }
 
 function TemplatesPage({ templates, setTemplates, canEdit, isAdmin, shops, onCreateFromTpl }) {
