@@ -504,7 +504,7 @@ export default function App() {
 
   var visUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
   var assUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team).filter(function(k) { return k !== "admin"; }); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
-  var visTasks = useMemo(function() { if (!user) return []; return tasks.filter(function(t) { return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy); }); }, [tasks, visUsers, user]);
+  var visTasks = useMemo(function() { if (!user) return []; return tasks.filter(function(t) { if (t._campaignParent) return false; return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy); }); }, [tasks, visUsers, user]);
 
   var filtered = useMemo(function() {
     return visTasks.filter(function(t) {
@@ -585,6 +585,24 @@ export default function App() {
       var autoPrio2 = autoPriority(t.deadline, t.priority);
       var assignees = t.assignees && t.assignees.length > 0 ? t.assignees : [t.assignee];
       if (t.campaignItems && t.campaignItems.length > 0 && !t._isCampaignChild) {
+        // Auto-save campaign products to products list ONLY for Ad Creation tasks
+        if (t.taskType === "Ad Creation" && t.campaignItems.length > 0) {
+          setProducts(function(prevProds) {
+            var updated = prevProds.slice();
+            t.campaignItems.forEach(function(ci) {
+              if (!ci.name || !ci.name.trim()) return;
+              // Check if already exists (same name + same shop)
+              var exists = updated.find(function(p) {
+                return p.name.toLowerCase().trim() === ci.name.toLowerCase().trim() && p.store === (t.shop || "");
+              });
+              if (!exists) {
+                updated.push({ id: gid(), name: ci.name.trim(), url: ci.link || "", store: t.shop || "", sku: "", _fromCampaign: true, addedAt: ts() });
+              }
+            });
+            return updated;
+          });
+          addLog("PRODUCTS", "Auto-salvat " + t.campaignItems.length + " produse din campaign Ad Creation");
+        }
         var parentId = gid();
         var parentTask = Object.assign({}, t, { id: parentId, priority: autoPrio2, createdBy: user, createdAt: ts(), updatedAt: ts(), _campaignParent: true });
         var childTasks = [];
