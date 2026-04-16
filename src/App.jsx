@@ -1417,26 +1417,41 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
       var todayDone = calcDone(tgt.userId, tgt.metric);
       var pct = tgt.target > 0 ? (todayDone / tgt.target) * 100 : 0;
       var rem = Math.max(0, tgt.target - todayDone);
-      var supliment = rem > 0 ? Math.ceil(rem * 1.2) : 0;
       var metricLabel = (metricOptions.find(function(o) { return o.id === nm; }) || {}).l || tgt.metric;
-      var borderC = pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626";
       var isEd = editId === tgt.id;
 
-      return <Card key={tgt.id} style={{ marginBottom: 14, borderLeft: "4px solid " + borderC }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <Av color={u.color} size={36}>{u.name[0]}</Av>
+      // Build 14-day history
+      var histDays = []; var totalExpected = 0; var totalActual = 0;
+      for (var d = 13; d >= 0; d--) {
+        var dt = new Date(); dt.setDate(dt.getDate() - d); var dStr = ds(dt);
+        var dayDone = tasks.filter(function(t2) {
+          if (t2.assignee !== tgt.userId || t2.status !== "Done" || !t2.updatedAt || ds(t2.updatedAt) !== dStr) return false;
+          if (nm === "all") return true;
+          if (nm.startsWith("type:") && t2.taskType === nm.replace("type:", "")) return true;
+          if (nm.startsWith("dept:") && t2.department === nm.replace("dept:", "")) return true;
+          if (nm.startsWith("plat:") && t2.platform === nm.replace("plat:", "")) return true;
+          return false;
+        }).reduce(function(acc, t2) { return acc + (t2._finalizedCount && t2._finalizedCount > 0 ? t2._finalizedCount : 1); }, 0);
+        var dow = dt.getDay();
+        var isWorkday = dow >= 1 && dow <= (tgt.daysPerWeek >= 6 ? 6 : 5);
+        var expected = isWorkday ? tgt.target : 0;
+        totalExpected += expected; totalActual += dayDone;
+        histDays.push({ date: dStr, label: dt.getDate() + " " + MN[dt.getMonth()], done: dayDone, expected: expected, deficit: expected - dayDone });
+      }
+      var totalDeficit = totalExpected - totalActual;
+      var borderC = pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626";
+
+      return <Card key={tgt.id} style={{ marginBottom: 16, borderLeft: "3px solid " + (pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626") }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <Av color={u.color} size={32}>{u.name[0]}</Av>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{u.name}</div>
-            <div style={{ fontSize: 11, color: "#94A3B8" }}>{metricLabel} | {tgt.daysPerWeek} zile/sapt</div>
+            <div style={{ fontWeight: 700 }}>{u.name}</div>
+            <div style={{ fontSize: 11, color: "#94A3B8" }}>{metricLabel} | {tgt.target}/zi | {tgt.daysPerWeek} zile/sapt</div>
           </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            {canEdit && <button style={S.iconBtn} onClick={function() { setEditId(isEd ? null : tgt.id); setEditForm({ target: tgt.target, daysPerWeek: tgt.daysPerWeek, metric: tgt.metric }); }}><Ic d={Icons.edit} size={15} color={isEd ? GR : "#94A3B8"} /></button>}
-            {canEdit && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi targetul?")) setTargets(function(p) { return p.filter(function(x) { return x.id !== tgt.id; }); }); }}><Ic d={Icons.del} size={15} color="#EF4444" /></button>}
-          </div>
+          {canEdit && <button style={Object.assign({}, S.chip, { fontSize: 10, background: isEd ? GR + "18" : "#F1F5F9", color: isEd ? GR : "#64748B" })} onClick={function() { setEditId(isEd ? null : tgt.id); setEditForm({ target: tgt.target, daysPerWeek: tgt.daysPerWeek, metric: tgt.metric }); }}>Edit</button>}
+          {canEdit && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) setTargets(function(p) { return p.filter(function(x) { return x.id !== tgt.id; }); }); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
         </div>
 
-        {/* Edit form inline */}
         {isEd && <div style={{ background: "#F8FAFC", borderRadius: 8, padding: "10px 12px", marginBottom: 12, border: "1px solid hsl(214,18%,90%)" }}>
           <div style={S.fRow}>
             <div style={S.fCol}><label style={S.label}>Target zilnic</label><input style={S.input} type="number" min="1" value={editForm.target} onChange={function(e) { setEditForm(Object.assign({}, editForm, { target: parseInt(e.target.value) || 1 })); }} /></div>
@@ -1446,40 +1461,37 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button style={S.primBtn} onClick={function() { saveEdit(tgt.id); }}>Salveaza</button><button style={S.cancelBtn} onClick={function() { setEditId(null); }}>Anuleaza</button></div>
         </div>}
 
-        {/* Progress section */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
-          <div style={{ textAlign: "center", padding: "8px 6px", borderRadius: 8, background: "#ECFDF5" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: GR }}>{todayDone}</div>
-            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>FINALIZATE AZI</div>
-          </div>
-          <div style={{ textAlign: "center", padding: "8px 6px", borderRadius: 8, background: "#F8FAFC" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#475569" }}>{tgt.target}</div>
-            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>TARGET / ZI</div>
-          </div>
-          <div style={{ textAlign: "center", padding: "8px 6px", borderRadius: 8, background: rem > 0 ? "#FEF2F2" : "#ECFDF5" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: rem > 0 ? "#DC2626" : GR }}>{rem > 0 ? rem : "✓"}</div>
-            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>{rem > 0 ? "LIPSA AZI" : "ATINS!"}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span>Done azi: {todayDone}/{tgt.target}</span><span style={{ fontWeight: 700, color: pct >= 100 ? GR : "#DC2626" }}>{Math.round(pct)}%</span></div>
+        <div style={S.progBg}><div style={S.progBar(pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626", Math.min(pct, 100))} /></div>
+        {rem > 0 && <div style={{ marginTop: 6, fontSize: 12, color: "#DC2626", fontWeight: 600 }}>Ramas azi: {rem}</div>}
+
+        <div style={{ marginTop: 10, padding: 10, background: totalDeficit > 0 ? "#FEF2F2" : "#F0FDF4", borderRadius: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600 }}>
+            <span>Ultimele 14 zile</span>
+            <span style={{ color: totalDeficit > 0 ? "#DC2626" : GR }}>Asteptat: {totalExpected} | Facut: {totalActual} | {totalDeficit > 0 ? "Deficit: " + totalDeficit : "Surplus: +" + Math.abs(totalDeficit)}</span>
           </div>
         </div>
 
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
-            <span style={{ color: "#64748B" }}>Progres: {todayDone}/{tgt.target}</span>
-            <span style={{ fontWeight: 700, color: borderC }}>{Math.round(Math.min(pct, 100))}%</span>
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 60px 60px 60px", gap: 2, fontSize: 11 }}>
+            <div style={{ fontWeight: 600, color: "#94A3B8", padding: 4 }}>Zi</div>
+            <div style={{ fontWeight: 600, color: "#94A3B8", padding: 4, textAlign: "center" }}>Target</div>
+            <div style={{ fontWeight: 600, color: "#94A3B8", padding: 4, textAlign: "center" }}>Facut</div>
+            <div style={{ fontWeight: 600, color: "#94A3B8", padding: 4, textAlign: "center" }}>+/-</div>
+            {histDays.map(function(h) {
+              var isToday2 = h.date === TD;
+              return [
+                <div key={h.date + "l"} style={{ padding: "3px 4px", background: isToday2 ? GR + "12" : "#F8FAFC", fontWeight: isToday2 ? 700 : 400, borderRadius: 3 }}>{h.label}{isToday2 ? " (azi)" : ""}</div>,
+                <div key={h.date + "e"} style={{ padding: "3px 4px", textAlign: "center", background: "#F8FAFC", borderRadius: 3 }}>{h.expected || "-"}</div>,
+                <div key={h.date + "d"} style={{ padding: "3px 4px", textAlign: "center", background: "#F8FAFC", borderRadius: 3, fontWeight: 600, color: h.expected > 0 ? (h.done >= h.expected ? GR : "#DC2626") : "#94A3B8" }}>{h.done || (h.expected > 0 ? "0" : "-")}</div>,
+                <div key={h.date + "df"} style={{ padding: "3px 4px", textAlign: "center", borderRadius: 3, fontWeight: 600, color: h.deficit > 0 ? "#DC2626" : h.deficit < 0 ? GR : "#94A3B8", background: h.deficit > 0 ? "#FEF2F2" : h.deficit < 0 ? "#F0FDF4" : "#F8FAFC" }}>{h.expected > 0 ? (h.deficit > 0 ? "-" + h.deficit : h.deficit < 0 ? "+" + Math.abs(h.deficit) : "✓") : "-"}</div>
+              ];
+            })}
           </div>
-          <div style={S.progBg}><div style={S.progBar(borderC, Math.min(pct, 100))} /></div>
         </div>
-
-        {rem > 0 && <div style={{ background: "#FFF8F8", border: "1px solid #FECACA", borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626" }}>Deficit: {rem} taskuri</div>
-            <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Supliment recomandat: <b style={{ color: "#EA580C" }}>{supliment} taskuri</b> (120% din lipsa)</div>
-          </div>
-          <div style={{ fontSize: 24 }}>⚠️</div>
-        </div>}
       </Card>;
     })}
-    {targets.length === 0 && <Card style={{ textAlign: "center", color: "#94A3B8", padding: 30 }}>Niciun target setat.</Card>}
+    {targets.length === 0 && <Card style={{ textAlign: "center", color: "#94A3B8", padding: 30 }}>Niciun target.</Card>}
   </div>;
 }
 
