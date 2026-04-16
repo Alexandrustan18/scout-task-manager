@@ -1809,283 +1809,166 @@ function EditUserInline({ u, m, team, setTeam }) {
 }
 
 // FEATURE 15: TaskModal with auto-save draft + FEATURE 16: conflict detection + FEATURE 4: tags
+// Feature 6 + 12: Task modal with custom types and departments
 function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, taskTypes, departments, allTasks, allTags, taskEditors, user, setTaskEditors }) {
-  var defForm = {
-    title: "", description: "", assignee: assUsers[0] || "", assignees: [], status: "To Do", priority: "Normal",
-    platform: "", taskType: "", department: "", shop: "", product: "", productName: "", deadline: "",
-    links: [], subtasks: [], comments: [], tags: [], dependsOn: [], campaignItems: [],
-    recurring: "", _pipelineNext: "", _replacedLink: ""
-  };
+  var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", department: "", shop: "", product: "", productName: "", deadline: TD, links: [], subtasks: [], comments: [], dependsOn: [], campaignItems: [], assignees: [], tags: [], _pipelineNext: "" });
+  var [newLink, setNewLink] = useState(""); var [newSub, setNewSub] = useState("");
+  var [customType, setCustomType] = useState("");
+  var [multiAssign, setMultiAssign] = useState(f.assignees && f.assignees.length > 0 ? f.assignees : []);
+  var [newTag, setNewTag] = useState("");
 
-  // FEATURE 15: Load from draft or task
-  var [f, setF] = useState(function() {
-    if (task && task.id) {
-      // Edit mode: no draft, use task directly
-      return Object.assign({}, defForm, task, { assignees: task.assignees || [], tags: task.tags || [] });
-    }
-    // New task: try to load draft
-    try {
-      var draft = localStorage.getItem("scout_task_draft");
-      if (draft) {
-        var parsed = JSON.parse(draft);
-        return Object.assign({}, defForm, parsed);
-      }
-    } catch(e) {}
-    return Object.assign({}, defForm, task || {}, { assignees: (task && task.assignees) || [], tags: (task && task.tags) || [] });
-  });
-
-  var [newLink, setNewLink] = useState(""); var [newSt, setNewSt] = useState(""); var [newTag, setNewTag] = useState(""); var [newCI, setNewCI] = useState(""); var [isCamp, setIsCamp] = useState(task && task.campaignItems && task.campaignItems.length > 0); var [tab, setTab] = useState("main"); var [showPW, setShowPW] = useState(false);
-  // FEATURE 16: Conflict detection
-  var [conflictWarning, setConflictWarning] = useState(null);
-  var me = team[user] || {};
-  var isAdmin = me.role === "admin";
-  var isDone = f.status === "Done";
-
-  // FEATURE 15: Auto-save draft on every form change (only for new tasks)
+  // Auto-save draft (new tasks only)
   useEffect(function() {
-    if (!task || !task.id) {
-      try { localStorage.setItem("scout_task_draft", JSON.stringify(f)); } catch(e) {}
-    }
+    if (!task || !task.id) { try { localStorage.setItem("scout_task_draft", JSON.stringify(f)); } catch(e) {} }
   }, [f]);
 
-  // FEATURE 16: Conflict detection on mount
+  // Conflict detection
   useEffect(function() {
     if (!task || !task.id) return;
-    var editor = taskEditors[task.id];
+    var editor = taskEditors && taskEditors[task.id];
     if (editor && editor.userId !== user) {
       var age = Date.now() - new Date(editor.at).getTime();
       if (age < 120000) {
-        setConflictWarning(editor);
+        // show subtle warning in console, not blocking UI
+        console.log("Conflict: " + editor.name + " is also editing this task");
       }
     }
-    // Broadcast self as editor
-    var updated = Object.assign({}, taskEditors, { [task.id]: { userId: user, name: (team[user] || {}).name, at: new Date().toISOString() } });
+    var updated = Object.assign({}, taskEditors || {}, { [task.id]: { userId: user, name: (team[user] || {}).name, at: new Date().toISOString() } });
     if (setTaskEditors) setTaskEditors(updated);
   }, []);
 
-  var up = function(k, v) { setF(function(p) { return Object.assign({}, p, { [k]: v }); }); };
-  var addLink = function() { if (!newLink.trim()) return; up("links", f.links.concat([newLink.trim()])); setNewLink(""); };
-  var addSt = function() { if (!newSt.trim()) return; up("subtasks", f.subtasks.concat([{ id: gid(), text: newSt.trim(), done: false }])); setNewSt(""); };
-  var addTag = function(tag) { var t = (tag || newTag).trim().toLowerCase().replace(/\s+/g, "-"); if (!t || f.tags.includes(t)) { setNewTag(""); return; } up("tags", f.tags.concat([t])); setNewTag(""); };
-  var addCI = function() { if (!newCI.trim()) return; up("campaignItems", f.campaignItems.concat([{ name: newCI.trim(), link: "" }])); setNewCI(""); };
-  var pmUsers = Object.keys(team).filter(function(u) { return team[u].role === "pm"; });
-  var prodList = f.shop ? products.filter(function(p) { return p.shop === f.shop; }) : products;
-  var deps = allTasks.filter(function(t) { return t.id !== (task && task.id) && !t._campaignParent; });
+  var set = function(k, v) { setF(function(p) { var n = Object.assign({}, p); n[k] = v; return n; }); };
+  var addLink = function() { var l = newLink.trim(); if (l) { set("links", (f.links || []).concat([l])); setNewLink(""); } };
+  var selProd = function(pid) { var p = products.find(function(x) { return x.id === pid; }); if (p) { set("product", p.id); set("productName", p.name); if (p.url) set("links", (f.links || []).concat([p.url])); } };
+  var addTag = function() { var t = newTag.trim().toLowerCase().replace(/\s+/g, "-"); if (t && !(f.tags || []).includes(t)) { set("tags", (f.tags || []).concat([t])); } setNewTag(""); };
 
-  var doSave = function() {
-    if (!f.title.trim()) return;
-    // FEATURE 9: block save on Done for non-admin
-    if (task && task.id && task.status === "Done" && !isAdmin) return;
-    var toSave = Object.assign({}, f);
-    if (task && task.id) toSave.id = task.id;
-    onSave(toSave);
-    localStorage.removeItem("scout_task_draft");
-  };
+  var allTypes = taskTypes || DEF_TASK_TYPES;
 
-  var tabs = [{ id: "main", l: "Task" }, { id: "meta", l: "Meta" }, { id: "subtasks", l: "Subtaskuri" + (f.subtasks.length > 0 ? " (" + f.subtasks.length + ")" : "") }, { id: "links", l: "Linkuri" + (f.links.length > 0 ? " (" + f.links.length + ")" : "") }, { id: "deps", l: "Dependente" }, { id: "campaign", l: "Campaign" }];
-
-  return <div style={S.overlay} onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
-    <div style={S.modal}>
-      {/* FEATURE 16: Conflict warning */}
-      {conflictWarning && <div style={{ background: "#FFFBEB", border: "1px solid #D97706", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}>
-        <span style={{ fontSize: 16 }}>⚠️</span>
-        <span><b>{conflictWarning.name}</b> editeaza acelasi task acum. Atentie la conflicte!</span>
-        <button style={{ border: "none", background: "none", cursor: "pointer", marginLeft: "auto" }} onClick={function() { setConflictWarning(null); }}><Ic d={Icons.x} size={14} color="#D97706" /></button>
-      </div>}
-
-      {/* FEATURE 9: Done block warning for non-admin */}
-      {task && task.id && isDone && !isAdmin && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}>
-        <Ic d={Icons.lock} size={16} color="#DC2626" /><span style={{ color: "#DC2626", fontWeight: 600 }}>Task Done - editare blocata. Contacteaza adminul.</span>
-      </div>}
-
-      {/* FEATURE 15: Draft indicator */}
-      {!task && localStorage.getItem("scout_task_draft") && <div style={{ background: "#ECFDF5", border: "1px solid " + GR + "40", borderRadius: 8, padding: "6px 12px", marginBottom: 8, fontSize: 11, color: GR, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>Draft restaurat automat</span>
-        <button style={{ border: "none", background: "none", fontSize: 10, color: "#DC2626", cursor: "pointer" }} onClick={function() { localStorage.removeItem("scout_task_draft"); setF(Object.assign({}, defForm)); }}>Sterge draft</button>
-      </div>}
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700 }}>{task && task.id ? "Editeaza Task" : "Task Nou"}</h2>
-        <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", padding: 4 }}><Ic d={Icons.x} size={20} color="#94A3B8" /></button>
-      </div>
-
-      <div style={{ display: "flex", gap: 4, marginBottom: 16, flexWrap: "wrap" }}>{tabs.map(function(tb) { return <button key={tb.id} onClick={function() { setTab(tb.id); }} style={Object.assign({}, S.chip, { background: tab === tb.id ? GR : "#F1F5F9", color: tab === tb.id ? "#fff" : "#475569", fontWeight: tab === tb.id ? 600 : 400 })}>{tb.l}</button>; })}</div>
-
-      {tab === "main" && <div>
-        <label style={S.label}>Titlu *</label>
-        <input style={S.input} value={f.title} onChange={function(e) { up("title", e.target.value); }} disabled={isDone && !isAdmin} />
-
-        <div style={S.fRow}>
-          <div style={S.fCol}><label style={S.label}>Status</label><select style={S.fSelF} value={f.status} onChange={function(e) { up("status", e.target.value); }} disabled={isDone && !isAdmin}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div>
-          <div style={S.fCol}><label style={S.label}>Prioritate</label><select style={S.fSelF} value={f.priority} onChange={function(e) { up("priority", e.target.value); }}>{PRIORITIES.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div>
-        </div>
-
-        <div style={S.fRow}>
-          <div style={S.fCol}><label style={S.label}>Assignee</label><select style={S.fSelF} value={f.assignee} onChange={function(e) { up("assignee", e.target.value); }}><option value="">--</option>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select></div>
-          <div style={S.fCol}><label style={S.label}>Multi-assign</label><select style={S.fSelF} multiple value={f.assignees} onChange={function(e) { up("assignees", Array.from(e.target.selectedOptions).map(function(o) { return o.value; })); }}>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select></div>
-        </div>
-
-        <div style={S.fRow}>
-          <div style={S.fCol}><label style={S.label}>Deadline</label><input style={S.input} type="date" value={f.deadline ? f.deadline.slice(0, 10) : ""} onChange={function(e) { up("deadline", e.target.value); }} /></div>
-          <div style={S.fCol}><label style={S.label}>Magazin</label><select style={S.fSelF} value={f.shop} onChange={function(e) { up("shop", e.target.value); up("product", ""); up("productName", ""); }}><option value="">--</option>{(shops || []).map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div>
-        </div>
-
-        <label style={S.label}>Descriere</label>
-        <textarea style={S.ta} value={f.description} onChange={function(e) { up("description", e.target.value); }} />
-
-        {/* FEATURE 4: Tags input */}
-        <label style={S.label}>Tags</label>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-          {f.tags.map(function(tag) { return <span key={tag} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 12, background: "#ECFDF5", color: GR, fontSize: 11, fontWeight: 600, border: "1px solid " + GR + "30" }}>#{tag}<button style={{ border: "none", background: "none", cursor: "pointer", padding: 0, display: "flex" }} onClick={function() { up("tags", f.tags.filter(function(t) { return t !== tag; })); }}><Ic d={Icons.x} size={10} color={GR} /></button></span>; })}
-        </div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
-          <input style={Object.assign({}, S.input, { flex: 1 })} value={newTag} onChange={function(e) { setNewTag(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} placeholder="Tag nou... (Enter pt adaugare)" list="tag-suggestions" />
-          <datalist id="tag-suggestions">{(allTags || []).map(function(t) { return <option key={t} value={t} />; })}</datalist>
-          <button style={S.primBtn} onClick={function() { addTag(); }}>+</button>
-        </div>
-        {allTags && allTags.length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{allTags.filter(function(t) { return !f.tags.includes(t); }).slice(0, 8).map(function(t) { return <button key={t} style={Object.assign({}, S.chip, { fontSize: 10, background: "#F0FDF4", color: GR, padding: "2px 8px" })} onClick={function() { addTag(t); }}>#{t}</button>; })}</div>}
-
-        <label style={S.label}>Pipeline -> Foto Produs</label>
-        <select style={S.fSelF} value={f._pipelineNext} onChange={function(e) { up("_pipelineNext", e.target.value); }}>
-          <option value="">Fara pipeline</option>
-          {Object.keys(team).filter(function(u) { return (team[u] || {}).role !== "admin"; }).map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}
-        </select>
-      </div>}
-
-      {tab === "meta" && <div>
-        <div style={S.fRow}>
-          <div style={S.fCol}><label style={S.label}>Platforma</label><select style={S.fSelF} value={f.platform} onChange={function(e) { up("platform", e.target.value); }}><option value="">--</option>{PLATFORMS.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div>
-          <div style={S.fCol}><label style={S.label}>Tip task</label><select style={S.fSelF} value={f.taskType} onChange={function(e) { up("taskType", e.target.value); }}><option value="">--</option>{(taskTypes || DEF_TASK_TYPES).map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select></div>
-        </div>
-        <div style={S.fRow}>
-          <div style={S.fCol}><label style={S.label}>Departament</label><select style={S.fSelF} value={f.department} onChange={function(e) { up("department", e.target.value); }}><option value="">--</option>{(departments || DEF_DEPARTMENTS).map(function(d) { return <option key={d} value={d}>{d}</option>; })}</select></div>
-          <div style={S.fCol}><label style={S.label}>Produs</label><select style={S.fSelF} value={f.product} onChange={function(e) { var p = prodList.find(function(x) { return x.id === e.target.value; }); up("product", e.target.value); up("productName", p ? p.name : ""); }}><option value="">--</option>{prodList.map(function(p) { return <option key={p.id} value={p.id}>{p.name}</option>; })}</select></div>
-        </div>
-        <label style={S.label}>Link inlocuit (pentru pipeline)</label>
-        <input style={S.input} value={f._replacedLink || ""} onChange={function(e) { up("_replacedLink", e.target.value); }} placeholder="Link la produsul foto" />
-      </div>}
-
-      {tab === "subtasks" && <div>
-        {f.subtasks.map(function(st, i) { return <div key={st.id || i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #F8FAFC" }}><input type="checkbox" checked={st.done} onChange={function(e) { up("subtasks", f.subtasks.map(function(x, j) { return j === i ? Object.assign({}, x, { done: e.target.checked }) : x; })); }} style={{ accentColor: GR }} /><span style={{ flex: 1, fontSize: 13, textDecoration: st.done ? "line-through" : "none", color: st.done ? "#94A3B8" : "#1E293B" }}>{st.text}</span><button style={S.iconBtn} onClick={function() { up("subtasks", f.subtasks.filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
-        <div style={{ display: "flex", gap: 6, marginTop: 10 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={newSt} onChange={function(e) { setNewSt(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") { e.preventDefault(); addSt(); } }} placeholder="Subtask nou..." /><button style={S.primBtn} onClick={addSt}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
-      </div>}
-
-      {tab === "links" && <div>
-        {f.links.map(function(l, i) { return <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #F8FAFC" }}><a href={l} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 12, color: "#2563EB", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l}</a><button style={S.iconBtn} onClick={function() { up("links", f.links.filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
-        <div style={{ display: "flex", gap: 6, marginTop: 10 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={newLink} onChange={function(e) { setNewLink(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") { e.preventDefault(); addLink(); } }} placeholder="https://..." /><button style={S.primBtn} onClick={addLink}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
-      </div>}
-
-      {tab === "deps" && <div>
-        <label style={S.label}>Depinde de (trebuie sa fie Done inainte)</label>
-        <div style={{ maxHeight: 300, overflowY: "auto" }}>{deps.map(function(t) { var sel = f.dependsOn && f.dependsOn.includes(t.id); return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", borderBottom: "1px solid #F8FAFC" }}><input type="checkbox" checked={!!sel} onChange={function(e) { var newDeps = e.target.checked ? (f.dependsOn || []).concat([t.id]) : (f.dependsOn || []).filter(function(id) { return id !== t.id; }); up("dependsOn", newDeps); }} style={{ accentColor: GR }} /><span style={{ flex: 1, fontSize: 13 }}>{t.title}</span><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge></div>; })}</div>
-      </div>}
-
-      {tab === "campaign" && <div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}><label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}><input type="checkbox" checked={isCamp} onChange={function(e) { setIsCamp(e.target.checked); if (!e.target.checked) up("campaignItems", []); }} style={{ accentColor: GR }} /> Mod Campaign (mai multe produse)</label></div>
-        {isCamp && <div>
-          {f.campaignItems.map(function(ci, i) { return <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}><span style={{ fontSize: 11, color: "#94A3B8", minWidth: 20 }}>{i + 1}.</span><input style={Object.assign({}, S.input, { flex: 1 })} value={ci.name} onChange={function(e) { up("campaignItems", f.campaignItems.map(function(x, j) { return j === i ? Object.assign({}, x, { name: e.target.value }) : x; })); }} placeholder="Produs..." /><input style={Object.assign({}, S.input, { flex: 1 })} value={ci.link || ""} onChange={function(e) { up("campaignItems", f.campaignItems.map(function(x, j) { return j === i ? Object.assign({}, x, { link: e.target.value }) : x; })); }} placeholder="Link produs..." /><button style={S.iconBtn} onClick={function() { up("campaignItems", f.campaignItems.filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
-          <div style={{ display: "flex", gap: 6, marginTop: 8 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={newCI} onChange={function(e) { setNewCI(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") { e.preventDefault(); addCI(); } }} placeholder="Produs nou..." /><button style={S.primBtn} onClick={addCI}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
-        </div>}
-      </div>}
-
-      <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-        <button style={Object.assign({}, S.primBtn, { flex: 1, justifyContent: "center" })} onClick={doSave} disabled={isDone && !isAdmin && !!(task && task.id)}>
-          {task && task.id ? "Salveaza" : "Creeaza Task"}
-        </button>
-        <button style={S.cancelBtn} onClick={onClose}>Anuleaza</button>
-      </div>
-    </div>
-  </div>;
+  return <div style={S.modalOv} onClick={onClose}><div style={S.modalBox} onClick={function(e) { e.stopPropagation(); }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontSize: 17, fontWeight: 700 }}>{task ? "Editeaza Task" : "Task Nou"}</h2><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
+    <label style={S.label}>Titlu *</label><input style={S.input} value={f.title} onChange={function(e) { set("title", e.target.value); }} placeholder="Ce trebuie facut?" autoFocus />
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Persoana</label><select style={S.fSelF} value={f.assignee} onChange={function(e) { set("assignee", e.target.value); }}>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select>
+    <label style={Object.assign({}, S.label, { marginTop: 6 })}>Multi-assign (optional)</label>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>{assUsers.map(function(u) { var active = multiAssign.includes(u); return <button key={u} type="button" onClick={function() { var na = active ? multiAssign.filter(function(x) { return x !== u; }) : multiAssign.concat([u]); setMultiAssign(na); set("assignees", na); }} style={Object.assign({}, S.chip, { background: active ? GR : "#F1F5F9", color: active ? "#fff" : "#475569", fontSize: 10, padding: "3px 8px" })}>{(team[u] || {}).name}</button>; })}</div>
+    {multiAssign.length > 1 && <div style={{ fontSize: 10, color: GR }}>Se vor crea {multiAssign.length} taskuri separate.</div>}
+    </div><div style={S.fCol}><label style={S.label}>Magazin</label><select style={S.fSelF} value={f.shop} onChange={function(e) { set("shop", e.target.value); }}><option value="">--</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
+    {assUsers.includes("mara_poze") && <div>
+    <label style={Object.assign({}, S.label, { marginTop: 6 })}>Pipeline: urmatorul (foto produs)</label>
+    <select style={S.fSelF} value={f._pipelineNext || ""} onChange={function(e) { set("_pipelineNext", e.target.value); }}><option value="">Fara pipeline</option>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select>
+    {f._pipelineNext && <div style={{ fontSize: 10, color: "#2563EB", marginTop: 2 }}>La Done, se creaza automat task pentru {(team[f._pipelineNext] || {}).name}.</div>}
+    </div>}
+    </div></div>
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Platforma</label><select style={S.fSelF} value={f.platform} onChange={function(e) { set("platform", e.target.value); }}><option value="">--</option>{PLATFORMS.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Tip Task</label><select style={S.fSelF} value={f.taskType} onChange={function(e) { set("taskType", e.target.value); }}><option value="">--</option>{allTypes.map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select><div style={{ display: "flex", gap: 4, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1, fontSize: 11, padding: "4px 8px" })} value={customType} onChange={function(e) { setCustomType(e.target.value); }} placeholder="Tip nou..." /><button style={Object.assign({}, S.primBtn, { fontSize: 10, padding: "4px 8px" })} onClick={function() { if (customType.trim()) { set("taskType", customType.trim()); setCustomType(""); } }}>+</button></div></div></div>
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Departament</label><select style={S.fSelF} value={f.department || ""} onChange={function(e) { set("department", e.target.value); }}><option value="">--</option>{(departments || DEF_DEPARTMENTS).map(function(d) { return <option key={d} value={d}>{d}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Prioritate</label><select style={S.fSelF} value={f.priority} onChange={function(e) { set("priority", e.target.value); }}>{PRIORITIES.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div></div>
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Status</label><select style={S.fSelF} value={f.status} onChange={function(e) { set("status", e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Deadline</label><input style={S.fSelF} type="date" value={f.deadline} onChange={function(e) { set("deadline", e.target.value); }} /></div></div>
+    {products.length > 0 && <div><label style={S.label}>Produs (lista)</label><select style={S.fSelF} value={f.product || ""} onChange={function(e) { selProd(e.target.value); }}><option value="">--</option>{products.map(function(p) { return <option key={p.id} value={p.id}>{p.name}{p.store ? " (" + p.store + ")" : ""}</option>; })}</select></div>}
+    <label style={S.label}>Produs (manual)</label><input style={S.input} value={f.productName || ""} onChange={function(e) { set("productName", e.target.value); }} placeholder="Nume produs" />
+    <label style={S.label}>Linkuri</label><div style={{ display: "flex", gap: 6, marginBottom: 8 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={newLink} onChange={function(e) { setNewLink(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addLink(); }} placeholder="https://..." /><button style={S.primBtn} onClick={addLink}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>{(f.links || []).map(function(l, i) { return <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 12 }}><Ic d={Icons.link} size={12} color="#2563EB" /><a href={l} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l}</a><button style={S.iconBtn} onClick={function() { set("links", (f.links || []).filter(function(_, idx) { return idx !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
+    <label style={S.label}>Tags</label>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>{(f.tags || []).map(function(tag) { return <span key={tag} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 12, background: "#ECFDF5", color: GR, fontSize: 11, fontWeight: 600 }}>#{tag}<button style={{ border: "none", background: "none", cursor: "pointer", padding: 0, lineHeight: 1 }} onClick={function() { set("tags", (f.tags || []).filter(function(t) { return t !== tag; })); }}>×</button></span>; })}</div>
+    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><input style={Object.assign({}, S.input, { flex: 1, fontSize: 12 })} value={newTag} onChange={function(e) { setNewTag(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} placeholder="Tag nou (Enter)" list="tag-sugg" /><datalist id="tag-sugg">{(allTags || []).map(function(t) { return <option key={t} value={t} />; })}</datalist><button style={Object.assign({}, S.primBtn, { padding: "4px 10px" })} onClick={addTag}>+</button></div>
+    <label style={S.label}>Subtaskuri</label>{(f.subtasks || []).map(function(st, i) { return <div key={st.id || i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}><input type="checkbox" checked={st.done} onChange={function() { var ns = (f.subtasks || []).map(function(s, j) { return j === i ? Object.assign({}, s, { done: !s.done }) : s; }); set("subtasks", ns); }} /><input style={Object.assign({}, S.input, { flex: 1 })} value={st.text} onChange={function(e) { var ns = (f.subtasks || []).map(function(s, j) { return j === i ? Object.assign({}, s, { text: e.target.value }) : s; }); set("subtasks", ns); }} /><button style={S.iconBtn} onClick={function() { set("subtasks", (f.subtasks || []).filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}<div style={{ display: "flex", gap: 6, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1 })} placeholder="Subtask nou..." value={newSub} onChange={function(e) { setNewSub(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter" && newSub.trim()) { set("subtasks", (f.subtasks || []).concat([{ id: gid(), text: newSub.trim(), done: false }])); setNewSub(""); } }} /><button style={S.primBtn} onClick={function() { if (newSub.trim()) { set("subtasks", (f.subtasks || []).concat([{ id: gid(), text: newSub.trim(), done: false }])); setNewSub(""); } }}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
+    <label style={S.label}>Produse Campaign (mega-task)</label>
+    <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>Adauga produse/items - la finalizare selectezi cate ai completat si se adauga la target.</div>
+    {(f.campaignItems || []).map(function(ci, i) { return <div key={ci.id || i} style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 3, padding: "4px 8px", background: "#F8FAFC", borderRadius: 6, flexWrap: "wrap" }}><span style={{ fontSize: 11, color: "#94A3B8", width: 22 }}>{i + 1}.</span><input style={Object.assign({}, S.input, { flex: 2, fontSize: 12, padding: "4px 8px", minWidth: 120 })} value={ci.name} onChange={function(e) { var nc = (f.campaignItems || []).map(function(x, j) { return j === i ? Object.assign({}, x, { name: e.target.value }) : x; }); set("campaignItems", nc); }} placeholder="Produs" /><input style={Object.assign({}, S.input, { flex: 3, fontSize: 11, padding: "4px 8px", minWidth: 140 })} value={ci.link || ""} onChange={function(e) { var nc = (f.campaignItems || []).map(function(x, j) { return j === i ? Object.assign({}, x, { link: e.target.value }) : x; }); set("campaignItems", nc); }} placeholder="Link produs..." /><button style={S.iconBtn} onClick={function() { set("campaignItems", (f.campaignItems || []).filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
+    <div style={{ display: "flex", gap: 6, marginTop: 4, marginBottom: 8 }}><input style={Object.assign({}, S.input, { flex: 1 })} id="campItemInput" placeholder="Nume produs / item..." onKeyDown={function(e) { if (e.key === "Enter" && e.target.value.trim()) { set("campaignItems", (f.campaignItems || []).concat([{ id: gid(), name: e.target.value.trim(), link: "" }])); e.target.value = ""; } }} /><button style={S.primBtn} onClick={function() { var el = document.getElementById("campItemInput"); if (el && el.value.trim()) { set("campaignItems", (f.campaignItems || []).concat([{ id: gid(), name: el.value.trim(), link: "" }])); el.value = ""; } }}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
+    {(f.campaignItems || []).length > 0 && <div style={{ fontSize: 11, color: "#64748B", marginBottom: 8 }}>{(f.campaignItems || []).length} produse in campaign. La finalizare vei selecta cate ai completat.</div>}
+    <label style={Object.assign({}, S.label, { marginTop: 12 })}>Descriere</label><textarea style={S.ta} value={f.description} onChange={function(e) { set("description", e.target.value); }} placeholder="Detalii..." />
+    <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button><button style={S.primBtn} onClick={function() { if (f.title.trim()) { var toSave = Object.assign({}, f, { tags: f.tags || [] }); if (task) toSave.id = task.id; onSave(toSave); localStorage.removeItem("scout_task_draft"); } }}>{task ? "Salveaza" : "Creeaza"}</button></div>
+  </div></div>;
 }
 
 function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTimer, products, onClose, onEdit, statusHistory, isAdmin }) {
-  var a = team[task.assignee] || {}; var me = team[user] || {}; var can = me.role === "admin" || me.role === "pm" || task.assignee === user; var secs = getTS(task.id); var run = timers[task.id] && timers[task.id].running; var ov = isOv(task); var stH = statusHistory[task.id] || [];
-  var [newComment, setNewComment] = useState("");
-  var addComment = function() { if (!newComment.trim()) return; var c = { id: gid(), user: user, name: (team[user] || {}).name, text: newComment.trim(), time: ts() }; setTasks(function(p) { return p.map(function(t) { return t.id === task.id ? Object.assign({}, t, { comments: (t.comments || []).concat([c]) }) : t; }); }); setNewComment(""); };
-  return <div style={S.overlay} onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
-    <div style={S.modal}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <Badge bg={SC[task.status] + "18"} color={SC[task.status]}>{task.status}</Badge>
-          <Badge bg={PC[task.priority] + "18"} color={PC[task.priority]}>{task.priority}</Badge>
-          {ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}
-          {task.status === "Done" && !isAdmin && <Badge bg="#F8FAFC" color="#94A3B8"><Ic d={Icons.lock} size={10} color="#94A3B8" /> Blocat</Badge>}
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {can && !(task.status === "Done" && !isAdmin) && <button style={S.primBtn} onClick={onEdit}><Ic d={Icons.edit} size={14} color="#fff" /> Edit</button>}
-          <button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button>
-        </div>
-      </div>
-      <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>{task.title}</h2>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-        {a.name && <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}><Av color={a.color} size={20} fs={9}>{a.name[0]}</Av>{a.name}</span>}
-        {task.shop && <Badge bg="#ECFDF5" color={GR}>{task.shop}</Badge>}
-        {task.productName && <Badge bg="#EFF6FF" color="#2563EB">{task.productName}</Badge>}
-        {task.platform && <Badge bg="#F1F5F9" color="#475569">{task.platform}</Badge>}
-        {task.department && <Badge bg="#FFF7ED" color="#EA580C">{task.department}</Badge>}
-        {task.taskType && <Badge bg="#F5F3FF" color="#7C3AED">{task.taskType}</Badge>}
-        {task.deadline && <span style={{ fontSize: 12, color: ov ? "#DC2626" : "#64748B" }}>{fd(task.deadline)}</span>}
-        {(task.tags || []).map(function(tag) { return <Badge key={tag} bg="#F0FDF4" color={GR}>#{tag}</Badge>; })}
-      </div>
-      {task.description && <div style={{ fontSize: 13, color: "#475569", marginBottom: 14, padding: "8px 12px", background: "#F8FAFC", borderRadius: 8, whiteSpace: "pre-wrap" }}>{task.description}</div>}
-      {can && task.status !== "Done" && <div style={{ display: "flex", gap: 8, marginBottom: 14 }}><button style={Object.assign({}, S.timerBtn, { background: run ? "#FEF2F2" : "#F8FAFC", color: run ? "#DC2626" : GR, borderColor: run ? "#FECACA" : "#E2E8F0" })} onClick={function() { togTimer(task.id); }}><Ic d={run ? Icons.stop : Icons.play} size={14} color={run ? "#DC2626" : GR} />{run ? "Stop" : "Start"} Timer{secs > 0 && " | " + ft(secs)}</button></div>}
-      {task.subtasks && task.subtasks.length > 0 && <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Subtaskuri ({task.subtasks.filter(function(s) { return s.done; }).length}/{task.subtasks.length})</div>{task.subtasks.map(function(st) { return <div key={st.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: st.done ? GR : "#CBD5E1" }} /><span style={{ fontSize: 13, textDecoration: st.done ? "line-through" : "none", color: st.done ? "#94A3B8" : "#1E293B" }}>{st.text}</span></div>; })}</div>}
-      {task.links && task.links.length > 0 && <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Linkuri</div>{task.links.map(function(l, i) { return <a key={i} href={l} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#2563EB", marginBottom: 4 }}><Ic d={Icons.link} size={12} color="#2563EB" />{l.length > 60 ? l.slice(0, 60) + "..." : l}</a>; })}</div>}
-      {stH.length > 0 && <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Istoric status</div>{stH.map(function(sh, i) { return <div key={i} style={{ fontSize: 11, display: "flex", gap: 8, padding: "2px 0", color: "#64748B" }}><Badge bg={SC[sh.status] + "18"} color={SC[sh.status]}>{sh.status}</Badge><span>{ff(sh.at)}</span></div>; })}</div>}
-      <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 14 }}><div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Comentarii ({(task.comments || []).length})</div>{(task.comments || []).map(function(c) { var cu = team[c.user] || {}; return <div key={c.id} style={{ padding: "8px 0", borderBottom: "1px solid #F8FAFC" }}><div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}><Av color={cu.color || "#94A3B8"} size={18} fs={9}>{(cu.name || "?")[0]}</Av><span style={{ fontSize: 12, fontWeight: 600 }}>{cu.name || c.name}</span><span style={{ fontSize: 10, color: "#CBD5E1" }}>{fr(c.time)}</span></div><div style={{ fontSize: 13, color: "#475569", paddingLeft: 24 }}>{c.text}</div></div>; })}{can && <div style={{ display: "flex", gap: 6, marginTop: 10 }}><input style={Object.assign({}, S.input, { flex: 1, fontSize: 12 })} value={newComment} onChange={function(e) { setNewComment(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") { e.preventDefault(); addComment(); } }} placeholder="Comentariu..." /><button style={S.primBtn} onClick={addComment}><Ic d={Icons.comment} size={14} color="#fff" /></button></div>}</div>
-    </div>
-  </div>;
+  var [commentText, setCommentText] = useState(""); var t = tasks.find(function(x) { return x.id === task.id; }) || task; var a = team[t.assignee] || {}; var secs = getTS(t.id); var subtasks = t.subtasks || []; var comments = t.comments || []; var doneS = subtasks.filter(function(s) { return s.done; }).length;
+  var addComment = function() { if (!commentText.trim()) return; setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, x, { comments: (x.comments || []).concat([{ id: gid(), userId: user, text: commentText.trim(), time: ts() }]) }) : x; }); }); setCommentText(""); };
+  var toggleSub = function(stId) { setTasks(function(p) { return p.map(function(x) { if (x.id !== t.id) return x; return Object.assign({}, x, { subtasks: (x.subtasks || []).map(function(s) { return s.id === stId ? Object.assign({}, s, { done: !s.done }) : s; }) }); }); }); };
+  var hist = (statusHistory || {})[t.id] || [];
+  var tis = {};
+  for (var i2 = 0; i2 < hist.length; i2++) { var nx = hist[i2 + 1]; var dur = nx ? hDiff(hist[i2].at, nx.at) : (t.status !== "Done" ? hDiff(hist[i2].at, ts()) : 0); tis[hist[i2].status] = (tis[hist[i2].status] || 0) + Math.round(dur); }
+  var deps = (t.dependsOn || []).map(function(depId) { return tasks.find(function(x) { return x.id === depId; }); }).filter(Boolean);
+  var [showReplace, setShowReplace] = useState(false);
+  var [replaceLink, setReplaceLink] = useState("");
+  var [replaceNote, setReplaceNote] = useState("");
+  var doReplace = function() {
+    if (!replaceLink.trim()) return;
+    setTasks(function(p) { return p.map(function(x) {
+      if (x.id !== t.id) return x;
+      var newLinks = (x.links || []).slice();
+      return Object.assign({}, x, { _replacedLink: replaceLink.trim(), _replacedNote: replaceNote.trim(), _replacedBy: user, _originalLinks: x._originalLinks || newLinks.slice(), links: [replaceLink.trim()].concat(newLinks), updatedAt: ts() });
+    }); });
+    setShowReplace(false); setReplaceLink(""); setReplaceNote("");
+  };
+
+  return <div style={S.modalOv} onClick={onClose}><div style={Object.assign({}, S.modalBox, { maxWidth: 640 })} onClick={function(e) { e.stopPropagation(); }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div><h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>{t.title}</h2><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{t.department && <Badge bg="#FFF7ED" color="#EA580C">{t.department}</Badge>}{(t.tags || []).map(function(tag) { return <Badge key={tag} bg="#ECFDF5" color={GR}>#{tag}</Badge>; })}{isOv(t) && <Badge bg="#FEF2F2" color="#DC2626">OVERDUE</Badge>}</div></div><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
+    {t.description && <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>{t.description}</div>}
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginBottom: 16 }}><div><strong>Asignat:</strong> {a.name || "-"}</div><div><strong>Deadline:</strong> {t.deadline ? fd(t.deadline) : "-"}</div><div><strong>Magazin:</strong> {t.shop || "-"}</div><div><strong>Timp:</strong> {ft(secs)}</div>{t.platform && <div><strong>Platforma:</strong> {t.platform}</div>}{t.taskType && <div><strong>Tip:</strong> {t.taskType}</div>}{t.productName && <div><strong>Produs:</strong> {t.productName}</div>}{t.department && <div><strong>Departament:</strong> {t.department}</div>}<div><strong>Creat:</strong> {ff(t.createdAt)}</div>{t._finalizedCount != null && <div><strong>Finalizate:</strong> {t._finalizedCount}/{(t.campaignItems || []).length}</div>}</div>
+    {t._replacedLink && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}><div style={{ fontWeight: 600, fontSize: 12, color: GR, marginBottom: 4 }}>Link actualizat{t._replacedBy && team[t._replacedBy] ? " de " + team[t._replacedBy].name : ""}:</div><a href={t._replacedLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: GR, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Ic d={Icons.ext} size={12} color={GR} />{t._replacedLink}</a>{t._replacedNote && <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>{t._replacedNote}</div>}</div>}
+    {t.links && t.links.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>{t._replacedLink ? "Linkuri (inclusiv original):" : "Linkuri:"}</div>{t.links.map(function(l, i) { var isReplaced = t._originalLinks && t._originalLinks.includes(l) && t._replacedLink && l !== t._replacedLink; return <a key={i} href={l} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: isReplaced ? "#94A3B8" : "#2563EB", marginBottom: 2, textDecoration: isReplaced ? "line-through" : "none" }}><Ic d={Icons.ext} size={10} color={isReplaced ? "#94A3B8" : "#2563EB"} />{l}{isReplaced && <span style={{ fontSize: 9, color: "#DC2626", marginLeft: 4 }}>(inlocuit)</span>}</a>; })}</div>}
+    {user === "dana" && t.assignee === user && t.status !== "Done" && <div style={{ marginBottom: 12 }}>{!showReplace && <button style={Object.assign({}, S.primBtn, { background: "#D97706", fontSize: 12 })} onClick={function() { setShowReplace(true); }}>Am schimbat produsul / Link nou</button>}{showReplace && <Card style={{ background: "#FFFBEB", borderLeft: "3px solid #D97706" }}><label style={S.label}>Link produs nou</label><input style={S.input} value={replaceLink} onChange={function(e) { setReplaceLink(e.target.value); }} placeholder="https://..." /><label style={S.label}>Observatie (optional)</label><input style={S.input} value={replaceNote} onChange={function(e) { setReplaceNote(e.target.value); }} placeholder="Ex: Nu am gasit, am schimbat cu..." /><div style={{ display: "flex", gap: 8, marginTop: 8 }}><button style={S.primBtn} onClick={doReplace}>Salveaza link nou</button><button style={S.cancelBtn} onClick={function() { setShowReplace(false); }}>Anuleaza</button></div></Card>}</div>}
+    {t.campaignItems && t.campaignItems.length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6 }}>Campaign ({t.campaignItems.length} produse){t._finalizedCount != null && <span style={{ marginLeft: 8, color: GR }}>- {t._finalizedCount} finalizate</span>}</div>{t.campaignItems.map(function(ci, i) { return <div key={ci.id || i} style={{ fontSize: 12, padding: "3px 0", display: "flex", alignItems: "center", gap: 6 }}><span style={{ color: "#94A3B8", width: 20 }}>{i + 1}.</span><span>{ci.name}</span></div>; })}</div>}
+    {Object.keys(tis).length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F8FAFC", borderRadius: 8 }}><div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Timp per status:</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{Object.entries(tis).map(function(e) { return <Badge key={e[0]} bg={(SC[e[0]] || "#94A3B8") + "18"} color={SC[e[0]] || "#94A3B8"}>{e[0]}: {e[1]}h</Badge>; })}</div></div>}
+    {deps.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Depinde de:</div>{deps.map(function(d) { return <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 0" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: SC[d.status] }} /><span>{d.title}</span><Badge bg={(SC[d.status] || "#94A3B8") + "18"} color={SC[d.status] || "#94A3B8"}>{d.status}</Badge></div>; })}</div>}
+    {subtasks.length > 0 && <div style={{ marginBottom: 12, borderTop: "1px solid #F1F5F9", paddingTop: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8 }}>Subtaskuri ({doneS}/{subtasks.length})</div><div style={Object.assign({}, S.progBg, { marginBottom: 8 })}><div style={S.progBar(doneS === subtasks.length ? GR : "#D97706", subtasks.length > 0 ? (doneS / subtasks.length) * 100 : 0)} /></div>{subtasks.map(function(st) { return <div key={st.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0", fontSize: 13, cursor: "pointer" }} onClick={function() { toggleSub(st.id); }}><span style={{ width: 18, height: 18, borderRadius: 4, border: "1.5px solid " + (st.done ? GR : "#CBD5E1"), background: st.done ? GR : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, flexShrink: 0 }}>{st.done ? "*" : ""}</span><span style={{ textDecoration: st.done ? "line-through" : "none", color: st.done ? "#94A3B8" : "#1E293B" }}>{st.text}</span></div>; })}</div>}
+    <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}><Ic d={Icons.comment} size={14} color="#64748B" /> Comentarii ({comments.length})</div><div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 8 }}>{comments.map(function(c) { var cu = team[c.userId] || {}; var isMine = c.userId === user; return <div key={c.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", marginBottom: 6 }}><div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>{cu.name || "?"} | {fr(c.time)}</div><div style={{ padding: "6px 12px", borderRadius: 10, maxWidth: "80%", background: isMine ? GR : "#F1F5F9", color: isMine ? "#fff" : "#1E293B", fontSize: 13 }}>{c.text}</div></div>; })}</div><div style={{ display: "flex", gap: 6 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={commentText} onChange={function(e) { setCommentText(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addComment(); }} placeholder="Comentariu..." /><button style={S.primBtn} onClick={addComment}>Trimite</button></div></div>
+    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}><button style={S.cancelBtn} onClick={onEdit}>Editeaza</button><button style={S.primBtn} onClick={onClose}>Inchide</button></div>
+  </div></div>;
 }
 
 function CampaignFinalizeModal({ task, onFinalize, onClose }) {
-  var [count, setCount] = useState(task.campaignItems ? task.campaignItems.length : 1);
-  return <div style={S.overlay} onClick={function(e) { if (e.target === e.currentTarget) onClose(); }}>
-    <div style={Object.assign({}, S.modal, { maxWidth: 420 })}>
-      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Finalizeaza Campaign</h2>
-      <div style={{ fontSize: 13, color: "#64748B", marginBottom: 14 }}>Cate produse au mers in campaign: <b>{task.title}</b>?</div>
-      <label style={S.label}>Nr produse finalizate</label>
-      <input style={S.input} type="number" min="1" value={count} onChange={function(e) { setCount(parseInt(e.target.value) || 1); }} />
-      <div style={{ marginTop: 16, display: "flex", gap: 8 }}><button style={Object.assign({}, S.primBtn, { flex: 1, justifyContent: "center" })} onClick={function() { onFinalize(count); }}>Finalizeaza</button><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button></div>
-    </div>
-  </div>;
+  var [count, setCount] = useState((task.campaignItems || []).length);
+  var total = (task.campaignItems || []).length;
+  return <div style={S.modalOv} onClick={onClose}><div style={Object.assign({}, S.modalBox, { maxWidth: 440 })} onClick={function(e) { e.stopPropagation(); }}>
+    <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>Finalizeaza Campaign</h2>
+    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{task.title}</div>
+    <div style={{ fontSize: 12, color: "#64748B", marginBottom: 16 }}>{total} produse in campaign:</div>
+    <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 16 }}>{(task.campaignItems || []).map(function(ci, i) { return <div key={ci.id || i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, background: "#F8FAFC", fontSize: 12 }}><span style={{ color: "#94A3B8", width: 22 }}>{i + 1}.</span><span style={{ flex: 1 }}>{ci.name}</span></div>; })}</div>
+    <label style={S.label}>Cate ai finalizat?</label>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}><input style={Object.assign({}, S.input, { width: 100, fontSize: 20, fontWeight: 700, textAlign: "center" })} type="number" min="0" max={total} value={count} onChange={function(e) { var v = parseInt(e.target.value) || 0; setCount(Math.min(v, total)); }} /><span style={{ fontSize: 14, color: "#64748B" }}>/ {total} produse</span></div>
+    <div style={S.progBg}><div style={S.progBar(count >= total ? GR : count >= total / 2 ? "#D97706" : "#DC2626", total > 0 ? (count / total) * 100 : 0)} /></div>
+    <div style={{ fontSize: 12, color: "#64748B", marginTop: 8, marginBottom: 16 }}>{count} produse se adauga la targetul zilnic. {total - count > 0 ? (total - count) + " ramase." : "Toate finalizate!"}</div>
+    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button><button style={S.primBtn} onClick={function() { onFinalize(count); }}>Finalizeaza ({count})</button></div>
+  </div></div>;
 }
 
+
 var S = {
-  app: { display: "flex", minHeight: "100vh", background: "#FAFAFA" },
-  loginWrap: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "hsl(216,22%,11%)", padding: 16 },
-  loginCard: { background: "#fff", borderRadius: 16, padding: 36, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" },
-  sidebar: { width: 230, background: "hsl(216,22%,11%)", display: "flex", flexDirection: "column", minHeight: "100vh", borderRight: "1px solid hsl(216,22%,18%)" },
-  logoArea: { padding: "24px 20px 14px", borderBottom: "1px solid hsl(216,22%,18%)", display: "flex", flexDirection: "column" },
-  logoH: { fontSize: 20, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 },
-  logoSub: { fontSize: 9, color: "#7A8BA0", letterSpacing: 3, textTransform: "uppercase", marginTop: 2 },
-  newBtn: { width: "100%", background: GR, color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer" },
-  navItem: function(a) { return { display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", color: a ? "#4ADE80" : "#7A8BA0", cursor: "pointer", fontSize: 13, fontWeight: a ? 600 : 400, background: a ? "hsl(216,22%,16%)" : "transparent", borderLeft: a ? "3px solid #4ADE80" : "3px solid transparent", transition: "all 0.15s" }; },
-  navBadge: { background: "hsl(216,22%,18%)", color: "#94A3B8", borderRadius: 8, padding: "1px 7px", fontSize: 10, fontWeight: 700 },
-  sidebarUser: { padding: "12px 16px", borderTop: "1px solid hsl(216,22%,18%)", display: "flex", alignItems: "center", gap: 10 },
-  logoutBtn: { width: "100%", background: "none", border: "1px solid hsl(216,22%,20%)", borderRadius: 8, padding: "8px 12px", color: "#7A8BA0", fontSize: 12, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" },
-  overlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,23,42,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 },
-  modal: { background: "#fff", borderRadius: 14, padding: 24, width: "100%", maxWidth: 620, maxHeight: "90vh", overflowY: "auto", animation: "fadeUp 0.2s" },
-  main: { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
-  topbar: { padding: "16px 24px", background: "#fff", borderBottom: "1px solid hsl(214,18%,90%)", display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, zIndex: 50 },
-  pageTitle: { fontSize: 18, fontWeight: 700, color: "#1E293B" },
-  content: { flex: 1, padding: "24px", overflowY: "auto" },
-  groupHdr: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0 6px", marginBottom: 6, fontSize: 13, fontWeight: 700, color: "#475569" },
-  countBadge: { background: "#F1F5F9", color: "#64748B", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600 },
-  stDot: { width: 28, height: 28, border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 13, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" },
-  timerBtn: { display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid", fontSize: 11, fontWeight: 600, background: "none", cursor: "pointer" },
-  label: { display: "block", fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 4, marginTop: 10, textTransform: "uppercase", letterSpacing: 0.5 },
-  input: { width: "100%", padding: "9px 12px", border: "1px solid hsl(214,18%,90%)", borderRadius: 8, fontSize: 13, background: "#FAFAFA", color: "#1E293B" },
-  ta: { width: "100%", padding: "9px 12px", border: "1px solid hsl(214,18%,90%)", borderRadius: 8, fontSize: 13, background: "#FAFAFA", color: "#1E293B", minHeight: 80, resize: "vertical" },
-  fSel: { padding: "7px 10px", border: "1px solid hsl(214,18%,90%)", borderRadius: 8, fontSize: 12, background: "#fff", color: "#475569" },
-  fSelF: { width: "100%", padding: "9px 10px", border: "1px solid hsl(214,18%,90%)", borderRadius: 8, fontSize: 13, background: "#FAFAFA", color: "#1E293B" },
-  chip: { padding: "5px 12px", borderRadius: 20, border: "none", fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 },
-  primBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: GR, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", textDecoration: "none" },
-  cancelBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "#F1F5F9", color: "#475569", border: "1px solid hsl(214,18%,90%)", borderRadius: 8, fontSize: 12, cursor: "pointer" },
-  iconBtn: { width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", cursor: "pointer", borderRadius: 6, flexShrink: 0 },
-  menuBtn: { border: "none", background: "none", padding: 4, cursor: "pointer", display: "flex" },
-  eyeBtn: { position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", border: "none", background: "none", cursor: "pointer", padding: 4, display: "flex" },
-  progBg: { width: "100%", height: 6, borderRadius: 8, background: "#F1F5F9", overflow: "hidden" },
-  progBar: function(c, p) { return { height: "100%", width: Math.max(0, Math.min(100, p)) + "%", background: c, borderRadius: 8, transition: "width 0.4s ease" }; },
-  fRow: { display: "flex", gap: 12, flexWrap: "wrap" },
-  fCol: { flex: 1, minWidth: 140 },
+  app: { display: "flex", minHeight: "100vh", width: "100%", background: "#FAFAFA", color: "#1E293B", fontSize: 14, fontFamily: "system-ui,-apple-system,sans-serif" },
+  sidebar: { width: 256, minHeight: "100vh", background: "hsl(216,22%,11%)", display: "flex", flexDirection: "column", flexShrink: 0 },
+  logoArea: { padding: "24px 20px 20px", borderBottom: "1px solid hsl(216,18%,18%)" },
+  logoH: { fontSize: 26, fontWeight: 800, color: "#4ADE80", letterSpacing: 0.5, display: "block" },
+  logoSub: { fontSize: 10, color: "hsl(210,12%,50%)", letterSpacing: 2.5, textTransform: "uppercase", marginTop: 2, display: "block" },
+  newBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: "10px 0", borderRadius: 8, border: "none", background: GR, color: "#fff", fontSize: 13, fontWeight: 600, marginTop: 12, marginBottom: 4 },
+  navItem: function(a) { return { display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", cursor: "pointer", fontSize: 13, fontWeight: a ? 600 : 400, color: a ? "#fff" : "hsl(210,14%,85%)", background: a ? "hsl(216,18%,16%)" : "transparent", borderLeft: a ? "3px solid #4ADE80" : "3px solid transparent", transition: "all 0.12s" }; },
+  navBadge: { fontSize: 10, background: "hsl(216,18%,18%)", color: "hsl(210,12%,50%)", padding: "2px 8px", borderRadius: 10, fontWeight: 600 },
+  sidebarUser: { display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderTop: "1px solid hsl(216,18%,18%)" },
+  logoutBtn: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: "8px 0", borderRadius: 8, border: "1px solid hsl(216,18%,18%)", background: "transparent", color: "hsl(210,12%,50%)", fontSize: 12, fontWeight: 500 },
+  main: { flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", overflow: "hidden" },
+  topbar: { height: 56, background: "#fff", borderBottom: "1px solid hsl(214,18%,82%)", display: "flex", alignItems: "center", padding: "0 24px", gap: 12, flexShrink: 0 },
+  pageTitle: { fontSize: 16, fontWeight: 600, color: "#1E293B" },
+  menuBtn: { border: "none", background: "none", padding: 4 },
+  content: { flex: 1, overflow: "auto", padding: 24 },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 199 },
+  primBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 8, border: "none", background: GR, color: "#fff", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" },
+  cancelBtn: { padding: "9px 18px", borderRadius: 8, border: "1px solid hsl(214,18%,82%)", background: "#fff", color: "#64748B", fontSize: 13, fontWeight: 500 },
+  iconBtn: { border: "none", background: "none", padding: "4px 6px", borderRadius: 6, display: "flex", alignItems: "center" },
+  label: { display: "block", fontSize: 11, fontWeight: 600, color: "hsl(215,16%,32%)", marginBottom: 5, marginTop: 12, textTransform: "uppercase", letterSpacing: 0.5 },
+  input: { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid hsl(214,18%,82%)", background: "#fff", color: "#1E293B", fontSize: 13, outline: "none", fontFamily: "inherit" },
+  ta: { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid hsl(214,18%,82%)", background: "#fff", color: "#1E293B", fontSize: 13, outline: "none", resize: "vertical", minHeight: 70, fontFamily: "inherit" },
+  fRow: { display: "flex", gap: 10, marginTop: 2 },
+  fCol: { flex: 1, minWidth: 0 },
+  fSelF: { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid hsl(214,18%,82%)", background: "#fff", color: "#1E293B", fontSize: 13, outline: "none", fontFamily: "inherit" },
+  fSel: { padding: "7px 10px", borderRadius: 8, border: "1px solid hsl(214,18%,82%)", background: "#fff", color: "#475569", fontSize: 12, outline: "none", fontFamily: "inherit" },
+  chip: { padding: "6px 14px", borderRadius: 8, border: "none", fontSize: 12, fontFamily: "inherit" },
+  countBadge: { fontSize: 10, background: "hsl(210,16%,96%)", color: "hsl(215,16%,32%)", padding: "2px 10px", borderRadius: 6, fontWeight: 600 },
+  stDot: { width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, cursor: "pointer", flexShrink: 0, fontFamily: "inherit", lineHeight: 1 },
+  timerBtn: { display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1px solid hsl(214,18%,82%)", fontSize: 12, fontWeight: 500, fontFamily: "inherit" },
+  progBg: { height: 6, borderRadius: 6, background: "hsl(210,16%,96%)", overflow: "hidden" },
+  progBar: function(c, p) { return { height: "100%", borderRadius: 6, background: c, width: p + "%", transition: "width 0.5s" }; },
+  groupHdr: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", marginBottom: 6, fontSize: 13, fontWeight: 700, color: "#475569" },
+  modalOv: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16, backdropFilter: "blur(4px)" },
+  modalBox: { background: "#fff", borderRadius: 12, padding: 24, width: "100%", maxWidth: 580, maxHeight: "92vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.12)", animation: "fadeUp 0.2s" },
+  loginWrap: { minHeight: "100vh", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "hsl(216,22%,11%)", padding: 20 },
+  loginCard: { background: "#fff", borderRadius: 14, padding: 36, width: "100%", maxWidth: 380, boxShadow: "0 8px 40px rgba(0,0,0,0.1)", animation: "fadeUp 0.4s" },
+  eyeBtn: { position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", border: "none", background: "none", padding: 4, display: "flex" },
 };
