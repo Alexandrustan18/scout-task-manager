@@ -1231,7 +1231,7 @@ function ProfileView({ pu, team, tasks, timers, getTS, logs, sessions, getPerf, 
 }
 
 function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, secs, running, togTimer, bulkMode, isSelected, toggleSel, canEdit, canDelete, onExplode, allTasks }) {
-  var me = team[user] || {}; var a = team[t.assignee] || {}; var ov = isOv(t); var can = me.role === "admin" || me.role === "pm" || t.assignee === user;
+  var me = team[user] || {}; var a = team[t.assignee] || {}; var ov = isOv(t); var canChangeStatus = me.role === "admin" || t.assignee === user; var can = canChangeStatus;
   var doneS = (t.subtasks || []).filter(function(s) { return s.done; }).length; var totalS = (t.subtasks || []).length;
   var isAdminTask = t.createdBy === "admin";
   var hasChildren = allTasks && allTasks.some(function(x) { return x._campaignParentId === t.id; });
