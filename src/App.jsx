@@ -1033,7 +1033,8 @@ export default function App() {
             <button style={S.cancelBtn} onClick={function() { setSelectedTasks([]); }}>Deselecteaza</button>
           </Card>}
           {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} />}
-          {page === "dashboard" && me.role !== "member" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} />}
+          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} />}
+          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
@@ -1107,7 +1108,227 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
   </div>;
 }
 
-function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements }) {
+function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers }) {
+  var [tab, setTab] = useState("personal"); // personal | team
+
+  // === TEAM DATA ===
+  var teamUsers = (me.team || []).filter(function(u) { return team[u]; });
+  var teamTasks = allTasks.filter(function(t) { return teamUsers.includes(t.assignee) && !t._campaignParent; });
+  var teamDoneToday = teamTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
+  var teamActive = teamTasks.filter(function(t) { return t.status !== "Done"; });
+  var teamOverdue = teamTasks.filter(function(t) { return t.status !== "Done" && isOv(t); });
+  var teamInProg = teamTasks.filter(function(t) { return t.status === "In Progress"; });
+
+  // Yesterday
+  var yStr = ds(new Date(Date.now() - 86400000));
+  var teamYDone = teamTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === yStr; }).length;
+  var teamDelta = teamYDone > 0 ? Math.round(((teamDoneToday - teamYDone) / teamYDone) * 100) : (teamDoneToday > 0 ? 100 : 0);
+
+  // 7-day team trend
+  var teamTrend = [];
+  for (var i = 6; i >= 0; i--) {
+    var dt = new Date(); dt.setDate(dt.getDate() - i);
+    var dStr = ds(dt);
+    var done = teamTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === dStr; }).length;
+    teamTrend.push({ date: dStr, label: dt.getDate() + " " + MN[dt.getMonth()].substring(0, 3), done: done, dow: dt.getDay() });
+  }
+  var maxTrend = Math.max.apply(null, teamTrend.map(function(d) { return d.done; }).concat([1]));
+
+  // Per-user performance in team
+  var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  var userPerf = teamUsers.map(function(u) {
+    var uTasks = teamTasks.filter(function(t) { return t.assignee === u; });
+    var uDoneWeek = uTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekAgo; }).length;
+    var uDoneToday = uTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
+    var uActive = uTasks.filter(function(t) { return t.status !== "Done"; }).length;
+    var uOverdue = uTasks.filter(function(t) { return t.status !== "Done" && isOv(t); }).length;
+    var uTarget = targets.find(function(tg) { return tg.userId === u && tg.active !== false; });
+    var perf = getPerf(u);
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneWeek: uDoneWeek, doneToday: uDoneToday, active: uActive, overdue: uOverdue, target: uTarget, perf: perf, onLeave: isOnLeave(leaves, u, TD) };
+  }).sort(function(a, b) { return b.doneWeek - a.doneWeek; });
+  var maxUserPerf = Math.max.apply(null, userPerf.map(function(p) { return p.doneWeek; }).concat([1]));
+
+  // Blockers in team
+  var now = Date.now();
+  var teamBlockers = teamTasks.filter(function(t) {
+    if (t.status === "Done") return false;
+    var lastUpdate = new Date(t.updatedAt || t.createdAt).getTime();
+    return (now - lastUpdate) / 3600000 > 48;
+  }).slice(0, 5);
+
+  // Target aggregate for team
+  var teamTargetTotal = 0, teamTargetDone = 0;
+  userPerf.forEach(function(up) {
+    if (up.onLeave || !up.target) return;
+    teamTargetTotal += up.target.target || 0;
+    teamTargetDone += up.doneToday;
+  });
+  var teamTargetPct = teamTargetTotal > 0 ? Math.min(100, (teamTargetDone / teamTargetTotal) * 100) : 0;
+
+  return <div>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>Salut, {me.name}!</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Dashboard PM - {teamUsers.length} persoane in echipa</div>
+    </div>
+
+    {/* Tab switcher */}
+    <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
+      <button onClick={function() { setTab("personal"); }} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: tab === "personal" ? "#fff" : "transparent", color: tab === "personal" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: tab === "personal" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>Personal</button>
+      <button onClick={function() { setTab("team"); }} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: tab === "team" ? "#fff" : "transparent", color: tab === "team" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: tab === "team" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
+        Echipa mea
+        {teamOverdue.length > 0 && <span style={{ background: "#DC2626", color: "#fff", fontSize: 10, padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>{teamOverdue.length}</span>}
+      </button>
+    </div>
+
+    {tab === "personal" && <MemberDashboard me={me} user={user} allTasks={allTasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} hideHeader={true} />}
+
+    {tab === "team" && <div>
+      {/* Team hero KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
+        <Card style={{ borderLeft: "3px solid " + GR, padding: 14 }}>
+          <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Done azi echipa</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <div style={{ fontSize: 32, fontWeight: 800, color: GR }}>{teamDoneToday}</div>
+            <div style={{ fontSize: 11, color: teamDelta >= 0 ? GR : "#DC2626", fontWeight: 700 }}>{teamDelta >= 0 ? "+" : ""}{teamDelta}%</div>
+          </div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>vs ieri ({teamYDone})</div>
+        </Card>
+        <Card style={{ borderLeft: "3px solid #2563EB", padding: 14 }}>
+          <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Active</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#2563EB" }}>{teamActive.length}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{teamInProg.length} in progres</div>
+        </Card>
+        <Card style={{ borderLeft: "3px solid " + (teamOverdue.length > 0 ? "#DC2626" : "#94A3B8"), padding: 14 }}>
+          <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Intarziate</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: teamOverdue.length > 0 ? "#DC2626" : "#94A3B8" }}>{teamOverdue.length}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{teamOverdue.length > 0 ? "Necesita atentie" : "Totul la zi"}</div>
+        </Card>
+        <Card style={{ borderLeft: "3px solid #7C3AED", padding: 14 }}>
+          <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Blocaje &gt;48h</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: teamBlockers.length > 0 ? "#7C3AED" : "#94A3B8" }}>{teamBlockers.length}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Fara miscare</div>
+        </Card>
+      </div>
+
+      {/* Team target aggregate */}
+      {teamTargetTotal > 0 && <Card style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Target echipa azi</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Suma target-urilor userilor activi (exclude concediu)</div>
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: teamTargetPct >= 100 ? GR : "#475569" }}>{teamTargetDone}/{teamTargetTotal}</div>
+        </div>
+        <div style={{ height: 12, background: "#F1F5F9", borderRadius: 6, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: teamTargetPct + "%", background: teamTargetPct >= 100 ? GR : teamTargetPct >= 50 ? "#D97706" : "#DC2626", transition: "width 0.4s" }} />
+        </div>
+        <div style={{ fontSize: 11, color: teamTargetPct >= 100 ? GR : "#64748B", marginTop: 6, fontWeight: 600 }}>{teamTargetPct >= 100 ? "✓ Target echipa atins!" : "Mai sunt " + (teamTargetTotal - teamTargetDone) + " taskuri pentru target"}</div>
+      </Card>}
+
+      {/* Team 7-day trend */}
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Productivitate echipa - 7 zile</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Total: <b style={{ color: GR }}>{teamTrend.reduce(function(a, d) { return a + d.done; }, 0)}</b> taskuri finalizate</div>
+        <svg viewBox="0 0 700 220" style={{ width: "100%", height: "auto" }}>
+          {[0, 0.25, 0.5, 0.75, 1].map(function(r, i) { return <line key={i} x1="40" y1={30 + 150 * r} x2="680" y2={30 + 150 * r} stroke="#F1F5F9" strokeWidth="1" />; })}
+          {[0, 0.5, 1].map(function(r, i) { return <text key={i} x="32" y={30 + 150 * (1 - r) + 4} fontSize="10" fill="#94A3B8" textAnchor="end">{Math.round(maxTrend * r)}</text>; })}
+          {teamTrend.map(function(d, i) {
+            var barW = (640 / teamTrend.length) * 0.6;
+            var xBase = 50 + i * (640 / teamTrend.length) + (640 / teamTrend.length - barW) / 2;
+            var hDone = (d.done / maxTrend) * 150;
+            var isWeekend = d.dow === 0 || d.dow === 6;
+            var isToday = d.date === TD;
+            return <g key={i}>
+              <rect x={xBase} y={180 - hDone} width={barW} height={Math.max(hDone, 2)} fill={isToday ? GR : isWeekend ? "#CBD5E1" : "#60A5FA"} opacity="0.95" rx="4" />
+              <text x={xBase + barW / 2} y="200" fontSize="10" fill={isWeekend ? "#CBD5E1" : "#64748B"} textAnchor="middle" fontWeight={isToday ? "700" : "400"}>{d.label}</text>
+              {d.done > 0 && <text x={xBase + barW / 2} y={180 - hDone - 4} fontSize="10" fill={isToday ? GR : "#475569"} textAnchor="middle" fontWeight="700">{d.done}</text>}
+            </g>;
+          })}
+        </svg>
+      </Card>
+
+      {/* Per-user cards */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Performanta per membru</div>
+          <div style={{ fontSize: 11, color: "#94A3B8" }}>Sortat dupa taskuri finalizate ultimele 7 zile</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+          {userPerf.map(function(up, i) {
+            var targetPct = up.target && up.target.target > 0 ? Math.min(100, (up.doneToday / up.target.target) * 100) : 0;
+            var perfColor = up.perf.score >= 70 ? GR : up.perf.score >= 40 ? "#D97706" : "#DC2626";
+            return <Card key={up.user} style={{ padding: 14, borderLeft: "3px solid " + (up.onLeave ? "#D97706" : perfColor) }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <Av color={up.color} size={36} fs={14}>{up.name[0]}</Av>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{up.name}</div>
+                  <div style={{ fontSize: 10, color: "#94A3B8" }}>{up.onLeave ? "🏖 Concediu azi" : "#" + (i + 1) + " saptamana"}</div>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: perfColor }}>{up.perf.score}%</div>
+              </div>
+
+              {/* Mini stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 10 }}>
+                <div style={{ padding: "6px 8px", background: "#F0FDF4", borderRadius: 5, textAlign: "center" }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: GR }}>{up.doneWeek}</div>
+                  <div style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>7 zile</div>
+                </div>
+                <div style={{ padding: "6px 8px", background: "#EFF6FF", borderRadius: 5, textAlign: "center" }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#2563EB" }}>{up.active}</div>
+                  <div style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>Active</div>
+                </div>
+                <div style={{ padding: "6px 8px", background: up.overdue > 0 ? "#FEF2F2" : "#F8FAFC", borderRadius: 5, textAlign: "center" }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: up.overdue > 0 ? "#DC2626" : "#94A3B8" }}>{up.overdue}</div>
+                  <div style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>Intarziate</div>
+                </div>
+              </div>
+
+              {/* Target */}
+              {up.target && !up.onLeave && <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+                  <span style={{ color: "#64748B", fontWeight: 600 }}>Target azi</span>
+                  <span style={{ fontWeight: 700, color: targetPct >= 100 ? GR : "#475569" }}>{up.doneToday}/{up.target.target}</span>
+                </div>
+                <div style={{ height: 6, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: targetPct + "%", background: targetPct >= 100 ? GR : targetPct >= 50 ? "#D97706" : "#DC2626" }} />
+                </div>
+              </div>}
+
+              {/* Weekly bar */}
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #F1F5F9" }}>
+                <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4 }}>Finalizate 7 zile vs top</div>
+                <div style={{ height: 4, background: "#F1F5F9", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: (up.doneWeek / maxUserPerf * 100) + "%", background: i === 0 ? GR : i < 3 ? "#60A5FA" : "#CBD5E1" }} />
+                </div>
+              </div>
+            </Card>;
+          })}
+        </div>
+      </div>
+
+      {/* Blockers */}
+      {teamBlockers.length > 0 && <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Blocaje in echipa</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Taskuri fara miscare peste 48h</div>
+        {teamBlockers.map(function(t) {
+          var hours = Math.floor((Date.now() - new Date(t.updatedAt || t.createdAt).getTime()) / 3600000);
+          var days = Math.floor(hours / 24);
+          var a = team[t.assignee] || {};
+          return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", marginBottom: 4, borderRadius: 5, background: "#FFFBEB", borderLeft: "2px solid #D97706" }}>
+            {a.color && <Av color={a.color} size={20} fs={9}>{(a.name || "?")[0]}</Av>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+              <div style={{ fontSize: 9, color: "#94A3B8" }}>{a.name || "?"} | {t.status}</div>
+            </div>
+            <span style={{ fontSize: 10, color: "#D97706", fontWeight: 700, flexShrink: 0 }}>{days > 0 ? days + "z" : hours + "h"}</span>
+          </div>;
+        })}
+      </Card>}
+    </div>}
+  </div>;
+}
+
+function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, hideHeader }) {
   var myTasks = allTasks.filter(function(t) { return t.assignee === user && !t._campaignParent; });
   var todayDone = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
   var activeTasks = myTasks.filter(function(t) { return t.status !== "Done"; });
@@ -1166,10 +1387,10 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
   var perf = getPerf(user);
 
   return <div>
-    <div style={{ marginBottom: 20 }}>
+    {!hideHeader && <div style={{ marginBottom: 20 }}>
       <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>Salut, {me.name}!</h2>
       <div style={{ fontSize: 12, color: "#64748B" }}>Uite cum merge ziua ta</div>
-    </div>
+    </div>}
 
     {/* Hero KPI row */}
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
