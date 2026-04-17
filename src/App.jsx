@@ -508,14 +508,21 @@ export default function App() {
     if (!user) return [];
     // Build set of parent IDs that have children
     var parentIds = new Set();
-    tasks.forEach(function(t) { if (t._campaignParentId) parentIds.add(t._campaignParentId); });
+    // Build set of task IDs that have pipeline children
+    var hasPipelineChild = new Set();
+    tasks.forEach(function(t) {
+      if (t._campaignParentId) parentIds.add(t._campaignParentId);
+      if (t._fromPipeline) hasPipelineChild.add(t._fromPipeline);
+    });
     return tasks.filter(function(t) {
       if (t._campaignParent) return false;
       // Hide old-style parent tasks (have campaign items + are referenced as parent by children)
       if (t.campaignItems && t.campaignItems.length > 0 && parentIds.has(t.id)) return false;
+      // Hide Done tasks where pipeline created a new task for next user (not for admin - they see everything)
+      if (t.status === "Done" && hasPipelineChild.has(t.id) && t.assignee === user && (team[user] || {}).role !== "admin") return false;
       return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy);
     });
-  }, [tasks, visUsers, user]);
+  }, [tasks, visUsers, user, team]);
 
   var filtered = useMemo(function() {
     return visTasks.filter(function(t) {
@@ -524,7 +531,13 @@ export default function App() {
       if (assignF !== "all" && t.assignee !== assignF) return false;
       if (shopF !== "all" && t.shop !== shopF) return false;
       if (tagFilter !== "all" && !(t.tags || []).includes(tagFilter)) return false;
-      if (dateF === "today" && !isTd(t.deadline)) return false;
+      if (dateF === "today" && !(isTd(t.deadline) || (t.createdAt && isTd(t.createdAt)))) return false;
+      if (dateF === "yesterday") {
+        var yDate = new Date(); yDate.setDate(yDate.getDate() - 1); var yStr = ds(yDate);
+        var matchDl = t.deadline === yStr;
+        var matchCr = t.createdAt && ds(t.createdAt) === yStr;
+        if (!matchDl && !matchCr) return false;
+      }
       if (dateF === "tomorrow" && !isTm(t.deadline)) return false;
       if (dateF === "overdue" && !isOv(t)) return false;
       if (dateF === "upcoming" && !isF(t.deadline)) return false;
@@ -534,10 +547,11 @@ export default function App() {
   }, [visTasks, statusF, prioF, assignF, shopF, dateF, tagFilter]);
 
   var stats = useMemo(function() {
-    var s = { total: visTasks.length, today: 0, overdue: 0, inProg: 0, done: 0, review: 0 };
-    visTasks.forEach(function(t) { if (isTd(t.deadline)) s.today++; if (isOv(t)) s.overdue++; if (t.status === "In Progress") s.inProg++; if (t.status === "Done") s.done++; if (t.status === "Review") s.review++; });
+    // Stats use filtered tasks (respect date filter), total uses visTasks
+    var s = { total: filtered.length, today: 0, overdue: 0, inProg: 0, done: 0, review: 0 };
+    filtered.forEach(function(t) { if (isTd(t.deadline)) s.today++; if (isOv(t)) s.overdue++; if (t.status === "In Progress") s.inProg++; if (t.status === "Done") s.done++; if (t.status === "Review") s.review++; });
     return s;
-  }, [visTasks]);
+  }, [filtered]);
 
   var grouped = useMemo(function() {
     var s = filtered.slice().sort(function(a, b) {
@@ -925,7 +939,7 @@ function LoginScreen({ team, onLogin, announcements }) {
 }
 
 function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPrioF, assignF, setAssignF, shopF, setShopF, visUsers, shops, count, team, noStatus, departments, deptFilter, setDeptFilter, platformFilter, setPlatformFilter, allTags, tagFilter, setTagFilter }) {
-  var chips = [{ id: "all", l: "Toate" }, { id: "today", l: "Azi", n: stats.today }, { id: "tomorrow", l: "Maine" }, { id: "overdue", l: "Intarziate", n: stats.overdue }, { id: "upcoming", l: "Viitoare" }, { id: "nodate", l: "Fara data" }];
+  var chips = [{ id: "all", l: "Toate" }, { id: "today", l: "Azi", n: stats.today }, { id: "yesterday", l: "Ieri" }, { id: "tomorrow", l: "Maine" }, { id: "overdue", l: "Intarziate", n: stats.overdue }, { id: "upcoming", l: "Viitoare" }, { id: "nodate", l: "Fara data" }];
   return <div>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{chips.map(function(c) { return <button key={c.id} onClick={function() { setDateF(c.id); }} style={Object.assign({}, S.chip, { background: dateF === c.id ? GR : "#F1F5F9", color: dateF === c.id ? "#fff" : "#475569", fontWeight: dateF === c.id ? 600 : 400 })}>{c.l}{c.n > 0 && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>({c.n})</span>}</button>; })}</div>
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
@@ -2069,7 +2083,7 @@ function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTi
       <a href={t.links[0]} target="_blank" rel="noopener noreferrer" style={Object.assign({}, S.primBtn, { background: "#2563EB", fontSize: 11, padding: "6px 12px", flexShrink: 0 })}><Ic d={Icons.ext} size={12} color="#fff" /> Deschide</a>
     </div>}
     {t._replacedLink && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}><div style={{ fontWeight: 600, fontSize: 12, color: GR, marginBottom: 4 }}>Link actualizat{t._replacedBy && team[t._replacedBy] ? " de " + team[t._replacedBy].name : ""}:</div><a href={t._replacedLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: GR, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Ic d={Icons.ext} size={12} color={GR} />{t._replacedLink}</a>{t._replacedNote && <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>{t._replacedNote}</div>}</div>}
-    {t.links && t.links.length > 0 && <div style={{ marginBottom: 14 }}><div style={{ fontWeight: 700, fontSize: 11, marginBottom: 8, color: "#475569", textTransform: "uppercase", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 5 }}><Ic d={Icons.link} size={11} color="#475569" />{t._replacedLink ? "Linkuri (" + t.links.length + ")" : "Linkuri (" + t.links.length + ")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{t.links.map(function(l, i) { var isReplaced = t._originalLinks && t._originalLinks.includes(l) && t._replacedLink && l !== t._replacedLink; var domain = ""; try { domain = new URL(l).hostname.replace("www.", ""); } catch(e) { domain = l.slice(0, 30); } return <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: isReplaced ? "#F8FAFC" : "#F0F9FF", border: "1px solid " + (isReplaced ? "#E2E8F0" : "#BFDBFE"), opacity: isReplaced ? 0.5 : 1 }}><Ic d={Icons.link} size={12} color={isReplaced ? "#94A3B8" : "#2563EB"} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, marginBottom: 1 }}>{domain}{isReplaced ? " (inlocuit)" : ""}</div><div style={{ fontSize: 11, color: isReplaced ? "#94A3B8" : "#1D4ED8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: isReplaced ? "line-through" : "none" }}>{l}</div></div><a href={l} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 6, background: isReplaced ? "#F1F5F9" : "#2563EB", color: isReplaced ? "#94A3B8" : "#fff", fontSize: 11, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}><Ic d={Icons.ext} size={11} color={isReplaced ? "#94A3B8" : "#fff"} /> Deschide</a></div>; })}</div></div>}
+    {t.links && t.links.length > 0 && !(t.links.length === 1 && t.productName && !t._replacedLink && ["dana", "carla", "mara_poze"].includes(t.assignee) && t._campaignParentId) && <div style={{ marginBottom: 14 }}><div style={{ fontWeight: 700, fontSize: 11, marginBottom: 8, color: "#475569", textTransform: "uppercase", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 5 }}><Ic d={Icons.link} size={11} color="#475569" />{t._replacedLink ? "Linkuri (" + t.links.length + ")" : "Linkuri (" + t.links.length + ")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{t.links.map(function(l, i) { var isReplaced = t._originalLinks && t._originalLinks.includes(l) && t._replacedLink && l !== t._replacedLink; var domain = ""; try { domain = new URL(l).hostname.replace("www.", ""); } catch(e) { domain = l.slice(0, 30); } return <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: isReplaced ? "#F8FAFC" : "#F0F9FF", border: "1px solid " + (isReplaced ? "#E2E8F0" : "#BFDBFE"), opacity: isReplaced ? 0.5 : 1 }}><Ic d={Icons.link} size={12} color={isReplaced ? "#94A3B8" : "#2563EB"} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, marginBottom: 1 }}>{domain}{isReplaced ? " (inlocuit)" : ""}</div><div style={{ fontSize: 11, color: isReplaced ? "#94A3B8" : "#1D4ED8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: isReplaced ? "line-through" : "none" }}>{l}</div></div><a href={l} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 6, background: isReplaced ? "#F1F5F9" : "#2563EB", color: isReplaced ? "#94A3B8" : "#fff", fontSize: 11, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}><Ic d={Icons.ext} size={11} color={isReplaced ? "#94A3B8" : "#fff"} /> Deschide</a></div>; })}</div></div>}
     {user === "dana" && t.assignee === user && t.status !== "Done" && <div style={{ marginBottom: 12 }}>{!showReplace && <button style={Object.assign({}, S.primBtn, { background: "#D97706", fontSize: 12 })} onClick={function() { setShowReplace(true); }}>Am schimbat produsul / Link nou</button>}{showReplace && <Card style={{ background: "#FFFBEB", borderLeft: "3px solid #D97706" }}><label style={S.label}>Link produs nou</label><input style={S.input} value={replaceLink} onChange={function(e) { setReplaceLink(e.target.value); }} placeholder="https://..." /><label style={S.label}>Observatie (optional)</label><input style={S.input} value={replaceNote} onChange={function(e) { setReplaceNote(e.target.value); }} placeholder="Ex: Nu am gasit, am schimbat cu..." /><div style={{ display: "flex", gap: 8, marginTop: 8 }}><button style={S.primBtn} onClick={doReplace}>Salveaza link nou</button><button style={S.cancelBtn} onClick={function() { setShowReplace(false); }}>Anuleaza</button></div></Card>}</div>}
     {t.campaignItems && t.campaignItems.length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8 }}>Campaign ({t.campaignItems.length} produse){t._finalizedCount != null && <span style={{ marginLeft: 8, color: GR }}>- {t._finalizedCount} finalizate</span>}</div>{t.campaignItems.map(function(ci, i) { return <div key={ci.id || i} style={{ fontSize: 12, padding: "5px 4px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #ECFDF5" }}><span style={{ color: "#94A3B8", width: 20, flexShrink: 0 }}>{i + 1}.</span><span style={{ flex: 1, fontWeight: 500 }}>{ci.name}</span>{ci.link && <a href={ci.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#2563EB", display: "flex", alignItems: "center", gap: 3, flexShrink: 0, padding: "2px 8px", background: "#EFF6FF", borderRadius: 4, fontWeight: 600 }}><Ic d={Icons.ext} size={9} color="#2563EB" /> Link</a>}</div>; })}</div>}
     {Object.keys(tis).length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F8FAFC", borderRadius: 8 }}><div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Timp per status:</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{Object.entries(tis).map(function(e) { return <Badge key={e[0]} bg={(SC[e[0]] || "#94A3B8") + "18"} color={SC[e[0]] || "#94A3B8"}>{e[0]}: {e[1]}h</Badge>; })}</div></div>}
