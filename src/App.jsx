@@ -164,7 +164,34 @@ function hasPerm(user, team, perm) {
 var CSS = "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{margin:0;background:#FAFAFA;font-family:system-ui,-apple-system,sans-serif}::selection{background:#0C7E3E22}input:focus,select:focus,textarea:focus{border-color:#0C7E3E !important;outline:none;box-shadow:0 0 0 3px #0C7E3E18}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}button{cursor:pointer;font-family:inherit}button:hover{opacity:0.9}a{text-decoration:none}@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes toastIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-20px)}}@keyframes badgePop{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}@keyframes confettiFall{0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}@keyframes celebratePulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(16,185,129,0.4)}50%{transform:scale(1.05);box-shadow:0 0 20px 10px rgba(16,185,129,0.1)}100%{transform:scale(1);box-shadow:0 0 0 0 rgba(16,185,129,0)}}@keyframes targetBurst{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}thead.sticky-header th{position:sticky;top:0;z-index:10;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.05)}";
 
 function Badge({ bg, color, children }) { return <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 9px", borderRadius: 6, fontSize: 10, fontWeight: 600, background: bg, color: color, whiteSpace: "nowrap" }}>{children}</span>; }
-function Av({ color, size, fs, children, level, userId }) { var s = size || 32; var lvl = level || (userId && _globalUserXP[userId] ? getLevel(_globalUserXP[userId]) : 0); var showBadge = lvl > 0 && s >= 16; return <div style={{ width: s, height: s, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0, position: "relative" }}>{children}{showBadge && <div style={{ position: "absolute", bottom: s > 28 ? -4 : -3, right: s > 28 ? -4 : -3, background: getLevelColor(lvl), color: "#fff", fontSize: s > 28 ? 8 : 7, fontWeight: 800, padding: s > 28 ? "1px 4px" : "0px 3px", borderRadius: 4, border: s > 28 ? "1.5px solid #fff" : "1px solid #fff", lineHeight: 1.3, minWidth: s > 28 ? 14 : 10, textAlign: "center" }}>{lvl}</div>}</div>; }
+function Av({ color, size, fs, children, level, userId }) {
+  var s = size || 32;
+  var lvl = level || (userId && _globalUserXP[userId] ? getLevel(_globalUserXP[userId]) : 0);
+  var showBadge = lvl > 0 && s >= 16;
+  // TikTok-style ring based on level tier
+  var ringStyle = {};
+  var outerSize = s;
+  if (lvl >= 40 && s >= 24) {
+    outerSize = s + 8;
+    ringStyle = { padding: 3, borderRadius: "50%", background: "linear-gradient(135deg, #7C3AED, #A855F7, #C084FC, #7C3AED)", boxShadow: "0 0 " + (s > 32 ? 12 : 6) + "px rgba(124,58,237,0.5)", animation: "pulse 2s infinite" };
+  } else if (lvl >= 30 && s >= 24) {
+    outerSize = s + 6;
+    ringStyle = { padding: 2, borderRadius: "50%", background: "linear-gradient(135deg, #EAB308, #F59E0B, #FDE047, #EAB308)", boxShadow: "0 0 " + (s > 32 ? 10 : 5) + "px rgba(234,179,8,0.4)" };
+  } else if (lvl >= 20 && s >= 24) {
+    outerSize = s + 6;
+    ringStyle = { padding: 2, borderRadius: "50%", background: "linear-gradient(135deg, #3B82F6, #60A5FA, #93C5FD, #3B82F6)", boxShadow: "0 0 6px rgba(59,130,246,0.3)" };
+  } else if (lvl >= 10 && s >= 24) {
+    outerSize = s + 4;
+    ringStyle = { padding: 2, borderRadius: "50%", background: "linear-gradient(135deg, #10B981, #34D399)", boxShadow: "0 0 4px rgba(16,185,129,0.25)" };
+  }
+  var hasRing = lvl >= 10 && s >= 24;
+  var avatarInner = <div style={{ width: s, height: s, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0, border: hasRing ? "2px solid #fff" : "none", boxSizing: "border-box" }}>{children}</div>;
+  var badge = showBadge ? <div style={{ position: "absolute", bottom: s > 28 ? -4 : -3, right: s > 28 ? -4 : -3, background: getLevelColor(lvl), color: "#fff", fontSize: s > 28 ? 8 : 7, fontWeight: 800, padding: s > 28 ? "1px 4px" : "0px 3px", borderRadius: 4, border: s > 28 ? "1.5px solid #fff" : "1px solid #fff", lineHeight: 1.3, minWidth: s > 28 ? 14 : 10, textAlign: "center" }}>{lvl}</div> : null;
+  if (hasRing) {
+    return <div style={Object.assign({ position: "relative", flexShrink: 0, display: "inline-flex" }, ringStyle)}>{avatarInner}{badge}</div>;
+  }
+  return <div style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>{avatarInner}{badge}</div>;
+}
 function Card({ children, style, onClick, onMouseEnter, onMouseLeave, onMouseDown, onMouseUp }) { return <div onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ background: "#fff", border: "1px solid hsl(214,18%,90%)", borderRadius: 10, padding: 16, animation: "fadeUp 0.2s", ...style }}>{children}</div>; }
 
 function Ic({ d, size, color }) { return <svg width={size || 20} height={size || 20} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>; }
@@ -3526,7 +3553,7 @@ function calcPMLeaderboard(allTasks, team, users) {
     // Team overdue
     var teamOverdue = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && isOv(t); }).length;
     // Score: created tasks weight + team done weight + own done - team overdue penalty
-    var score = createdThisMonth * 5 + teamDoneThisMonth * 8 + ownDone * 10 - teamOverdue * 3;
+    var score = createdThisMonth * 5 + teamDoneThisMonth * 8 + ownDone * 10 - teamOverdue * 8;
     return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", created: createdThisMonth, teamDone: teamDoneThisMonth, ownDone: ownDone, teamOverdue: teamOverdue, doneThis: createdThisMonth, score: Math.max(0, score), role: "pm", teamSize: pmTeam.length };
   }).sort(function(a, b) { return b.score - a.score; });
 }
@@ -3617,7 +3644,7 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
     var teamDone = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; }).length;
     var ownDone = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; }).length;
     var teamOv = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && isOv(t); }).length;
-    var score = created * 5 + teamDone * 8 + ownDone * 10 - teamOv * 3;
+    var score = created * 5 + teamDone * 8 + ownDone * 10 - teamOv * 8;
     var xp = (userXP || {})[u] || 0;
     return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", created: created, teamDone: teamDone, ownDone: ownDone, teamOverdue: teamOv, doneThis: created, score: Math.max(0, score), level: getLevel(xp), title: getLevelTitle(getLevel(xp)), teamSize: pmTeam.length };
   }).sort(function(a, b) { return b.score - a.score; });
@@ -3730,7 +3757,7 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
             <span style={{ display: "block" }}>+5 per task creat catre echipa</span>
             <span style={{ display: "block" }}>+8 per task finalizat de echipa</span>
             <span style={{ display: "block" }}>+10 per task propriu finalizat</span>
-            <span style={{ display: "block" }}>-3 per task intarziat in echipa</span>
+            <span style={{ display: "block" }}>-8 per task intarziat in echipa</span>
           </div>
         </div>
       </div>
@@ -3739,6 +3766,7 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
 }
 
 function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, user, visUsers, me, addLog, addNotif }) {
+  try {
   var [selectedUser, setSelectedUser] = useState(visUsers.filter(function(u) { return u !== "admin" && team[u] && team[u].role !== "admin"; })[0] || "");
   var [calMonth, setCalMonth] = useState(new Date());
   var [showRequestForm, setShowRequestForm] = useState(false);
@@ -3929,6 +3957,7 @@ function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, 
       </Card>
     </div>
   </div>;
+  } catch(err) { return <Card style={{ padding: 30, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>Eroare Concedii</div><div style={{ fontSize: 12, color: "#64748B" }}>{err.message}</div></Card>; }
 }
 
 function RecurringPage({ recurringTasks, setRecurringTasks, team, assUsers, shops, departments, canEdit }) {
@@ -4747,7 +4776,7 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
             <span style={{ display: "block" }}>+5 per task creat catre echipa</span>
             <span style={{ display: "block" }}>+8 per task finalizat de echipa</span>
             <span style={{ display: "block" }}>+10 per task propriu finalizat</span>
-            <span style={{ display: "block" }}>-3 per task intarziat in echipa</span>
+            <span style={{ display: "block" }}>-8 per task intarziat in echipa</span>
           </div>
         </div>
       </div>
