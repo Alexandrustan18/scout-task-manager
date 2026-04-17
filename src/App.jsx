@@ -1232,7 +1232,69 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
 }
 
 function KanbanPage({ fProps, tasks, user, team, onEdit, onDel, onDup, onChgSt, dragId, setDragId, handleDrop, isMob, timers, getTS, togTimer }) {
-  return <div><FiltersBar {...fProps} noStatus /><div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(4,1fr)", gap: 14, alignItems: "start" }}>{STATUSES.map(function(st) { var col = tasks.filter(function(t) { return t.status === st; }); return <div key={st} onDragOver={function(e) { e.preventDefault(); }} onDrop={function(e) { e.preventDefault(); handleDrop(st); }} style={{ background: "#FAFBFC", borderRadius: 12, padding: 12, minHeight: 200 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[st] }} /><span style={{ fontSize: 13, fontWeight: 700 }}>{st}</span></div><span style={S.countBadge}>{col.length}</span></div>{col.map(function(t) { var a = team[t.assignee] || {}; var ov = isOv(t); var me = team[user] || {}; var can = true; var secs = getTS(t.id); var run = timers[t.id] && timers[t.id].running; return <Card key={t.id} style={{ padding: 12, cursor: "grab", opacity: dragId === t.id ? 0.4 : 1, borderLeft: "3px solid " + (ov ? "#EF4444" : SC[st]), marginBottom: 8, background: SBG[st] }}><div draggable={can} onDragStart={function() { setDragId(t.id); }} onDragEnd={function() { setDragId(null); }}><div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t.title}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{(t.tags || []).map(function(tag) { return <Badge key={tag} bg="#F0FDF4" color={GR}>#{tag}</Badge>; })}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}</div><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "#94A3B8" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={18} fs={9}>{a.name[0]}</Av>{a.name}</span>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}</div><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>{can && st !== "Done" ? <button onClick={function() { togTimer(t.id); }} style={Object.assign({}, S.timerBtn, { fontSize: 10, padding: "2px 8px", background: run ? "#FEF2F2" : "#F8FAFC", color: run ? "#DC2626" : GR, borderColor: run ? "#FECACA" : "#E2E8F0" })}><Ic d={run ? Icons.stop : Icons.play} size={10} color={run ? "#DC2626" : GR} />{secs > 0 && <span>{ft(secs)}</span>}</button> : <span style={{ fontSize: 10 }}>{secs > 0 ? ft(secs) : ""}</span>}<div style={{ display: "flex", gap: 2 }}><button style={S.iconBtn} onClick={function() { onDup(t); }}><Ic d={Icons.copy} size={12} color="#94A3B8" /></button><button style={S.iconBtn} onClick={function() { onEdit(t); }}><Ic d={Icons.edit} size={12} color="#94A3B8" /></button></div></div></div></Card>; })}</div>; })}</div></div>;
+  var [dropTarget, setDropTarget] = useState(null);
+  return <div>
+    <FiltersBar {...fProps} noStatus />
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(4,1fr)", gap: 14, alignItems: "start" }}>
+      {STATUSES.map(function(st) {
+        var col = tasks.filter(function(t) { return t.status === st; });
+        var isOver = dropTarget === st;
+        return <div key={st}
+          onDragOver={function(e) { e.preventDefault(); e.stopPropagation(); setDropTarget(st); }}
+          onDragLeave={function(e) { if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget(null); }}
+          onDrop={function(e) { e.preventDefault(); e.stopPropagation(); setDropTarget(null); handleDrop(st); }}
+          style={{ background: isOver ? SC[st] + "15" : "#FAFBFC", borderRadius: 12, padding: 12, minHeight: 200, border: "2px solid " + (isOver ? SC[st] : "transparent"), transition: "all 0.15s" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[st] }} />
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{st}</span>
+            </div>
+            <span style={S.countBadge}>{col.length}</span>
+          </div>
+          {col.map(function(t) {
+            var a = team[t.assignee] || {};
+            var ov = isOv(t);
+            var secs = getTS(t.id);
+            var run = timers[t.id] && timers[t.id].running;
+            var me2 = team[user] || {};
+            var canEdit2 = me2.role === "admin" || me2.role === "pm" || t.assignee === user;
+            return <div key={t.id}
+              draggable={true}
+              onDragStart={function(e) { e.stopPropagation(); setDragId(t.id); e.dataTransfer.effectAllowed = "move"; }}
+              onDragEnd={function(e) { e.stopPropagation(); setDragId(null); setDropTarget(null); }}
+              style={{ opacity: dragId === t.id ? 0.35 : 1, marginBottom: 8, transform: dragId === t.id ? "rotate(2deg)" : "none", transition: "opacity 0.15s, transform 0.15s" }}>
+              <Card style={{ padding: 12, cursor: "grab", borderLeft: "3px solid " + (ov ? "#EF4444" : SC[st]), background: SBG[st] }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t.title}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                  <Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>
+                  {(t.tags || []).map(function(tag) { return <Badge key={tag} bg="#F0FDF4" color={GR}>#{tag}</Badge>; })}
+                  {t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}
+                  {ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "#94A3B8" }}>
+                  {a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={18} fs={9}>{a.name[0]}</Av>{a.name}</span>}
+                  {t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>
+                  {st !== "Done"
+                    ? <button onMouseDown={function(e) { e.stopPropagation(); }} onClick={function(e) { e.stopPropagation(); togTimer(t.id); }} style={Object.assign({}, S.timerBtn, { fontSize: 10, padding: "2px 8px", background: run ? "#FEF2F2" : "#F8FAFC", color: run ? "#DC2626" : GR, borderColor: run ? "#FECACA" : "#E2E8F0" })}>
+                        <Ic d={run ? Icons.stop : Icons.play} size={10} color={run ? "#DC2626" : GR} />
+                        {secs > 0 && <span>{ft(secs)}</span>}
+                      </button>
+                    : <span style={{ fontSize: 10, color: "#94A3B8" }}>{secs > 0 ? ft(secs) : ""}</span>
+                  }
+                  <div style={{ display: "flex", gap: 2 }}>
+                    {canEdit2 && <button onMouseDown={function(e) { e.stopPropagation(); }} style={S.iconBtn} onClick={function(e) { e.stopPropagation(); onDup(t); }}><Ic d={Icons.copy} size={12} color="#94A3B8" /></button>}
+                    {canEdit2 && <button onMouseDown={function(e) { e.stopPropagation(); }} style={S.iconBtn} onClick={function(e) { e.stopPropagation(); onEdit(t); }}><Ic d={Icons.edit} size={12} color="#94A3B8" /></button>}
+                  </div>
+                </div>
+              </Card>
+            </div>;
+          })}
+        </div>;
+      })}
+    </div>
+  </div>;
 }
 
 function CalendarPage({ tasks, user, team, calDate, setCalDate, onView, isMob, me }) {
