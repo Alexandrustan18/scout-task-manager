@@ -322,7 +322,7 @@ export default function App() {
   // User XP & Levels
   var [userXP, setUserXP] = useState({});
   // Monthly bonus reward
-  var [monthlyBonus, setMonthlyBonus] = useState({ amount: 0, currency: "RON", enabled: false });
+  var [monthlyBonus, setMonthlyBonus] = useState({ memberAmount: 0, memberCurrency: "RON", pmAmount: 0, pmCurrency: "RON", enabled: false });
   var [expandedGroups, setExpandedGroups] = useState(function() {
     try { var saved = localStorage.getItem("s7_nav_groups"); if (saved) return JSON.parse(saved); } catch(e) {}
     return { "Operational": true, "Echipa": true, "Comunicare": false, "Configurare": false };
@@ -360,7 +360,7 @@ export default function App() {
         cloudLoad("platforms", DEF_PLATFORMS),
         cloudLoad("pipelineRules", []),
         cloudLoad("userXP", {}),
-        cloudLoad("monthlyBonus", { amount: 0, currency: "RON", enabled: false }),
+        cloudLoad("monthlyBonus", { memberAmount: 0, memberCurrency: "RON", pmAmount: 0, pmCurrency: "RON", enabled: false }),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -378,7 +378,7 @@ export default function App() {
       if (plf && plf.length > 0) setPlatforms(plf); else { setPlatforms(DEF_PLATFORMS); cloudSave("platforms", DEF_PLATFORMS); }
       setPipelineRules(plr || []);
       setUserXP(uxp || {});
-      if (mb) setMonthlyBonus(mb);
+      if (mb) { if (mb.amount !== undefined && mb.memberAmount === undefined) { mb.memberAmount = mb.amount; mb.memberCurrency = mb.currency || "RON"; mb.pmAmount = 0; mb.pmCurrency = "RON"; } setMonthlyBonus(mb); }
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -1531,7 +1531,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
 
     {(function() {
       var renderPmBlock = function(id) {
-        if (id === "podium") return <PodiumCompact leaderboard={calcPMLeaderboard(allTasks, team, Object.keys(team))} onNavigate={!pmEditMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga PM-ilor"} subtitle={"Scor: taskuri create + taskuri echipa done + taskuri proprii done"} />;
+        if (id === "podium") return <PodiumCompact leaderboard={calcPMLeaderboard(allTasks, team, Object.keys(team))} onNavigate={!pmEditMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga PM-ilor"} subtitle={"Scor: taskuri create + taskuri echipa done + taskuri proprii done"} leagueType="pm" />;
         if (id === "tabs") return <div>
           {/* Tab switcher */}
           <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
@@ -1802,7 +1802,7 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
 
     {/* Podium - hidden when rendered as sub-tab of PM dashboard */}
-    {!hideHeader && <PodiumCompact leaderboard={calcMemberLeaderboard(allTasks, team, targets, Object.keys(team))} onNavigate={setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga Membrilor"} subtitle={"Taskuri finalizate luna aceasta"} />}
+    {!hideHeader && <PodiumCompact leaderboard={calcMemberLeaderboard(allTasks, team, targets, Object.keys(team))} onNavigate={setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga Membrilor"} subtitle={"Taskuri finalizate luna aceasta"} leagueType="members" />}
 
     {/* Target progress */}
     {myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
@@ -2420,8 +2420,8 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
         })}</div>;
         if (id === "live") return activeTimers.length > 0 ? <Card style={{ borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10} userId={t.assignee}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card> : null;
         if (id === "podium") return <div>
-          <PodiumCompact leaderboard={calcMemberLeaderboard(allTasks, team, targets, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga Membrilor"} subtitle={"Cine implementeaza cel mai mult"} />
-          <PodiumCompact leaderboard={calcPMLeaderboard(allTasks, team, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("leagueMonthly"); } : null} title={"Liga PM-ilor"} subtitle={"Cine coordoneaza cel mai bine"} />
+          <PodiumCompact leaderboard={calcMemberLeaderboard(allTasks, team, targets, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga Membrilor"} subtitle={"Cine implementeaza cel mai mult"} leagueType="members" />
+          <PodiumCompact leaderboard={calcPMLeaderboard(allTasks, team, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("leagueMonthly"); } : null} title={"Liga PM-ilor"} subtitle={"Cine coordoneaza cel mai bine"} leagueType="pm" monthlyBonus={monthlyBonus} />
         </div>;
         if (id === "insights") return <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} setPage={setPage} />;
         if (id === "team") return <div>
@@ -3536,12 +3536,15 @@ function calcLeaderboard(allTasks, team, targets, achievements, users) {
   return calcMemberLeaderboard(allTasks, team, targets, users);
 }
 
-function PodiumCompact({ leaderboard, onNavigate, monthlyBonus, title, subtitle }) {
+function PodiumCompact({ leaderboard, onNavigate, monthlyBonus, title, subtitle, leagueType }) {
   if (leaderboard.length < 2) return null;
   var now = new Date();
   var monthNames = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
   var monthLabel = monthNames[now.getMonth()];
-  var hasBonus = monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0;
+  var isPM = leagueType === "pm";
+  var bonusAmt = monthlyBonus ? (isPM ? (monthlyBonus.pmAmount || 0) : (monthlyBonus.memberAmount || monthlyBonus.amount || 0)) : 0;
+  var bonusCur = monthlyBonus ? (isPM ? (monthlyBonus.pmCurrency || "RON") : (monthlyBonus.memberCurrency || monthlyBonus.currency || "RON")) : "RON";
+  var hasBonus = monthlyBonus && monthlyBonus.enabled && bonusAmt > 0;
   var podiumTitle = title || ("Liga lunara - " + monthLabel);
   return <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FFFBEB, #FFF 50%)", cursor: onNavigate ? "pointer" : "default" }} onClick={onNavigate}>
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: hasBonus ? 6 : 12 }}>
@@ -3551,7 +3554,7 @@ function PodiumCompact({ leaderboard, onNavigate, monthlyBonus, title, subtitle 
     {subtitle && <div style={{ fontSize: 11, color: "#64748B", marginBottom: 8 }}>{subtitle}</div>}
     {hasBonus && <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "6px 12px", background: "#EAB30812", borderRadius: 8, border: "1px solid #EAB30825" }}>
       <span style={{ fontSize: 16 }}>💰</span>
-      <span style={{ fontSize: 13, fontWeight: 800, color: "#92400E" }}>Premiu locul 1: {monthlyBonus.amount} {monthlyBonus.currency}</span>
+      <span style={{ fontSize: 13, fontWeight: 800, color: "#92400E" }}>Premiu locul 1: {bonusAmt} {bonusCur} bonus extra</span>
       <span style={{ fontSize: 11, color: "#92400E", opacity: 0.7 }}>| Se cumuleaza toata luna</span>
     </div>}
     <div style={{ display: "grid", gridTemplateColumns: leaderboard.length >= 3 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 10, alignItems: "end" }}>
@@ -4627,24 +4630,39 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
       <div style={{ fontSize: 12, color: "#64748B" }}>Clasament lunar. Se reseteaza pe 1 a fiecarei luni. {daysRemaining} zile ramase.</div>
     </div>
 
-    {/* Bonus Banner */}
-    {monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FEFCE8, #FEF3C7 40%, #FFF 80%)", borderLeft: "4px solid #EAB308", position: "relative", overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: -20, right: -10, fontSize: 100, opacity: 0.06 }}>💰</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 48 }}>🏆</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Premiu Membrul #1 - {monthLabel}</div>
-          <div style={{ fontSize: 36, fontWeight: 900, color: "#1E293B" }}>{monthlyBonus.amount} {monthlyBonus.currency}</div>
-          <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>Membrul cu cel mai mare scor la sfarsitul lunii castiga bonusul.</div>
+    {/* Bonus Banners */}
+    {monthlyBonus && monthlyBonus.enabled && (monthlyBonus.memberAmount > 0 || monthlyBonus.pmAmount > 0) && <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
+      {monthlyBonus.memberAmount > 0 && <Card style={{ background: "linear-gradient(135deg, #FEFCE8, #FEF3C7 40%, #FFF 80%)", borderLeft: "4px solid #EAB308", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: -10, right: -5, fontSize: 60, opacity: 0.06 }}>💰</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 36 }}>🏆</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1 }}>Premiu Membrul #1</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: "#1E293B" }}>{monthlyBonus.memberAmount} {monthlyBonus.memberCurrency}</div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>bonus extra</div>
+          </div>
         </div>
-        {memberBoard.length > 0 && <div style={{ textAlign: "center", padding: "12px 20px", background: "#EAB30815", borderRadius: 12, border: "1px solid #EAB30830" }}>
-          <div style={{ fontSize: 11, color: "#92400E", fontWeight: 600, marginBottom: 4 }}>Lider curent</div>
-          <Av color={memberBoard[0].color} size={44} fs={16} userId={memberBoard[0].user}>{memberBoard[0].name[0]}</Av>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#1E293B", marginTop: 4 }}>{memberBoard[0].name}</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>{memberBoard[0].score} pts | Lv.{memberBoard[0].level}</div>
+        {memberBoard.length > 0 && <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "#EAB30812", borderRadius: 8 }}>
+          <Av color={memberBoard[0].color} size={28} fs={11} userId={memberBoard[0].user}>{memberBoard[0].name[0]}</Av>
+          <div><div style={{ fontSize: 12, fontWeight: 700 }}>{memberBoard[0].name}</div><div style={{ fontSize: 10, color: "#64748B" }}>{memberBoard[0].score} pts</div></div>
         </div>}
-      </div>
-    </Card>}
+      </Card>}
+      {monthlyBonus.pmAmount > 0 && <Card style={{ background: "linear-gradient(135deg, #F5F3FF, #EDE9FE 40%, #FFF 80%)", borderLeft: "4px solid #7C3AED", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: -10, right: -5, fontSize: 60, opacity: 0.06 }}>💰</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 36 }}>🏆</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: 1 }}>Premiu PM #1</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: "#1E293B" }}>{monthlyBonus.pmAmount} {monthlyBonus.pmCurrency}</div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>bonus extra</div>
+          </div>
+        </div>
+        {pmBoard.length > 0 && <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "#7C3AED12", borderRadius: 8 }}>
+          <Av color={pmBoard[0].color} size={28} fs={11} userId={pmBoard[0].user}>{pmBoard[0].name[0]}</Av>
+          <div><div style={{ fontSize: 12, fontWeight: 700 }}>{pmBoard[0].name}</div><div style={{ fontSize: 10, color: "#64748B" }}>{pmBoard[0].score} pts</div></div>
+        </div>}
+      </Card>}
+    </div>}
 
     {/* Month progress */}
     <Card style={{ marginBottom: 16 }}>
@@ -4683,18 +4701,31 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
 
     {/* Admin bonus config */}
     {me.role === "admin" && <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premiu Lunar (admin)</div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premii Lunare (admin)</div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
           <input type="checkbox" checked={monthlyBonus.enabled} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { enabled: e.target.checked })); }} style={{ accentColor: "#7C3AED" }} /> Activ
         </label>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <label style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Suma:</label>
-          <input type="number" min="0" step="10" value={monthlyBonus.amount} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { amount: parseInt(e.target.value) || 0 })); }} style={Object.assign({}, S.input, { width: 100, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ padding: 12, background: "#EFF6FF", borderRadius: 8, border: "1px solid #BFDBFE" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#2563EB", marginBottom: 8 }}>Premiu Membri (implementare)</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input type="number" min="0" step="10" value={monthlyBonus.memberAmount || 0} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { memberAmount: parseInt(e.target.value) || 0 })); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+            <select value={monthlyBonus.memberCurrency || "RON"} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { memberCurrency: e.target.value })); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
+              <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
+            </select>
+          </div>
         </div>
-        <select value={monthlyBonus.currency} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { currency: e.target.value })); }} style={Object.assign({}, S.fSel, { padding: "6px 10px" })}>
-          <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
-        </select>
+        <div style={{ padding: 12, background: "#F5F3FF", borderRadius: 8, border: "1px solid #DDD6FE" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED", marginBottom: 8 }}>Premiu PM (coordonare)</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <input type="number" min="0" step="10" value={monthlyBonus.pmAmount || 0} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { pmAmount: parseInt(e.target.value) || 0 })); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+            <select value={monthlyBonus.pmCurrency || "RON"} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { pmCurrency: e.target.value })); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
+              <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
+            </select>
+          </div>
+        </div>
       </div>
     </Card>}
 
