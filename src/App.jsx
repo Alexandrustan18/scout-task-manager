@@ -1052,14 +1052,17 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
               if (t.assignee !== d.key || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
               // Exclude pipeline-generated tasks (would double-count for original assignee)
               if (t._fromPipeline) return false;
+              // Exclude campaign parents - their children count individually
+              if (t._campaignParent === true) return false;
+              if (t.campaignItems && t.campaignItems.length > 1) return false;
               if (!normM || normM === "all") return true;
               if (normM.startsWith("type:") && t.taskType === normM.replace("type:", "")) return true;
               if (normM.startsWith("dept:") && t.department === normM.replace("dept:", "")) return true;
               if (normM.startsWith("plat:") && t.platform === normM.replace("plat:", "")) return true;
               return false;
             }).reduce(function(acc, t) {
-              // Campaign tasks count by number of finalized products, not 1 per task
-              return acc + (t._finalizedCount && t._finalizedCount > 0 ? t._finalizedCount : 1);
+              // Count 1 per task - campaign parents are already excluded above
+              return acc + 1;
             }, 0);
             var pct = tgt.target > 0 ? Math.min(100, (tgtDoneToday / tgt.target) * 100) : 0;
             var rem = Math.max(0, tgt.target - tgtDoneToday);
@@ -1548,16 +1551,18 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
     var nm = normM(metric);
     return tasks.filter(function(t) {
       if (t.assignee !== userId || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
-      // Exclude pipeline-generated tasks (they shouldn't count twice for the original assignee)
+      // Exclude pipeline-generated tasks (shouldn't count twice for original assignee)
       if (t._fromPipeline) return false;
+      // Exclude campaign parents - their children count individually
+      if (t._campaignParent === true) return false;
+      if (t.campaignItems && t.campaignItems.length > 1) return false;
       if (nm === "all") return true;
       if (nm.startsWith("type:") && t.taskType === nm.replace("type:", "")) return true;
       if (nm.startsWith("dept:") && t.department === nm.replace("dept:", "")) return true;
       if (nm.startsWith("plat:") && t.platform === nm.replace("plat:", "")) return true;
       return false;
-    }).reduce(function(acc, t) {
-      // Campaign tasks: count finalized products, not 1 per task
-      return acc + (t._finalizedCount && t._finalizedCount > 0 ? t._finalizedCount : 1);
+    }).reduce(function(acc) {
+      return acc + 1;
     }, 0);
   };
 
@@ -1605,12 +1610,15 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
         var dt = new Date(); dt.setDate(dt.getDate() - d); var dStr = ds(dt);
         var dayDone = tasks.filter(function(t2) {
           if (t2.assignee !== tgt.userId || t2.status !== "Done" || !t2.updatedAt || ds(t2.updatedAt) !== dStr) return false;
+          if (t2._fromPipeline) return false;
+          if (t2._campaignParent === true) return false;
+          if (t2.campaignItems && t2.campaignItems.length > 1) return false;
           if (nm === "all") return true;
           if (nm.startsWith("type:") && t2.taskType === nm.replace("type:", "")) return true;
           if (nm.startsWith("dept:") && t2.department === nm.replace("dept:", "")) return true;
           if (nm.startsWith("plat:") && t2.platform === nm.replace("plat:", "")) return true;
           return false;
-        }).reduce(function(acc, t2) { return acc + (t2._finalizedCount && t2._finalizedCount > 0 ? t2._finalizedCount : 1); }, 0);
+        }).reduce(function(acc) { return acc + 1; }, 0);
         var dow = dt.getDay();
         var isWorkday = dow >= 1 && dow <= (tgt.daysPerWeek >= 6 ? 6 : 5);
         var expected = isWorkday ? tgt.target : 0;
