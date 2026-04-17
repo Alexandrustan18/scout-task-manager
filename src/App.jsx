@@ -1331,8 +1331,8 @@ export default function App() {
               <div><div style={{ fontSize: 10, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Deadline</div><input type="date" style={Object.assign({}, S.fSel, { width: "100%" })} onChange={function(e) { if (e.target.value) bulkChgDeadline(e.target.value); e.target.value = ""; }} /></div>
             </div>
           </Card>}
-          {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} />}
-          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} />}
+          {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
+          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
           {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
@@ -1413,7 +1413,7 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
   </div>;
 }
 
-function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers, setPage }) {
+function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers, setPage, monthlyBonus }) {
   var [tab, setTab] = useState("personal"); // personal | team
   var [pmKpiModal, setPmKpiModal] = useState(null);
   var [pmEditMode, setPmEditMode] = useState(false);
@@ -1531,7 +1531,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
 
     {(function() {
       var renderPmBlock = function(id) {
-        if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!pmEditMode && setPage ? function() { setPage("league"); } : null} />;
+        if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!pmEditMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} />;
         if (id === "tabs") return <div>
           {/* Tab switcher */}
           <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
@@ -1541,7 +1541,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
               {teamOverdue.length > 0 && <span style={{ background: "#DC2626", color: "#fff", fontSize: 10, padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>{teamOverdue.length}</span>}
             </button>
           </div>
-          {tab === "personal" && <MemberDashboard me={me} user={user} allTasks={allTasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} hideHeader={true} visUsers={visUsers} setPage={setPage} />}
+          {tab === "personal" && <MemberDashboard me={me} user={user} allTasks={allTasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} hideHeader={true} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
           {tab === "team" && <div>
             {pmKpiModal && <TaskDetailModal title={pmKpiModal.title} color={pmKpiModal.color} tasks={pmKpiModal.tasks} team={team} onClose={function() { setPmKpiModal(null); }} setPage={setPage} />}
             {/* Team hero KPIs */}
@@ -1705,7 +1705,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
   </div>;
 }
 
-function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, hideHeader, visUsers, setPage }) {
+function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, hideHeader, visUsers, setPage, monthlyBonus }) {
   var [kpiModal, setKpiModal] = useState(null);
   var myTasks = allTasks.filter(function(t) { return t.assignee === user && !t._campaignParent; });
   var todayDone = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
@@ -1802,7 +1802,7 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
 
     {/* Podium - hidden when rendered as sub-tab of PM dashboard */}
-    {!hideHeader && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("league"); } : null} />}
+    {!hideHeader && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} />}
 
     {/* Target progress */}
     {myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
@@ -2419,7 +2419,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
           </Card>;
         })}</div>;
         if (id === "live") return activeTimers.length > 0 ? <Card style={{ borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10} userId={t.assignee}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card> : null;
-        if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("league"); } : null} />;
+        if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} />;
         if (id === "insights") return <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} setPage={setPage} />;
         if (id === "team") return <div>
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
@@ -3482,40 +3482,49 @@ function BrandingPage({ branding, setBranding, addLog }) {
 
 function calcLeaderboard(allTasks, team, targets, achievements, users) {
   var now = new Date();
-  var dow = now.getDay();
-  var daysFromMon = dow === 0 ? 6 : dow - 1;
-  var weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - daysFromMon); weekStart.setHours(0, 0, 0, 0);
-  var weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  var daysPassed = now.getDate();
   var competitors = users.filter(function(u) { return team[u] && team[u].role !== "admin"; });
   return competitors.map(function(u) {
     var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
-    var thisWeek = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; });
+    var thisMonth = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; });
     var overdue = userTasks.filter(function(t) { return isOv(t); }).length;
     var userTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
     var streakBonus = 0;
     if (userTargets.length > 0) {
       var tgt = userTargets[0];
       var daysWithTarget = 0;
-      for (var d = 0; d < 7; d++) {
-        var dt = new Date(weekStart); dt.setDate(dt.getDate() + d);
+      for (var d = 0; d < daysPassed; d++) {
+        var dt = new Date(monthStart); dt.setDate(dt.getDate() + d);
         if (dt > now) break;
+        if (dt.getDay() === 0 || dt.getDay() === 6) continue;
         var doneDay = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length;
         if (doneDay >= (tgt.target || 0)) daysWithTarget++;
       }
-      streakBonus = daysWithTarget * 5;
+      streakBonus = daysWithTarget * 3;
     }
-    var score = thisWeek.length * 10 - overdue * 5 + streakBonus;
-    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneThis: thisWeek.length, overdue: overdue, score: Math.max(0, score) };
+    var score = thisMonth.length * 10 - overdue * 5 + streakBonus;
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneThis: thisMonth.length, overdue: overdue, score: Math.max(0, score) };
   }).sort(function(a, b) { return b.score - a.score; });
 }
 
-function PodiumCompact({ leaderboard, onNavigate }) {
+function PodiumCompact({ leaderboard, onNavigate, monthlyBonus }) {
   if (leaderboard.length < 3) return null;
+  var now = new Date();
+  var monthNames = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
+  var monthLabel = monthNames[now.getMonth()];
+  var hasBonus = monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0;
   return <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FFFBEB, #FFF 50%)", cursor: onNavigate ? "pointer" : "default" }} onClick={onNavigate}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 6 }}>🏆 Liga saptamanii - podium</div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: hasBonus ? 6 : 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 6 }}>Liga lunara - {monthLabel}</div>
       {onNavigate && <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Vezi tot ▶</span>}
     </div>
+    {hasBonus && <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "6px 12px", background: "#EAB30812", borderRadius: 8, border: "1px solid #EAB30825" }}>
+      <span style={{ fontSize: 16 }}>💰</span>
+      <span style={{ fontSize: 13, fontWeight: 800, color: "#92400E" }}>Premiu locul 1: {monthlyBonus.amount} {monthlyBonus.currency}</span>
+      <span style={{ fontSize: 11, color: "#92400E", opacity: 0.7 }}>| Se cumuleaza toata luna</span>
+    </div>}
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, alignItems: "end" }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 24, marginBottom: 2 }}>🥈</div>
