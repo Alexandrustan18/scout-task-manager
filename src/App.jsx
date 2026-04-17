@@ -655,6 +655,25 @@ export default function App() {
     // clear draft
     localStorage.removeItem("scout_task_draft");
   };
+  var explodeCampaign = function(t) {
+    // Create individual child tasks from a campaign parent that has no children yet
+    if (!t.campaignItems || t.campaignItems.length === 0) return;
+    var parentId = t.id;
+    var childTasks = [];
+    t.campaignItems.forEach(function(ci) {
+      var childLinks = t.links ? t.links.slice() : [];
+      if (ci.link) childLinks = [ci.link];
+      var child = { id: gid(), title: ci.name || t.title, description: t.description || "", assignee: t.assignee || "", status: "To Do", priority: t.priority, platform: t.platform, taskType: t.taskType, department: t.department, shop: t.shop, product: "", productName: ci.name, deadline: t.deadline, links: childLinks, subtasks: [], comments: [], tags: t.tags || [], dependsOn: [], campaignItems: [], createdBy: t.createdBy, createdAt: ts(), updatedAt: ts(), _campaignParentId: parentId, _pipelineNext: t._pipelineNext || "" };
+      childTasks.push(child);
+      setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[child.id] = [{ status: "To Do", at: ts() }]; return n; });
+    });
+    // Mark parent as _campaignParent so it gets hidden
+    setTasks(function(p) {
+      return p.map(function(x) { return x.id === parentId ? Object.assign({}, x, { _campaignParent: true }) : x; }).concat(childTasks);
+    });
+    addLog("EXPLODE", """ + t.title + "" exploded in " + childTasks.length + " taskuri");
+  };
+
   var delTask = function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) addLog("DELETE", "Sters \"" + t.title + "\""); setTasks(function(p) { return p.filter(function(x) { return x.id !== tid; }); }); };
   var dupTask = function(t) { var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) }); setTasks(function(p) { return [nt].concat(p); }); addLog("DUPLICATE", "Duplicat \"" + t.title + "\""); };
 
@@ -853,7 +872,7 @@ export default function App() {
           </Card>}
           {page === "dashboard" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
-          {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} />}
+          {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
           {page === "calendar" && <CalendarPage tasks={visTasks} user={user} team={team} calDate={calDate} setCalDate={setCalDate} onView={setViewTask} isMob={isMob} me={me} />}
           {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} taskTypes={taskTypes} departments={departments} />}
@@ -1125,10 +1144,12 @@ function ProfileView({ pu, team, tasks, timers, getTS, logs, sessions, getPerf, 
   </div>;
 }
 
-function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, secs, running, togTimer, bulkMode, isSelected, toggleSel, canEdit, canDelete }) {
+function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, secs, running, togTimer, bulkMode, isSelected, toggleSel, canEdit, canDelete, onExplode, allTasks }) {
   var me = team[user] || {}; var a = team[t.assignee] || {}; var ov = isOv(t); var can = me.role === "admin" || me.role === "pm" || t.assignee === user;
   var doneS = (t.subtasks || []).filter(function(s) { return s.done; }).length; var totalS = (t.subtasks || []).length;
   var isAdminTask = t.createdBy === "admin";
+  var hasChildren = allTasks && allTasks.some(function(x) { return x._campaignParentId === t.id; });
+  var needsExplode = t.campaignItems && t.campaignItems.length > 0 && !hasChildren && !t._campaignParent;
   // FEATURE 9: block edit badge
   var isDone = t.status === "Done";
   var canEditThis = (canEdit || me.role === "admin") && !(isDone && me.role !== "admin");
@@ -1168,6 +1189,7 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={16} fs={8}>{a.name[0]}</Av>{a.name}</span>}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.productName && <Badge bg="#EFF6FF" color="#2563EB">{t.productName}</Badge>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{t.links && t.links.length > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2 }}><Ic d={Icons.link} size={10} color="#94A3B8" /> {t.links.length}</span>}{totalS > 0 && <span><Ic d={Icons.check} size={10} color="#94A3B8" /> {doneS}/{totalS}</span>}</div>
     </div>
     <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+      {needsExplode && onExplode && <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1.5px solid " + GR, background: "#ECFDF5", color: GR, fontSize: 11, fontWeight: 700, cursor: "pointer" }} onClick={function(e) { e.stopPropagation(); if (confirm("Creezi " + t.campaignItems.length + " taskuri individuale din acest campaign?")) onExplode(t); }}>⚡ Split {t.campaignItems.length}</button>}
       {can && t.status !== "Done" && <button onClick={togTimer} style={Object.assign({}, S.timerBtn, { background: running ? "#FEF2F2" : "#F8FAFC", color: running ? "#DC2626" : GR, borderColor: running ? "#FECACA" : "#E2E8F0" })}><Ic d={running ? Icons.stop : Icons.play} size={12} color={running ? "#DC2626" : GR} />{secs > 0 && <span style={{ fontVariantNumeric: "tabular-nums" }}>{ft(secs)}</span>}</button>}
       {t.status === "Done" && secs > 0 && <span style={{ fontSize: 11, color: "#94A3B8" }}>{ft(secs)}</span>}
       <select style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 6px" })} value={t.status} onChange={function(e) { onChgSt(t.id, e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
@@ -1178,7 +1200,7 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
   </Card>;
 }
 
-function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer, bulkMode, selectedTasks, toggleSel, canEdit, canDelete }) {
+function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer, bulkMode, selectedTasks, toggleSel, canEdit, canDelete, onExplode, tasks }) {
   var st = fProps.stats;
   var statusGroups = useMemo(function() {
     var groups = {};
@@ -1195,14 +1217,14 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
     <FiltersBar {...fProps} />
     {statusGroups["Urgent"].length > 0 && <div style={{ marginBottom: 20 }}>
       <div style={Object.assign({}, S.groupHdr, { color: "#DC2626" })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />URGENT</span><span style={S.countBadge}>{statusGroups["Urgent"].length}</span></div>
-      {statusGroups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} />; })}
+      {statusGroups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
     </div>}
     {["In Progress", "Review", "To Do", "Done"].map(function(status) {
       var sectionTasks = statusGroups[status];
       if (!sectionTasks || sectionTasks.length === 0) return null;
       return <div key={status} style={{ marginBottom: 20 }}>
         <div style={Object.assign({}, S.groupHdr, { borderLeft: "3px solid " + SC[status], paddingLeft: 10 })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[status] }} />{status}</span><span style={S.countBadge}>{sectionTasks.length}</span></div>
-        {sectionTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} />; })}
+        {sectionTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
       </div>;
     })}
     {filtered.length === 0 && <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>Niciun task.</Card>}
