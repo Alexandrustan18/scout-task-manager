@@ -1082,6 +1082,7 @@ export default function App() {
     { id: "announce", label: "Announcements", icon: Icons.announce },
     { id: "backups", label: "Backup Taskuri", icon: Icons.history },
     { id: "departments", label: "Departamente", icon: Icons.dept },
+    { id: "insights", label: "Insights", icon: Icons.perf },
     { id: "shops", label: "Magazine", icon: Icons.shops },
     { id: "products", label: "Produse", icon: Icons.prod },
     { id: "sheets", label: "Sheets", icon: Icons.sheet },
@@ -1091,7 +1092,7 @@ export default function App() {
 
   var navGroups = [
     { solo: true, items: ["dashboard", "tasks", "kanban"] },
-    { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
+    { label: "Operational", items: ["targets", "templates", "recurring", "leaves", "insights"] },
     { label: "Echipa", items: ["workload", "performance", "league", "digest", "achievements"] },
     { label: "Comunicare", items: ["announce"] },
     { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "backups"] },
@@ -1101,7 +1102,7 @@ export default function App() {
     if (me.role === "admin") return true;
     if (me.access && me.access.length > 0) return me.access.includes(n.id);
     if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "backups", "branding"].includes(n.id);
-    if (me.role === "member") return ["tasks", "kanban", "achievements", "announce"].includes(n.id);
+    if (me.role === "member") return ["tasks", "kanban", "achievements", "announce", "insights"].includes(n.id);
     return false;
   });
 
@@ -1224,6 +1225,7 @@ export default function App() {
           {page === "shops" && <ShopsBordPage shops={shops} setShops={setShops} tasks={tasks} team={team} isMob={isMob} canEdit={canCreate} slas={slas} />}
           {page === "products" && <ProdsPage products={products} setProducts={setProducts} shops={shops} productAudit={productAudit} setProductAudit={setProductAudit} user={user} team={team} />}
           {page === "sheets" && <SheetsPage sheets={sheets} setSheets={setSheets} shops={shops} />}
+          {page === "insights" && <InsightsPage isMob={isMob} />}
           {page === "manage_users" && <UsersPage team={team} setTeam={setTeam} addLog={addLog} />}
         </div>
       </main>
@@ -4101,6 +4103,666 @@ function CampaignFinalizeModal({ task, onFinalize, onClose }) {
 }
 
 
+var SHEETS_ID = "1IVg0fI-_Rm7IptmOl3BmGrqtyyzn3auf0ZPuftr9vQo";
+
+function fetchSheetCSV(sheetName) {
+  var url = "https://docs.google.com/spreadsheets/d/" + SHEETS_ID + "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(sheetName);
+  return fetch(url).then(function(r) {
+    if (!r.ok) throw new Error("Sheet fetch failed: " + r.status);
+    return r.text();
+  }).then(function(csv) {
+    return parseCSV(csv);
+  });
+}
+
+function parseCSV(text) {
+  var lines = [];
+  var current = "";
+  var inQuote = false;
+  for (var i = 0; i < text.length; i++) {
+    var ch = text[i];
+    if (ch === '"') { inQuote = !inQuote; continue; }
+    if (ch === '\n' && !inQuote) { lines.push(current); current = ""; continue; }
+    if (ch === '\r' && !inQuote) continue;
+    current += ch;
+  }
+  if (current.trim()) lines.push(current);
+  
+  return lines.map(function(line) {
+    var cells = [];
+    var cell = "";
+    var q = false;
+    for (var j = 0; j < line.length; j++) {
+      var c = line[j];
+      if (c === '"') { q = !q; continue; }
+      if (c === ',' && !q) { cells.push(cell); cell = ""; continue; }
+      cell += c;
+    }
+    cells.push(cell);
+    return cells;
+  });
+}
+
+function parseSheetRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  var brands = [];
+  for (var i = 1; i < rows.length; i++) {
+    var row = rows[i];
+    if (!row || row.length < 5) continue;
+    
+    var dateRaw = (row[0] || "").trim();
+    if (!dateRaw) continue;
+    
+    // Parse date - could be DD.MM.YYYY or DD/MM/YYYY or YYYY-MM-DD
+    var dateStr = "";
+    var mDate = dateRaw.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/);
+    if (mDate) {
+      dateStr = mDate[3] + "-" + mDate[2].padStart(2, "0") + "-" + mDate[1].padStart(2, "0");
+    } else {
+      var mISO = dateRaw.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (mISO) dateStr = mISO[1];
+    }
+    if (!dateStr) continue;
+    
+    var brand = (row[1] || "").trim();
+    if (!brand) continue;
+    
+    var p = function(v) {
+      if (!v) return 0;
+      var s = String(v).replace(/\./g, "").replace(",", ".").replace(/[^\d.\-]/g, "");
+      return parseFloat(s) || 0;
+    };
+    
+    var entry = {
+      date: dateStr,
+      brand: brand,
+      fb_spend: p(row[2]),
+      tk_spend: p(row[3]),
+      orders: p(row[4]),
+      revenue: p(row[5]),
+      cogs: p(row[6]),
+      transport: p(row[7]),
+      consumabile: p(row[8]),
+      comision_tom: p(row[9]),
+      comision_agentie: p(row[10]),
+      abonamente: p(row[11]),
+      roas: p(row[12]),
+      cpa: p(row[13]),
+      fb_clicks: p(row[14]),
+      tk_clicks: p(row[15]),
+      fb_impressions: p(row[16]),
+      tk_impressions: p(row[17]),
+      google_spend: p(row[18]),
+      google_clicks: p(row[19]),
+      google_impressions: p(row[20]),
+      aov: p(row[21]),
+    };
+    entry.total_spend = Math.round((entry.fb_spend + entry.tk_spend + entry.google_spend) * 100) / 100;
+    entry.profit = Math.round((entry.revenue - entry.cogs - entry.transport - entry.consumabile - entry.comision_tom - entry.comision_agentie - entry.abonamente - entry.total_spend) * 100) / 100;
+    
+    brands.push(entry);
+  }
+  return brands;
+}
+
+function numFmt(n, decimals) {
+  if (n === 0) return "0";
+  var d = decimals !== undefined ? decimals : 0;
+  var parts = Math.abs(n).toFixed(d).split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  var formatted = parts.join(",");
+  return n < 0 ? "-" + formatted : formatted;
+}
+
+function pctChange(current, previous) {
+  if (!previous || previous === 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / Math.abs(previous)) * 1000) / 10;
+}
+
+function InsightsPage({ isMob }) {
+  var [todayData, setTodayData] = useState([]);
+  var [histData, setHistData] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var [error, setError] = useState(null);
+  var [lastUpdate, setLastUpdate] = useState(null);
+  var [sortCol, setSortCol] = useState("orders");
+  var [sortDir, setSortDir] = useState("desc");
+  var [dateRange, setDateRange] = useState("14");
+  var [selectedBrand, setSelectedBrand] = useState("all");
+  var [chartMetric, setChartMetric] = useState("revenue");
+  var [tab, setTab] = useState("today"); // today | history | charts
+  var [histSortCol, setHistSortCol] = useState("date");
+  var [histSortDir, setHistSortDir] = useState("desc");
+
+  var loadData = useCallback(function() {
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      fetchSheetCSV("Raport azi"),
+      fetchSheetCSV("Raport Zilnic 2")
+    ]).then(function(results) {
+      var today = parseSheetRows(results[0]);
+      var hist = parseSheetRows(results[1]);
+      setTodayData(today);
+      setHistData(hist);
+      setLastUpdate(new Date().toISOString());
+      setLoading(false);
+    }).catch(function(err) {
+      setError(err.message);
+      setLoading(false);
+    });
+  }, []);
+
+  useEffect(function() { loadData(); }, []);
+
+  // ─── Computed: today totals ───
+  var todayTotals = useMemo(function() {
+    var t = { revenue: 0, orders: 0, spend: 0, profit: 0, fb_spend: 0, tk_spend: 0, google_spend: 0 };
+    todayData.forEach(function(d) {
+      t.revenue += d.revenue;
+      t.orders += d.orders;
+      t.spend += d.total_spend;
+      t.profit += d.profit;
+      t.fb_spend += d.fb_spend;
+      t.tk_spend += d.tk_spend;
+      t.google_spend += d.google_spend;
+    });
+    t.roas = t.spend > 0 ? Math.round((t.revenue / t.spend) * 100) / 100 : 0;
+    t.cpa = t.orders > 0 ? Math.round((t.spend / t.orders) * 100) / 100 : 0;
+    t.aov = t.orders > 0 ? Math.round((t.revenue / t.orders) * 100) / 100 : 0;
+    return t;
+  }, [todayData]);
+
+  // ─── Computed: yesterday totals (from hist) ───
+  var yesterdayTotals = useMemo(function() {
+    if (histData.length === 0) return null;
+    var dates = [...new Set(histData.map(function(d) { return d.date; }))].sort().reverse();
+    // Find the most recent date in hist that is NOT today
+    var todayDates = [...new Set(todayData.map(function(d) { return d.date; }))];
+    var prevDate = dates.find(function(d) { return !todayDates.includes(d); });
+    if (!prevDate) prevDate = dates[0];
+    
+    var prevDay = histData.filter(function(d) { return d.date === prevDate; });
+    var t = { revenue: 0, orders: 0, spend: 0, profit: 0 };
+    prevDay.forEach(function(d) {
+      t.revenue += d.revenue;
+      t.orders += d.orders;
+      t.spend += d.total_spend;
+      t.profit += d.profit;
+    });
+    t.roas = t.spend > 0 ? Math.round((t.revenue / t.spend) * 100) / 100 : 0;
+    t.cpa = t.orders > 0 ? Math.round((t.spend / t.orders) * 100) / 100 : 0;
+    return t;
+  }, [histData, todayData]);
+
+  // ─── Computed: sorted brand table ───
+  var sortedBrands = useMemo(function() {
+    var arr = todayData.slice();
+    arr.sort(function(a, b) {
+      var va = a[sortCol] || 0;
+      var vb = b[sortCol] || 0;
+      if (typeof va === "string") va = va.toLowerCase();
+      if (typeof vb === "string") vb = vb.toLowerCase();
+      if (sortDir === "asc") return va > vb ? 1 : va < vb ? -1 : 0;
+      return va < vb ? 1 : va > vb ? -1 : 0;
+    });
+    return arr;
+  }, [todayData, sortCol, sortDir]);
+
+  // ─── Computed: filtered hist data ───
+  var filteredHist = useMemo(function() {
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - parseInt(dateRange));
+    var cutoffStr = cutoff.getFullYear() + "-" + String(cutoff.getMonth() + 1).padStart(2, "0") + "-" + String(cutoff.getDate()).padStart(2, "0");
+    
+    return histData.filter(function(d) {
+      if (d.date < cutoffStr) return false;
+      if (selectedBrand !== "all" && d.brand !== selectedBrand) return false;
+      return true;
+    });
+  }, [histData, dateRange, selectedBrand]);
+
+  // ─── Computed: daily aggregates for chart ───
+  var dailyAgg = useMemo(function() {
+    var byDate = {};
+    filteredHist.forEach(function(d) {
+      if (!byDate[d.date]) byDate[d.date] = { date: d.date, revenue: 0, orders: 0, spend: 0, profit: 0, fb_spend: 0, tk_spend: 0, google_spend: 0 };
+      byDate[d.date].revenue += d.revenue;
+      byDate[d.date].orders += d.orders;
+      byDate[d.date].spend += d.total_spend;
+      byDate[d.date].profit += d.profit;
+      byDate[d.date].fb_spend += d.fb_spend;
+      byDate[d.date].tk_spend += d.tk_spend;
+      byDate[d.date].google_spend += d.google_spend;
+    });
+    var arr = Object.values(byDate);
+    arr.forEach(function(d) {
+      d.roas = d.spend > 0 ? Math.round((d.revenue / d.spend) * 100) / 100 : 0;
+      d.cpa = d.orders > 0 ? Math.round((d.spend / d.orders) * 100) / 100 : 0;
+    });
+    return arr.sort(function(a, b) { return a.date > b.date ? 1 : -1; });
+  }, [filteredHist]);
+
+  // ─── Computed: history table (aggregated per day) sorted ───
+  var sortedHistory = useMemo(function() {
+    var arr = dailyAgg.slice();
+    arr.sort(function(a, b) {
+      var va = a[histSortCol] || 0;
+      var vb = b[histSortCol] || 0;
+      if (histSortDir === "asc") return va > vb ? 1 : va < vb ? -1 : 0;
+      return va < vb ? 1 : va > vb ? -1 : 0;
+    });
+    // Add delta (orders change vs previous day)
+    for (var i = 0; i < arr.length; i++) {
+      var prev = arr[i + 1]; // previous day (sorted desc = next in array)
+      arr[i].ordersDelta = prev ? arr[i].orders - prev.orders : 0;
+      arr[i].profitDelta = prev ? arr[i].profit - prev.profit : 0;
+    }
+    return arr;
+  }, [dailyAgg, histSortCol, histSortDir]);
+
+  // ─── Computed: alerts ───
+  var alerts = useMemo(function() {
+    var a = [];
+    todayData.forEach(function(d) {
+      if (d.revenue > 0 && d.roas < 2 && d.total_spend > 50) {
+        a.push({ type: "roas_low", brand: d.brand, msg: "ROAS " + d.roas.toFixed(2) + " (sub 2)", severity: d.roas < 1.5 ? "high" : "medium", value: d.roas });
+      }
+      if (d.profit < 0 && d.revenue > 0) {
+        a.push({ type: "profit_neg", brand: d.brand, msg: "Profit negativ: " + numFmt(d.profit) + " RON", severity: "high", value: d.profit });
+      }
+      if (d.cpa > 50 && d.orders > 0) {
+        a.push({ type: "cpa_high", brand: d.brand, msg: "CPA ridicat: " + d.cpa.toFixed(2) + " RON", severity: d.cpa > 80 ? "high" : "medium", value: d.cpa });
+      }
+      if (d.total_spend > 100 && d.orders === 0) {
+        a.push({ type: "zero_orders", brand: d.brand, msg: "Spend " + numFmt(d.total_spend) + " RON, 0 comenzi", severity: "high", value: d.total_spend });
+      }
+    });
+    return a.sort(function(x, y) { return x.severity === "high" ? -1 : 1; });
+  }, [todayData]);
+
+  // ─── Computed: all brands for filter ───
+  var allBrands = useMemo(function() {
+    var set = new Set();
+    histData.forEach(function(d) { set.add(d.brand); });
+    todayData.forEach(function(d) { set.add(d.brand); });
+    return Array.from(set).sort();
+  }, [todayData, histData]);
+
+  var toggleSort = function(col) {
+    if (sortCol === col) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("desc"); }
+  };
+
+  var toggleHistSort = function(col) {
+    if (histSortCol === col) setHistSortDir(histSortDir === "asc" ? "desc" : "asc");
+    else { setHistSortCol(col); setHistSortDir("desc"); }
+  };
+
+  // Row highlight logic
+  var rowBg = function(d) {
+    if (d.total_spend > 100 && d.orders === 0) return "#2D1215"; // zero orders with spend
+    if (d.roas > 0 && d.roas < 2 && d.total_spend > 50) return "#2D1B15"; // low roas
+    if (d.profit < -100) return "#2D1215";
+    if (d.roas >= 5) return "#0D291A"; // high performer
+    return "transparent";
+  };
+
+  // Chart rendering
+  var renderChart = function() {
+    if (dailyAgg.length === 0) return <div style={{ textAlign: "center", padding: 40, color: "#64748B" }}>Nu sunt date pentru perioada selectata.</div>;
+    
+    var data = dailyAgg;
+    var metric = chartMetric;
+    var values = data.map(function(d) { return d[metric] || 0; });
+    var maxVal = Math.max.apply(null, values.concat([1]));
+    var minVal = Math.min.apply(null, values.concat([0]));
+    if (minVal > 0) minVal = 0;
+    var range = maxVal - minVal || 1;
+    
+    var w = 700;
+    var h = 260;
+    var padL = 65;
+    var padR = 20;
+    var padT = 20;
+    var padB = 40;
+    var chartW = w - padL - padR;
+    var chartH = h - padT - padB;
+    
+    var points = data.map(function(d, i) {
+      var x = padL + (i / Math.max(data.length - 1, 1)) * chartW;
+      var y = padT + chartH - ((d[metric] - minVal) / range) * chartH;
+      return { x: x, y: y, val: d[metric], date: d.date, label: d.date.slice(5) };
+    });
+    
+    var linePath = points.map(function(p, i) { return (i === 0 ? "M" : "L") + p.x + "," + p.y; }).join(" ");
+    var areaPath = linePath + " L" + points[points.length - 1].x + "," + (padT + chartH) + " L" + points[0].x + "," + (padT + chartH) + " Z";
+    
+    var lineColor = metric === "profit" ? "#10B981" : metric === "revenue" ? "#3B82F6" : metric === "orders" ? "#F59E0B" : metric === "roas" ? "#8B5CF6" : metric === "cpa" ? "#EF4444" : "#3B82F6";
+    
+    // Y axis labels
+    var ySteps = 5;
+    var yLabels = [];
+    for (var yi = 0; yi <= ySteps; yi++) {
+      var yVal = minVal + (range / ySteps) * yi;
+      var yPos = padT + chartH - (yi / ySteps) * chartH;
+      yLabels.push({ val: yVal, y: yPos });
+    }
+    
+    return <svg viewBox={"0 0 " + w + " " + h} style={{ width: "100%", height: "auto" }}>
+      <defs>
+        <linearGradient id={"grad_" + metric} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={lineColor} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      {yLabels.map(function(yl, i) {
+        return <g key={i}>
+          <line x1={padL} y1={yl.y} x2={w - padR} y2={yl.y} stroke="#1E293B" strokeWidth="1" />
+          <text x={padL - 8} y={yl.y + 4} fontSize="10" fill="#64748B" textAnchor="end" fontFamily="system-ui">{metric === "roas" || metric === "cpa" ? yl.val.toFixed(1) : numFmt(Math.round(yl.val))}</text>
+        </g>;
+      })}
+      <path d={areaPath} fill={"url(#grad_" + metric + ")"} />
+      <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.5" strokeLinejoin="round" />
+      {points.map(function(p, i) {
+        var showLabel = data.length <= 14 || i % Math.ceil(data.length / 14) === 0;
+        return <g key={i}>
+          <circle cx={p.x} cy={p.y} r="3.5" fill={lineColor} stroke="#0F172A" strokeWidth="1.5" />
+          {showLabel && <text x={p.x} y={h - 8} fontSize="9" fill="#64748B" textAnchor="middle" fontFamily="system-ui">{p.label}</text>}
+        </g>;
+      })}
+      {minVal < 0 && <line x1={padL} y1={padT + chartH - ((0 - minVal) / range) * chartH} x2={w - padR} y2={padT + chartH - ((0 - minVal) / range) * chartH} stroke="#DC2626" strokeWidth="1" strokeDasharray="4,4" />}
+    </svg>;
+  };
+
+  // ─── Spend breakdown bars ───
+  var renderSpendBreakdown = function() {
+    var fb = todayTotals.fb_spend;
+    var tk = todayTotals.tk_spend;
+    var gg = todayTotals.google_spend;
+    var total = fb + tk + gg;
+    if (total === 0) return null;
+    var fbPct = (fb / total) * 100;
+    var tkPct = (tk / total) * 100;
+    var ggPct = (gg / total) * 100;
+    
+    return <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Distributie Spend</div>
+      <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 6 }}>
+        {fb > 0 && <div style={{ width: fbPct + "%", background: "#3B82F6" }} />}
+        {tk > 0 && <div style={{ width: tkPct + "%", background: "#06B6D4" }} />}
+        {gg > 0 && <div style={{ width: ggPct + "%", background: "#F59E0B" }} />}
+      </div>
+      <div style={{ display: "flex", gap: 14, fontSize: 11 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "#3B82F6" }} /><span style={{ color: "#94A3B8" }}>FB {numFmt(fb)} ({fbPct.toFixed(0)}%)</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "#06B6D4" }} /><span style={{ color: "#94A3B8" }}>TK {numFmt(tk)} ({tkPct.toFixed(0)}%)</span></div>
+        {gg > 0 && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "#F59E0B" }} /><span style={{ color: "#94A3B8" }}>Google {numFmt(gg)} ({ggPct.toFixed(0)}%)</span></div>}
+      </div>
+    </div>;
+  };
+
+  // Sort indicator
+  var sortArrow = function(col, currentCol, currentDir) {
+    if (col !== currentCol) return <span style={{ color: "#334155", marginLeft: 2 }}>↕</span>;
+    return <span style={{ color: "#10B981", marginLeft: 2 }}>{currentDir === "asc" ? "↑" : "↓"}</span>;
+  };
+
+  if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, gap: 12 }}>
+    <div style={{ width: 20, height: 20, border: "3px solid #1E293B", borderTop: "3px solid #10B981", borderRadius: "50%", animation: "pulse 1s infinite" }} />
+    <span style={{ color: "#64748B", fontSize: 14 }}>Se incarca datele din Google Sheets...</span>
+  </div>;
+
+  if (error) return <Card style={{ background: "#1C1217", borderLeft: "3px solid #DC2626" }}>
+    <div style={{ fontSize: 14, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>Eroare la incarcarea datelor</div>
+    <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 12 }}>{error}</div>
+    <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>Verifica ca sheet-ul este public (Anyone with the link > Viewer).</div>
+    <button style={S.primBtn} onClick={loadData}>Reincearca</button>
+  </Card>;
+
+  var GR = "#0C7E3E";
+
+  return <div>
+    {/* Header */}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1E293B", marginBottom: 2 }}>Performance Marketing</h2>
+        <div style={{ fontSize: 11, color: "#94A3B8" }}>
+          Live din Google Sheets | {todayData.length} branduri | {lastUpdate ? "Actualizat: " + new Date(lastUpdate).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }) : ""}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <select style={S.fSel} value={selectedBrand} onChange={function(e) { setSelectedBrand(e.target.value); }}>
+          <option value="all">Toate brandurile</option>
+          {allBrands.map(function(b) { return <option key={b} value={b}>{b}</option>; })}
+        </select>
+        <select style={S.fSel} value={dateRange} onChange={function(e) { setDateRange(e.target.value); }}>
+          <option value="7">7 zile</option>
+          <option value="14">14 zile</option>
+          <option value="30">30 zile</option>
+          <option value="60">60 zile</option>
+          <option value="90">90 zile</option>
+        </select>
+        <button style={Object.assign({}, S.primBtn, { padding: "7px 14px", fontSize: 12 })} onClick={loadData}>
+          Actualizeaza
+        </button>
+      </div>
+    </div>
+
+    {/* KPI Cards */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 10, marginBottom: 16 }}>
+      {[
+        { label: "Incasari", value: numFmt(todayTotals.revenue), unit: "RON", color: "#3B82F6", prev: yesterdayTotals ? yesterdayTotals.revenue : null, current: todayTotals.revenue },
+        { label: "Comenzi", value: numFmt(todayTotals.orders), unit: "", color: "#F59E0B", prev: yesterdayTotals ? yesterdayTotals.orders : null, current: todayTotals.orders },
+        { label: "Marketing", value: numFmt(todayTotals.spend), unit: "RON", color: "#EF4444", prev: yesterdayTotals ? yesterdayTotals.spend : null, current: todayTotals.spend, invertColor: true },
+        { label: "ROAS", value: todayTotals.roas.toFixed(2), unit: "", color: "#8B5CF6", prev: yesterdayTotals ? yesterdayTotals.roas : null, current: todayTotals.roas },
+        { label: "CPA", value: todayTotals.cpa.toFixed(2), unit: "RON", color: "#EC4899", prev: yesterdayTotals ? yesterdayTotals.cpa : null, current: todayTotals.cpa, invertColor: true },
+        { label: "Profit", value: numFmt(todayTotals.profit), unit: "RON", color: todayTotals.profit >= 0 ? "#10B981" : "#DC2626", prev: yesterdayTotals ? yesterdayTotals.profit : null, current: todayTotals.profit },
+      ].map(function(kpi) {
+        var delta = kpi.prev !== null ? pctChange(kpi.current, kpi.prev) : null;
+        var deltaPositive = kpi.invertColor ? delta < 0 : delta > 0;
+        return <Card key={kpi.label} style={{ borderTop: "3px solid " + kpi.color, padding: 14 }}>
+          <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>{kpi.label}</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: kpi.color, fontVariantNumeric: "tabular-nums" }}>{kpi.value}</div>
+          {kpi.unit && <div style={{ fontSize: 10, color: "#475569", marginTop: 1 }}>{kpi.unit}</div>}
+          {delta !== null && <div style={{ fontSize: 11, fontWeight: 700, color: deltaPositive ? "#10B981" : "#DC2626", marginTop: 4 }}>
+            {delta >= 0 ? "+" : ""}{delta}%
+            <span style={{ color: "#64748B", fontWeight: 400, marginLeft: 4 }}>vs ieri</span>
+          </div>}
+        </Card>;
+      })}
+    </div>
+
+    {/* Spend breakdown */}
+    {renderSpendBreakdown()}
+
+    {/* Alerts */}
+    {alerts.length > 0 && <Card style={{ marginTop: 16, marginBottom: 16, borderLeft: "3px solid #DC2626", background: "#FEF2F2", padding: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />
+        Alerte ({alerts.length})
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: 6 }}>
+        {alerts.slice(0, 8).map(function(a, i) {
+          var sc = a.severity === "high" ? "#DC2626" : "#D97706";
+          return <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: "#fff", border: "1px solid " + sc + "30" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: sc, flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: sc, minWidth: 80 }}>{a.brand}</span>
+            <span style={{ fontSize: 11, color: "#64748B", flex: 1 }}>{a.msg}</span>
+          </div>;
+        })}
+      </div>
+    </Card>}
+
+    {/* Tab switcher */}
+    <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
+      {[
+        { id: "today", label: "Astazi per Brand" },
+        { id: "history", label: "Istoric Zilnic" },
+        { id: "charts", label: "Grafice Evolutie" },
+      ].map(function(t2) {
+        return <button key={t2.id} onClick={function() { setTab(t2.id); }} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: tab === t2.id ? "#fff" : "transparent", color: tab === t2.id ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: tab === t2.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>{t2.label}</button>;
+      })}
+    </div>
+
+    {/* TAB: Today per Brand */}
+    {tab === "today" && <Card style={{ overflow: "auto" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: "#1E293B" }}>Performance per Brand - Azi</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 800 }}>
+        <thead>
+          <tr style={{ borderBottom: "2px solid #E2E8F0" }}>
+            {[
+              { key: "brand", label: "Brand", align: "left" },
+              { key: "orders", label: "Comenzi" },
+              { key: "revenue", label: "Incasari" },
+              { key: "fb_spend", label: "Facebook" },
+              { key: "tk_spend", label: "Tiktok" },
+              { key: "google_spend", label: "Google" },
+              { key: "roas", label: "ROAS" },
+              { key: "cpa", label: "CPA" },
+              { key: "profit", label: "Profit" },
+            ].map(function(col) {
+              return <th key={col.key} onClick={function() { toggleSort(col.key); }} style={{ padding: "8px 10px", textAlign: col.align || "right", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", userSelect: "none" }}>
+                {col.label}{sortArrow(col.key, sortCol, sortDir)}
+              </th>;
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {sortedBrands.map(function(d) {
+            var bg = rowBg(d);
+            var roasColor = d.roas >= 4 ? "#10B981" : d.roas >= 2 ? "#F59E0B" : d.roas > 0 ? "#DC2626" : "#64748B";
+            var profitColor = d.profit >= 0 ? "#10B981" : "#DC2626";
+            return <tr key={d.brand} style={{ borderBottom: "1px solid #F1F5F9", background: bg }}>
+              <td style={{ padding: "8px 10px", fontWeight: 600, color: "#1E293B", whiteSpace: "nowrap" }}>{d.brand}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{numFmt(d.orders)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{numFmt(d.revenue)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", color: "#3B82F6", fontVariantNumeric: "tabular-nums" }}>{numFmt(d.fb_spend)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", color: "#06B6D4", fontVariantNumeric: "tabular-nums" }}>{numFmt(d.tk_spend)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", color: "#F59E0B", fontVariantNumeric: "tabular-nums" }}>{numFmt(d.google_spend)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: roasColor, fontVariantNumeric: "tabular-nums" }}>{d.roas > 0 ? d.roas.toFixed(2) : "-"}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.cpa > 0 ? d.cpa.toFixed(2) : "-"}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: profitColor, fontVariantNumeric: "tabular-nums" }}>{numFmt(d.profit)}</td>
+            </tr>;
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: "2px solid #E2E8F0", background: "#F8FAFC" }}>
+            <td style={{ padding: "10px 10px", fontWeight: 800, color: "#1E293B" }}>TOTAL</td>
+            <td style={{ padding: "10px 10px", textAlign: "right", fontWeight: 800 }}>{numFmt(todayTotals.orders)}</td>
+            <td style={{ padding: "10px 10px", textAlign: "right", fontWeight: 800 }}>{numFmt(todayTotals.revenue)}</td>
+            <td style={{ padding: "10px 10px", textAlign: "right", fontWeight: 800, color: "#3B82F6" }}>{numFmt(todayTotals.fb_spend)}</td>
+            <td style={{ padding: "10px 10px", textAlign: "right", fontWeight: 800, color: "#06B6D4" }}>{numFmt(todayTotals.tk_spend)}</td>
+            <td style={{ padding: "10px 10px", textAlign: "right", fontWeight: 800, color: "#F59E0B" }}>{numFmt(todayTotals.google_spend)}</td>
+            <td style={{ padding: "10px 10px", textAlign: "right", fontWeight: 800, color: "#8B5CF6" }}>{todayTotals.roas.toFixed(2)}</td>
+            <td style={{ padding: "10px 10px", textAlign: "right", fontWeight: 800 }}>{todayTotals.cpa.toFixed(2)}</td>
+            <td style={{ padding: "10px 10px", textAlign: "right", fontWeight: 800, color: todayTotals.profit >= 0 ? "#10B981" : "#DC2626" }}>{numFmt(todayTotals.profit)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </Card>}
+
+    {/* TAB: History */}
+    {tab === "history" && <Card style={{ overflow: "auto" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Istoric Zilnic - Agregat {selectedBrand !== "all" ? "(" + selectedBrand + ")" : "(Toate)"}</div>
+        <div style={{ fontSize: 11, color: "#94A3B8" }}>{sortedHistory.length} zile</div>
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 800 }}>
+        <thead>
+          <tr style={{ borderBottom: "2px solid #E2E8F0" }}>
+            {[
+              { key: "date", label: "Data", align: "left" },
+              { key: "orders", label: "Comenzi" },
+              { key: "revenue", label: "Vanzari" },
+              { key: "profit", label: "Profit" },
+              { key: "fb_spend", label: "Facebook" },
+              { key: "google_spend", label: "Google" },
+              { key: "tk_spend", label: "Tiktok" },
+              { key: "cpa", label: "CPA" },
+              { key: "roas", label: "ROAS" },
+            ].map(function(col) {
+              return <th key={col.key} onClick={function() { toggleHistSort(col.key); }} style={{ padding: "8px 10px", textAlign: col.align || "right", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", userSelect: "none" }}>
+                {col.label}{sortArrow(col.key, histSortCol, histSortDir)}
+              </th>;
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {sortedHistory.map(function(d) {
+            var profitColor = d.profit >= 0 ? "#10B981" : "#DC2626";
+            var deltaColor = function(v) { return v > 0 ? "#10B981" : v < 0 ? "#DC2626" : "#64748B"; };
+            return <tr key={d.date} style={{ borderBottom: "1px solid #F1F5F9" }}>
+              <td style={{ padding: "8px 10px", fontWeight: 600, color: "#1E293B", whiteSpace: "nowrap" }}>
+                {new Date(d.date + "T00:00:00").toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" })}
+              </td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                <span style={{ fontWeight: 700 }}>{numFmt(d.orders)}</span>
+                {d.ordersDelta !== 0 && <span style={{ fontSize: 10, color: deltaColor(d.ordersDelta), marginLeft: 6 }}>{d.ordersDelta > 0 ? "+" : ""}{numFmt(d.ordersDelta)}</span>}
+              </td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{numFmt(d.revenue)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: profitColor, fontVariantNumeric: "tabular-nums" }}>
+                {numFmt(d.profit)}
+              </td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{numFmt(d.fb_spend)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{numFmt(d.google_spend)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{numFmt(d.tk_spend)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.cpa > 0 ? d.cpa.toFixed(2) : "-"}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: d.roas >= 3 ? "#10B981" : d.roas >= 2 ? "#F59E0B" : "#DC2626", fontVariantNumeric: "tabular-nums" }}>{d.roas > 0 ? d.roas.toFixed(2) : "-"}</td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </Card>}
+
+    {/* TAB: Charts */}
+    {tab === "charts" && <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {[
+          { id: "revenue", label: "Vanzari", color: "#3B82F6" },
+          { id: "orders", label: "Comenzi", color: "#F59E0B" },
+          { id: "spend", label: "Spend", color: "#EF4444" },
+          { id: "profit", label: "Profit", color: "#10B981" },
+          { id: "roas", label: "ROAS", color: "#8B5CF6" },
+          { id: "cpa", label: "CPA", color: "#EC4899" },
+        ].map(function(m) {
+          return <button key={m.id} onClick={function() { setChartMetric(m.id); }} style={{ padding: "6px 14px", borderRadius: 6, border: "2px solid " + (chartMetric === m.id ? m.color : "#E2E8F0"), background: chartMetric === m.id ? m.color + "15" : "#fff", color: chartMetric === m.id ? m.color : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{m.label}</button>;
+        })}
+      </div>
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 4 }}>
+          {chartMetric === "revenue" ? "Vanzari" : chartMetric === "orders" ? "Comenzi" : chartMetric === "spend" ? "Spend Total" : chartMetric === "profit" ? "Profit" : chartMetric === "roas" ? "ROAS" : "CPA"} - Evolutie {dateRange} zile
+          {selectedBrand !== "all" && <span style={{ color: "#64748B", fontWeight: 400 }}> ({selectedBrand})</span>}
+        </div>
+        <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 14 }}>{dailyAgg.length} zile cu date</div>
+        {renderChart()}
+      </Card>
+
+      {/* Mini summary cards under chart */}
+      {dailyAgg.length > 0 && <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 10, marginTop: 12 }}>
+        {(function() {
+          var vals = dailyAgg.map(function(d) { return d[chartMetric]; });
+          var avg = vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+          var max = Math.max.apply(null, vals);
+          var min = Math.min.apply(null, vals);
+          var last = vals[vals.length - 1];
+          var isDecimal = chartMetric === "roas" || chartMetric === "cpa";
+          var fmt = function(v) { return isDecimal ? v.toFixed(2) : numFmt(Math.round(v)); };
+          return [
+            { label: "Medie", value: fmt(avg), color: "#64748B" },
+            { label: "Maxim", value: fmt(max), color: "#10B981" },
+            { label: "Minim", value: fmt(min), color: "#DC2626" },
+            { label: "Ultima zi", value: fmt(last), color: "#3B82F6" },
+          ].map(function(s) {
+            return <Card key={s.label} style={{ padding: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: s.color, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
+            </Card>;
+          });
+        })()}
+      </div>}
+    </div>}
+  </div>;
+}
 var S = {
   app: { display: "flex", minHeight: "100vh", width: "100%", background: "#FAFAFA", color: "#1E293B", fontSize: 14, fontFamily: "system-ui,-apple-system,sans-serif" },
   sidebar: { width: 256, minHeight: "100vh", background: "hsl(216,22%,11%)", display: "flex", flexDirection: "column", flexShrink: 0 },
