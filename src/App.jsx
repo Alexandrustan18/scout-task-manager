@@ -353,6 +353,25 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("shops", shops, 1000); }, [shops]);
   useEffect(function() { if (!loading) debouncedSave("products", products, 1000); }, [products]);
   useEffect(function() { if (!loading) debouncedSave("timers", timers, 1000); }, [timers]);
+
+  // Auto-stop timers that are running on hidden/invalid tasks
+  useEffect(function() {
+    if (loading || tasks.length === 0) return;
+    var needsUpdate = false;
+    var newTimers = Object.assign({}, timers);
+    Object.keys(timers).forEach(function(tid) {
+      var tm = timers[tid];
+      if (!tm || !tm.running) return;
+      var t = tasks.find(function(x) { return x.id === tid; });
+      // Stop if task doesn't exist, is a campaign parent, or not In Progress
+      if (!t || t._campaignParent === true || t.status !== "In Progress") {
+        var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0;
+        newTimers[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null };
+        needsUpdate = true;
+      }
+    });
+    if (needsUpdate) setTimers(newTimers);
+  }, [tasks, loading]);
   useEffect(function() { if (!loading) debouncedSave("templates", templates, 1000); }, [templates]);
   useEffect(function() { if (!loading) debouncedSave("targets", targets, 1000); }, [targets]);
   useEffect(function() { if (!loading) debouncedSave("sheets", sheets, 1000); }, [sheets]);
