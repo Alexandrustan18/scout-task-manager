@@ -54,15 +54,46 @@ var SI = { "To Do": "o", "In Progress": "~", Review: "?", Done: "*" };
 var GR = "#0C7E3E";
 
 // FEATURE 10: Achievements definitions
+var TIERS = { bronze: { color: "#CD7F32", bg: "#FEF3C7", name: "Bronze" }, silver: { color: "#94A3B8", bg: "#F1F5F9", name: "Silver" }, gold: { color: "#EAB308", bg: "#FEFCE8", name: "Gold" }, platinum: { color: "#7C3AED", bg: "#F3E8FF", name: "Platinum" } };
+
 var ACHIEVEMENTS = [
-  { id: "first_task", name: "Prima Sarcina", desc: "Primul task completat", icon: "🎯", threshold: 1, type: "done_count" },
-  { id: "ten_done", name: "Productiv", desc: "10 taskuri completate", icon: "⚡", threshold: 10, type: "done_count" },
-  { id: "fifty_done", name: "Masina de Lucru", desc: "50 taskuri completate", icon: "🔥", threshold: 50, type: "done_count" },
-  { id: "hundred_done", name: "Legend", desc: "100 taskuri completate", icon: "👑", threshold: 100, type: "done_count" },
-  { id: "streak_3", name: "Streak 3 Zile", desc: "3 zile consecutive cu taskuri done", icon: "📅", threshold: 3, type: "streak" },
-  { id: "streak_7", name: "Saptamana Perfecta", desc: "7 zile consecutive active", icon: "🏆", threshold: 7, type: "streak" },
-  { id: "no_overdue", name: "Zero Intarzieri", desc: "Niciun task overdue", icon: "✅", threshold: 0, type: "no_overdue" },
-  { id: "speed_demon", name: "Speed Demon", desc: "Task completat in sub 1h", icon: "💨", threshold: 3600, type: "fast_complete" },
+  // GENERAL - all roles
+  { id: "first_task", name: "Prima Sarcina", title: "Recrut", desc: "Primul task completat", icon: "🎯", threshold: 1, type: "done_count", tier: "bronze", role: "all" },
+  { id: "ten_done", name: "Productiv", title: "Muncitor", desc: "10 taskuri completate", icon: "⚡", threshold: 10, type: "done_count", tier: "bronze", role: "all" },
+  { id: "fifty_done", name: "Masina de Lucru", title: "Veteran", desc: "50 taskuri completate", icon: "🔥", threshold: 50, type: "done_count", tier: "silver", role: "all" },
+  { id: "hundred_done", name: "Century Club", title: "Elite", desc: "100 taskuri completate", icon: "💯", threshold: 100, type: "done_count", tier: "gold", role: "all" },
+  { id: "five_hundred_done", name: "Legend", title: "Legenda", desc: "500 taskuri completate", icon: "👑", threshold: 500, type: "done_count", tier: "platinum", role: "all" },
+
+  // STREAKS
+  { id: "streak_3", name: "Warming Up", title: "Consistent", desc: "3 zile consecutive cu target atins", icon: "📅", threshold: 3, type: "streak", tier: "bronze", role: "all" },
+  { id: "streak_7", name: "Saptamana Perfecta", title: "Unstoppable", desc: "7 zile consecutive cu target", icon: "🏆", threshold: 7, type: "streak", tier: "silver", role: "all" },
+  { id: "streak_14", name: "Two Week Storm", title: "Storm", desc: "14 zile consecutive", icon: "⚡", threshold: 14, type: "streak", tier: "gold", role: "all" },
+  { id: "streak_30", name: "Month of Fire", title: "Inferno", desc: "30 zile consecutive - record!", icon: "🔥", threshold: 30, type: "streak", tier: "platinum", role: "all" },
+
+  // QUALITY
+  { id: "no_overdue", name: "Zero Intarzieri", title: "Punctual", desc: "Niciun task overdue in prezent", icon: "✅", threshold: 0, type: "no_overdue", tier: "silver", role: "all" },
+  { id: "speed_demon", name: "Speed Demon", title: "Quick Draw", desc: "Task completat in sub 1h", icon: "💨", threshold: 3600, type: "fast_complete", tier: "bronze", role: "all" },
+  { id: "perfectionist", name: "Perfectionist", title: "Perfect", desc: "20 taskuri done fara overdue", icon: "💎", threshold: 20, type: "perfect_count", tier: "gold", role: "all" },
+  { id: "early_bird", name: "Early Bird", title: "Matinal", desc: "Login inainte de 9:00 - 5 ori", icon: "🌅", threshold: 5, type: "early_login", tier: "bronze", role: "all" },
+  { id: "night_owl", name: "Night Owl", title: "Nocturn", desc: "Taskuri finalizate dupa 20:00 - 10 ori", icon: "🦉", threshold: 10, type: "late_done", tier: "bronze", role: "all" },
+
+  // ROLE-SPECIFIC - MEMBERS (creative work)
+  { id: "foto_ninja_10", name: "Foto Ninja", title: "Ninja Fotograf", desc: "10 taskuri Foto Produs completate", icon: "📸", threshold: 10, type: "type_count:Foto Produs", tier: "silver", role: "member" },
+  { id: "foto_master_50", name: "Foto Master", title: "Maestrul Lentilei", desc: "50 taskuri Foto Produs", icon: "🎨", threshold: 50, type: "type_count:Foto Produs", tier: "gold", role: "member" },
+  { id: "product_launcher", name: "Product Launcher", title: "Launcher", desc: "25 Product Launch completate", icon: "🚀", threshold: 25, type: "type_count:Product Launch", tier: "silver", role: "member" },
+  { id: "creative_genius", name: "Creative Genius", title: "Geniu Creativ", desc: "30 Creative/Copy taskuri", icon: "💡", threshold: 30, type: "creative_count", tier: "gold", role: "member" },
+  { id: "target_smasher", name: "Target Smasher", title: "Destructorul", desc: "Depasit targetul cu 50% - 5 zile", icon: "💥", threshold: 5, type: "target_overshoot", tier: "gold", role: "member" },
+
+  // ROLE-SPECIFIC - PM
+  { id: "pm_organizer", name: "Organizator", title: "Organizator", desc: "50 taskuri create in echipa", icon: "📋", threshold: 50, type: "created_count", tier: "silver", role: "pm" },
+  { id: "pm_commander", name: "Commander", title: "Comandantul", desc: "200 taskuri create", icon: "🎖️", threshold: 200, type: "created_count", tier: "gold", role: "pm" },
+  { id: "pm_mentor", name: "Mentor", title: "Mentor", desc: "Toata echipa cu target atins 1 zi", icon: "🧙", threshold: 1, type: "team_target", tier: "gold", role: "pm" },
+  { id: "pm_efficiency", name: "Efficiency Expert", title: "Eficientul", desc: "Echipa - 0 overdue 7 zile", icon: "⚙️", threshold: 7, type: "team_clean", tier: "platinum", role: "pm" },
+
+  // COMPETITIVE
+  { id: "mvp_day", name: "MVP al Zilei", title: "MVP", desc: "Cel mai activ din echipa intr-o zi", icon: "🥇", threshold: 1, type: "mvp_day", tier: "gold", role: "all" },
+  { id: "top_week", name: "Top Performer", title: "Top Gun", desc: "Top 1 saptamana", icon: "🏅", threshold: 1, type: "top_week", tier: "gold", role: "all" },
+  { id: "comeback", name: "Comeback King", title: "Comeback", desc: "Target atins dupa 3 zile sub target", icon: "🔄", threshold: 1, type: "comeback", tier: "silver", role: "all" },
 ];
 
 var DEF_TEMPLATES = [
@@ -476,22 +507,131 @@ export default function App() {
 
   // FEATURE 10: Achievement checker
   var checkAchievements = useCallback(function(forUser) {
-    var userTasks = tasks.filter(function(t) { return t.assignee === forUser; });
-    var doneCount = userTasks.filter(function(t) { return t.status === "Done"; }).length;
+    if (!team[forUser]) return;
+    var userRole = team[forUser].role || "member";
+    var userTasks = tasks.filter(function(t) { return t.assignee === forUser && !t._campaignParent; });
+    var doneTasks = userTasks.filter(function(t) { return t.status === "Done"; });
+    var doneCount = doneTasks.length;
     var existing = achievements[forUser] || [];
     var newOnes = [];
+
+    // Compute streak
+    var streakCount = 0;
+    var userTargets = (targets || []).filter(function(t) { return t.userId === forUser && t.active !== false; });
+    if (userTargets.length > 0) {
+      for (var sd = 0; sd < 60; sd++) {
+        var sdt = new Date(); sdt.setDate(sdt.getDate() - sd);
+        var sdow = sdt.getDay();
+        if (sdow === 0 || sdow === 6) continue;
+        if (isOnLeave(leaves, forUser, ds(sdt))) continue;
+        var tgt = userTargets[0];
+        var doneDay = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(sdt); }).length;
+        if (doneDay >= (tgt.target || 0)) streakCount++;
+        else break;
+      }
+    }
+
+    // Created count (for PM)
+    var createdCount = tasks.filter(function(t) { return t.createdBy === forUser; }).length;
+
+    // Fast complete - any task done in < 1h
+    var hasFastComplete = doneTasks.some(function(t) {
+      var tm = timers[t.id];
+      return tm && tm.total > 0 && tm.total < 3600;
+    });
+
+    // Type-specific counts
+    var typeCount = {};
+    doneTasks.forEach(function(t) {
+      var tp = t.taskType || "General";
+      typeCount[tp] = (typeCount[tp] || 0) + 1;
+    });
+    var creativeCount = (typeCount["Creative"] || 0) + (typeCount["Copy"] || 0);
+
+    // Overdue count
+    var currentOverdue = userTasks.filter(function(t) { return isOv(t); }).length;
+
+    // Perfect count (done without overdue)
+    var perfectCount = doneTasks.filter(function(t) { return !t.deadline || new Date(t.updatedAt || 0) <= new Date(t.deadline + "T23:59:59"); }).length;
+
+    // Early logins (before 9:00)
+    var earlyLogins = 0;
+    if (loginHistory && loginHistory.length) {
+      var userLogins = loginHistory.filter(function(l) { return l.user === forUser; });
+      var daysSeen = {};
+      userLogins.forEach(function(l) {
+        var dt = new Date(l.at);
+        var dayKey = ds(dt);
+        if (daysSeen[dayKey]) return;
+        if (dt.getHours() < 9) { earlyLogins++; daysSeen[dayKey] = true; }
+      });
+    }
+
+    // Late done (after 20:00)
+    var lateDone = doneTasks.filter(function(t) {
+      if (!t.updatedAt) return false;
+      var dt = new Date(t.updatedAt);
+      return dt.getHours() >= 20;
+    }).length;
+
+    // Team target (PM only)
+    var teamTargetMet = false;
+    if (userRole === "pm" && team[forUser].team) {
+      var teamMembers = team[forUser].team;
+      teamTargetMet = teamMembers.length > 0 && teamMembers.every(function(m) {
+        var mTgts = (targets || []).filter(function(t) { return t.userId === m && t.active !== false; });
+        if (mTgts.length === 0) return false;
+        var mTgt = mTgts[0];
+        var mDone = tasks.filter(function(t) { return t.assignee === m && t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD && !t._campaignParent; }).length;
+        return mDone >= (mTgt.target || 0);
+      });
+    }
+
+    // Team clean (PM - 7 days no overdue across team)
+    var teamClean7 = false;
+    if (userRole === "pm" && team[forUser].team) {
+      var teamMembers2 = team[forUser].team;
+      var cleanDays = 0;
+      for (var cd = 0; cd < 7; cd++) {
+        var cdt = new Date(); cdt.setDate(cdt.getDate() - cd);
+        var cdStr = ds(cdt);
+        var hadOverdueThatDay = tasks.some(function(t) {
+          return teamMembers2.includes(t.assignee) && t.deadline === cdStr && t.status !== "Done" && !t._campaignParent;
+        });
+        if (!hadOverdueThatDay) cleanDays++; else break;
+      }
+      teamClean7 = cleanDays >= 7;
+    }
+
     ACHIEVEMENTS.forEach(function(ach) {
       if (existing.includes(ach.id)) return;
+      if (ach.role !== "all" && ach.role !== userRole) return;
+
       var earned = false;
       if (ach.type === "done_count" && doneCount >= ach.threshold) earned = true;
-      if (ach.type === "no_overdue" && tasks.filter(function(t) { return t.assignee === forUser && isOv(t); }).length === 0 && doneCount > 0) earned = true;
+      else if (ach.type === "no_overdue" && currentOverdue === 0 && doneCount > 0) earned = true;
+      else if (ach.type === "fast_complete" && hasFastComplete) earned = true;
+      else if (ach.type === "streak" && streakCount >= ach.threshold) earned = true;
+      else if (ach.type === "perfect_count" && perfectCount >= ach.threshold) earned = true;
+      else if (ach.type === "early_login" && earlyLogins >= ach.threshold) earned = true;
+      else if (ach.type === "late_done" && lateDone >= ach.threshold) earned = true;
+      else if (ach.type === "created_count" && createdCount >= ach.threshold) earned = true;
+      else if (ach.type === "creative_count" && creativeCount >= ach.threshold) earned = true;
+      else if (ach.type === "team_target" && teamTargetMet) earned = true;
+      else if (ach.type === "team_clean" && teamClean7) earned = true;
+      else if (ach.type && ach.type.indexOf("type_count:") === 0) {
+        var wanted = ach.type.replace("type_count:", "");
+        if ((typeCount[wanted] || 0) >= ach.threshold) earned = true;
+      }
+
       if (earned) newOnes.push(ach);
     });
+
     if (newOnes.length > 0) {
       setAchievements(function(p) { var n = Object.assign({}, p); n[forUser] = (n[forUser] || []).concat(newOnes.map(function(a) { return a.id; })); return n; });
       if (forUser === user) setAchievementPopup(newOnes[0]);
     }
-  }, [tasks, achievements, user]);
+  }, [tasks, achievements, user, team, timers, targets, leaves, loginHistory]);
 
   // Recurring tasks check
   useEffect(function() {
@@ -873,6 +1013,22 @@ export default function App() {
   var bulkChgSt = function(ns) { selectedTasks.forEach(function(tid) { chgSt(tid, ns); }); setSelectedTasks([]); setBulkMode(false); };
   var bulkChgAssign = function(na) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { assignee: na, updatedAt: ts() }) : x; }); }); addLog("BULK", "Bulk assign " + selectedTasks.length); setSelectedTasks([]); setBulkMode(false); };
   var bulkChgPrio = function(np) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { priority: np, updatedAt: ts() }) : x; }); }); setSelectedTasks([]); setBulkMode(false); };
+  var bulkChgDeadline = function(nd) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { deadline: nd, updatedAt: ts() }) : x; }); }); addLog("BULK", "Bulk deadline " + selectedTasks.length + " -> " + nd); setSelectedTasks([]); setBulkMode(false); };
+  var bulkChgShop = function(ns) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { shop: ns, updatedAt: ts() }) : x; }); }); addLog("BULK", "Bulk shop " + selectedTasks.length + " -> " + ns); setSelectedTasks([]); setBulkMode(false); };
+  var bulkDel = function() {
+    if (!window.confirm("Sterge " + selectedTasks.length + " taskuri? Actiune ireversibila!")) return;
+    var n = selectedTasks.length;
+    setTasks(function(p) { return p.filter(function(x) { return !selectedTasks.includes(x.id); }); });
+    addLog("BULK_DELETE", "Sterse " + n + " taskuri in bulk");
+    setSelectedTasks([]); setBulkMode(false);
+  };
+  var bulkDup = function() {
+    var copies = selectedTasks.map(function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (!t) return null; return Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdAt: ts(), updatedAt: ts(), comments: [], _finalizedCount: 0 }); }).filter(Boolean);
+    setTasks(function(p) { return copies.concat(p); });
+    addLog("BULK", "Duplicate " + copies.length + " taskuri");
+    setSelectedTasks([]); setBulkMode(false);
+  };
+  var selectAllFiltered = function() { setSelectedTasks(filtered.map(function(t) { return t.id; })); };
   var toggleSel = function(tid) { setSelectedTasks(function(p) { return p.includes(tid) ? p.filter(function(x) { return x !== tid; }) : p.concat([tid]); }); };
 
   // FEATURE 6: Export all data
@@ -925,6 +1081,7 @@ export default function App() {
     { id: "performance", label: "Performance", icon: Icons.perf },
     { id: "digest", label: "Weekly Digest", icon: Icons.digest },
     { id: "achievements", label: "Achievements", icon: Icons.trophy },
+    { id: "league", label: "Liga Saptamanii", icon: Icons.trophy },
     { id: "announce", label: "Announcements", icon: Icons.announce },
     { id: "challenge", label: "Daily Challenge", icon: Icons.challenge },
     { id: "log", label: "Activity Log", icon: Icons.log },
@@ -941,7 +1098,7 @@ export default function App() {
   var navGroups = [
     { solo: true, items: ["dashboard", "birdseye", "tasks", "kanban", "calendar"] },
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
-    { label: "Echipa", items: ["workload", "team", "performance", "digest", "achievements"] },
+    { label: "Echipa", items: ["workload", "team", "performance", "league", "digest", "achievements"] },
     { label: "Comunicare", items: ["announce", "challenge", "log"] },
     { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "backups", "loginhistory"] },
   ];
@@ -1025,12 +1182,25 @@ export default function App() {
           {(page === "tasks" || page === "kanban") && canCreate && <button style={Object.assign({}, S.primBtn, { marginLeft: 8 })} onClick={function() { setEditTask(null); setShowAdd(true); }}><Ic d={Icons.plus} size={15} color="#fff" /> New Task</button>}
         </header>
         <div style={S.content}>
-          {bulkMode && selectedTasks.length > 0 && <Card style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: GR + "08" }}>
-            <span style={{ fontWeight: 700, fontSize: 13 }}>{selectedTasks.length} selectate</span>
-            <select style={S.fSel} onChange={function(e) { if (e.target.value) bulkChgSt(e.target.value); e.target.value = ""; }}><option value="">Status...</option>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
-            <select style={S.fSel} onChange={function(e) { if (e.target.value) bulkChgAssign(e.target.value); e.target.value = ""; }}><option value="">Assignee...</option>{assUsers.map(function(u2) { return <option key={u2} value={u2}>{(team[u2] || {}).name}</option>; })}</select>
-            <select style={S.fSel} onChange={function(e) { if (e.target.value) bulkChgPrio(e.target.value); e.target.value = ""; }}><option value="">Prioritate...</option>{PRIORITIES.map(function(p2) { return <option key={p2} value={p2}>{p2}</option>; })}</select>
-            <button style={S.cancelBtn} onClick={function() { setSelectedTasks([]); }}>Deselecteaza</button>
+          {bulkMode && selectedTasks.length > 0 && <Card style={{ marginBottom: 16, background: GR + "08", borderLeft: "3px solid " + GR, padding: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: GR }}>{selectedTasks.length} selectate</span>
+                <button style={Object.assign({}, S.cancelBtn, { padding: "5px 12px", fontSize: 11 })} onClick={selectAllFiltered}>Selecteaza toate ({filtered.length})</button>
+                <button style={Object.assign({}, S.cancelBtn, { padding: "5px 12px", fontSize: 11 })} onClick={function() { setSelectedTasks([]); }}>Deselecteaza</button>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #2563EB", background: "#EFF6FF", color: "#2563EB", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={bulkDup}><Ic d={Icons.copy} size={12} color="#2563EB" /> Duplica</button>
+                <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #DC2626", background: "#FEF2F2", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={bulkDel}><Ic d={Icons.del} size={12} color="#DC2626" /> Sterge</button>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr 1fr" : "repeat(5, 1fr)", gap: 8 }}>
+              <div><div style={{ fontSize: 10, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Status</div><select style={Object.assign({}, S.fSel, { width: "100%" })} onChange={function(e) { if (e.target.value) bulkChgSt(e.target.value); e.target.value = ""; }}><option value="">Schimba...</option>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div>
+              <div><div style={{ fontSize: 10, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Asignat</div><select style={Object.assign({}, S.fSel, { width: "100%" })} onChange={function(e) { if (e.target.value) bulkChgAssign(e.target.value); e.target.value = ""; }}><option value="">Schimba...</option>{assUsers.map(function(u2) { return <option key={u2} value={u2}>{(team[u2] || {}).name}</option>; })}</select></div>
+              <div><div style={{ fontSize: 10, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Prioritate</div><select style={Object.assign({}, S.fSel, { width: "100%" })} onChange={function(e) { if (e.target.value) bulkChgPrio(e.target.value); e.target.value = ""; }}><option value="">Schimba...</option>{PRIORITIES.map(function(p2) { return <option key={p2} value={p2}>{p2}</option>; })}</select></div>
+              <div><div style={{ fontSize: 10, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Magazin</div><select style={Object.assign({}, S.fSel, { width: "100%" })} onChange={function(e) { if (e.target.value) bulkChgShop(e.target.value); e.target.value = ""; }}><option value="">Schimba...</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div>
+              <div><div style={{ fontSize: 10, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Deadline</div><input type="date" style={Object.assign({}, S.fSel, { width: "100%" })} onChange={function(e) { if (e.target.value) bulkChgDeadline(e.target.value); e.target.value = ""; }} /></div>
+            </div>
           </Card>}
           {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} />}
           {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} />}
@@ -1044,6 +1214,7 @@ export default function App() {
           {page === "recurring" && <RecurringPage recurringTasks={recurringTasks} setRecurringTasks={setRecurringTasks} team={team} assUsers={assUsers} shops={shops} departments={departments} canEdit={canCreate} />}
           {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
+          {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
           {page === "performance" && <PerfPage users={visUsers} team={team} getPerf={getPerf} isMob={isMob} />}
@@ -1528,20 +1699,27 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Achievements</div>
-            <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Ai deblocat {myAch.length} din {totalAchievements}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Achievements & Titluri</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Deblocate: <b>{myAch.length}</b> / {ACHIEVEMENTS.filter(function(a) { return a.role === "all" || a.role === me.role; }).length}</div>
           </div>
-          <div style={{ fontSize: 11, color: GR, fontWeight: 700 }}>{Math.round((myAch.length / totalAchievements) * 100)}%</div>
+          {(function() {
+            var userAchObjs = myAch.map(function(id) { return ACHIEVEMENTS.find(function(a) { return a.id === id; }); }).filter(Boolean);
+            var topAch = userAchObjs.sort(function(a, b) { var order = { platinum: 4, gold: 3, silver: 2, bronze: 1 }; return (order[b.tier] || 0) - (order[a.tier] || 0); })[0];
+            if (!topAch) return null;
+            var tier = TIERS[topAch.tier];
+            return <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 6, background: tier.bg, border: "1px solid " + tier.color + "50" }}>
+              <span style={{ fontSize: 10, color: tier.color, fontWeight: 700 }}>Titlu: {topAch.title}</span>
+            </div>;
+          })()}
         </div>
-        <div style={{ height: 8, background: "#F1F5F9", borderRadius: 4, overflow: "hidden", marginBottom: 14 }}>
-          <div style={{ height: "100%", width: (myAch.length / totalAchievements * 100) + "%", background: "linear-gradient(90deg, " + GR + ", #4ADE80)", transition: "width 0.4s" }} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-          {["🎯 Prima Sarcina", "✅ Zero Intarzieri", "⚡ Productiv", "🔥 Streak 5", "🏆 100 Taskuri", "⏱ Rapid", "💎 Calitate", "🌟 Best of Month"].map(function(a, i) {
-            var unlocked = myAch.length > i;
-            return <div key={i} style={{ padding: "10px 6px", borderRadius: 8, background: unlocked ? "#ECFDF5" : "#F8FAFC", textAlign: "center", opacity: unlocked ? 1 : 0.4, border: "1px solid " + (unlocked ? GR + "30" : "#E2E8F0") }}>
-              <div style={{ fontSize: 18, marginBottom: 2 }}>{a.split(" ")[0]}</div>
-              <div style={{ fontSize: 9, color: unlocked ? GR : "#94A3B8", fontWeight: 600 }}>{a.split(" ").slice(1).join(" ")}</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(3, 1fr)" : "repeat(6, 1fr)", gap: 8 }}>
+          {ACHIEVEMENTS.filter(function(a) { return a.role === "all" || a.role === me.role; }).map(function(a) {
+            var unlocked = myAch.includes(a.id);
+            var tier = TIERS[a.tier] || TIERS.bronze;
+            return <div key={a.id} title={a.desc} style={{ padding: "10px 6px", borderRadius: 8, background: unlocked ? tier.bg : "#F8FAFC", textAlign: "center", opacity: unlocked ? 1 : 0.35, border: "1px solid " + (unlocked ? tier.color + "40" : "#E2E8F0"), position: "relative" }}>
+              {unlocked && <div style={{ position: "absolute", top: 2, right: 4, fontSize: 8, fontWeight: 700, color: tier.color, textTransform: "uppercase", letterSpacing: 0.5 }}>{tier.name}</div>}
+              <div style={{ fontSize: 22, marginBottom: 2, filter: unlocked ? "none" : "grayscale(1)" }}>{a.icon}</div>
+              <div style={{ fontSize: 9, color: unlocked ? tier.color : "#94A3B8", fontWeight: 700, lineHeight: 1.2 }}>{a.name}</div>
             </div>;
           })}
         </div>
@@ -2896,6 +3074,175 @@ function BrandingPage({ branding, setBranding, addLog }) {
   </div>;
 }
 
+function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, visUsers, isMob }) {
+  // Calculate start of current week (Monday)
+  var now = new Date();
+  var dow = now.getDay();
+  var daysFromMon = dow === 0 ? 6 : dow - 1;
+  var weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - daysFromMon); weekStart.setHours(0, 0, 0, 0);
+  var weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
+
+  var lastWeekStart = new Date(weekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  var lastWeekEnd = new Date(weekStart); lastWeekEnd.setDate(lastWeekEnd.getDate() - 1); lastWeekEnd.setHours(23, 59, 59, 999);
+
+  // Stats per user
+  var competitors = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; });
+  var leaderboard = competitors.map(function(u) {
+    var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
+    var thisWeek = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; });
+    var lastWeek = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= lastWeekStart && new Date(t.updatedAt) <= lastWeekEnd; });
+    var overdue = userTasks.filter(function(t) { return isOv(t); }).length;
+
+    // Score formula: done * 10 - overdue * 5 + streak_bonus
+    var userTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
+    var streakBonus = 0;
+    if (userTargets.length > 0) {
+      var tgt = userTargets[0];
+      var daysWithTarget = 0;
+      for (var d = 0; d < 7; d++) {
+        var dt = new Date(weekStart); dt.setDate(dt.getDate() + d);
+        if (dt > now) break;
+        var doneDay = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length;
+        if (doneDay >= (tgt.target || 0)) daysWithTarget++;
+      }
+      streakBonus = daysWithTarget * 5;
+    }
+
+    var score = thisWeek.length * 10 - overdue * 5 + streakBonus;
+    var achCount = (achievements[u] || []).length;
+
+    return {
+      user: u,
+      name: (team[u] || {}).name || u,
+      color: (team[u] || {}).color || "#94A3B8",
+      role: (team[u] || {}).role,
+      doneThis: thisWeek.length,
+      doneLast: lastWeek.length,
+      delta: thisWeek.length - lastWeek.length,
+      overdue: overdue,
+      score: Math.max(0, score),
+      achCount: achCount
+    };
+  }).sort(function(a, b) { return b.score - a.score; });
+
+  // Tier assignment
+  var total = leaderboard.length;
+  var promoted = Math.min(3, Math.ceil(total / 3));
+  var relegated = Math.min(3, Math.ceil(total / 3));
+
+  var getTier = function(idx) {
+    if (idx < promoted) return { name: "Promovabil", color: GR, bg: "#ECFDF5", icon: "⬆" };
+    if (idx >= total - relegated && total > promoted) return { name: "Risc retrogradare", color: "#DC2626", bg: "#FEF2F2", icon: "⬇" };
+    return { name: "Zona stabila", color: "#94A3B8", bg: "#F8FAFC", icon: "▪" };
+  };
+
+  var myPos = leaderboard.findIndex(function(p) { return p.user === user; });
+  var myData = myPos >= 0 ? leaderboard[myPos] : null;
+
+  var weekLabel = weekStart.getDate() + " " + MN[weekStart.getMonth()].substring(0, 3) + " - " + weekEnd.getDate() + " " + MN[weekEnd.getMonth()].substring(0, 3);
+
+  var maxScore = leaderboard.length > 0 ? leaderboard[0].score : 1;
+
+  return <div>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>🏆 Liga Saptamanii</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>{weekLabel}. Competitia se reseteaza lunea dimineata.</div>
+    </div>
+
+    {/* My rank card */}
+    {myData && <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, " + myData.color + "15, " + myData.color + "05)", borderLeft: "4px solid " + myData.color }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ fontSize: 48, fontWeight: 900, color: myData.color, fontVariantNumeric: "tabular-nums", minWidth: 80 }}>#{myPos + 1}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Pozitia ta, {myData.name}</div>
+          <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{myData.doneThis} taskuri done | {myData.overdue} intarziate | Scor: {myData.score}</div>
+          {myData.delta !== 0 && <div style={{ fontSize: 11, fontWeight: 600, color: myData.delta > 0 ? GR : "#DC2626", marginTop: 4 }}>{myData.delta > 0 ? "▲ +" : "▼ "}{myData.delta} vs sapt. trecuta</div>}
+        </div>
+        <div style={{ textAlign: "right" }}>
+          {myPos === 0 && <div style={{ fontSize: 28 }}>👑</div>}
+          {myPos < promoted && myPos > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: GR }}>⬆ Zona premiu</div>}
+          {myPos >= total - relegated && total > promoted && <div style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>⬇ Zona retrogradare</div>}
+        </div>
+      </div>
+    </Card>}
+
+    {/* Top 3 podium */}
+    {leaderboard.length >= 3 && <Card style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>🏆 Podium saptamana</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, alignItems: "end" }}>
+        {/* 2nd */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 4 }}>🥈</div>
+          <Av color={leaderboard[1].color} size={50} fs={18}>{leaderboard[1].name[0]}</Av>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginTop: 6 }}>{leaderboard[1].name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{leaderboard[1].doneThis} taskuri</div>
+          <div style={{ height: 60, background: "#E5E7EB", borderRadius: "8px 8px 0 0", marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B", fontWeight: 800, fontSize: 18 }}>2</div>
+        </div>
+        {/* 1st */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 44, marginBottom: 4 }}>👑</div>
+          <Av color={leaderboard[0].color} size={64} fs={24}>{leaderboard[0].name[0]}</Av>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#1E293B", marginTop: 6 }}>{leaderboard[0].name}</div>
+          <div style={{ fontSize: 12, color: "#D97706", fontWeight: 700 }}>{leaderboard[0].doneThis} taskuri</div>
+          <div style={{ height: 90, background: "linear-gradient(180deg, #FDE047, #EAB308)", borderRadius: "8px 8px 0 0", marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: 24, boxShadow: "0 4px 12px rgba(234,179,8,0.3)" }}>1</div>
+        </div>
+        {/* 3rd */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 4 }}>🥉</div>
+          <Av color={leaderboard[2].color} size={44} fs={16}>{leaderboard[2].name[0]}</Av>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginTop: 6 }}>{leaderboard[2].name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{leaderboard[2].doneThis} taskuri</div>
+          <div style={{ height: 40, background: "#F97316", borderRadius: "8px 8px 0 0", marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16 }}>3</div>
+        </div>
+      </div>
+    </Card>}
+
+    {/* Full leaderboard */}
+    <Card>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Clasament complet</div>
+      {leaderboard.map(function(p, idx) {
+        var tier = getTier(idx);
+        var isMe = p.user === user;
+        var widthPct = maxScore > 0 ? (p.score / maxScore) * 100 : 0;
+        return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", marginBottom: 6, borderRadius: 8, background: isMe ? p.color + "10" : idx < 3 ? "#FEFCE8" : "#fff", border: "1px solid " + (isMe ? p.color + "40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
+          {/* Progress bar background */}
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #FDE04720, transparent)" : idx < 3 ? "linear-gradient(90deg, " + p.color + "10, transparent)" : "linear-gradient(90deg, #F1F5F910, transparent)", zIndex: 0 }} />
+
+          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+            <div style={{ width: 32, textAlign: "center", fontSize: 16, fontWeight: 800, color: idx === 0 ? "#EAB308" : idx === 1 ? "#94A3B8" : idx === 2 ? "#F97316" : "#CBD5E1" }}>{idx < 3 ? ["🥇", "🥈", "🥉"][idx] : "#" + (idx + 1)}</div>
+            <Av color={p.color} size={32} fs={12}>{p.name[0]}</Av>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{p.name}</span>
+                {isMe && <Badge bg={p.color + "15"} color={p.color}>TU</Badge>}
+                {p.role === "pm" && <Badge bg="#F3E8FF" color="#7C3AED">PM</Badge>}
+              </div>
+              <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>{p.doneThis} done | {p.overdue} intarziate | {p.achCount} achievements</div>
+            </div>
+            <div style={{ textAlign: "right", minWidth: 70 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: idx === 0 ? "#EAB308" : "#1E293B", fontVariantNumeric: "tabular-nums" }}>{p.score}</div>
+              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>scor</div>
+            </div>
+            {p.delta !== 0 && <div style={{ fontSize: 11, fontWeight: 700, color: p.delta > 0 ? GR : "#DC2626", minWidth: 40, textAlign: "right" }}>{p.delta > 0 ? "▲+" : "▼"}{p.delta}</div>}
+            <Badge bg={tier.bg} color={tier.color}>{tier.icon}</Badge>
+          </div>
+        </div>;
+      })}
+      {leaderboard.length === 0 && <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nu sunt useri in liga.</div>}
+    </Card>
+
+    {/* Scoring explanation */}
+    <Card style={{ marginTop: 16, background: "#F8FAFC" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>Cum se calculeaza scorul:</div>
+      <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.7 }}>
+        <span style={{ display: "block" }}>+10 puncte pentru fiecare task finalizat</span>
+        <span style={{ display: "block" }}>+5 puncte bonus pentru fiecare zi cu target atins</span>
+        <span style={{ display: "block" }}>-5 puncte pentru fiecare task intarziat</span>
+      </div>
+    </Card>
+  </div>;
+}
+
 function LeavesPage({ leaves, setLeaves, team, user, visUsers, me, addLog }) {
   var [selectedUser, setSelectedUser] = useState(visUsers.filter(function(u) { return u !== "admin" && team[u] && team[u].role !== "admin"; })[0] || "");
   var [calMonth, setCalMonth] = useState(new Date());
@@ -3355,10 +3702,6 @@ function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, tas
     {products.length > 0 && <div><label style={S.label}>Produs (lista)</label><select style={S.fSelF} value={f.product || ""} onChange={function(e) { selProd(e.target.value); }}><option value="">--</option>{products.map(function(p) { return <option key={p.id} value={p.id}>{p.name}{p.store ? " (" + p.store + ")" : ""}</option>; })}</select></div>}
     <label style={S.label}>Produs (manual)</label><input style={S.input} value={f.productName || ""} onChange={function(e) { set("productName", e.target.value); }} placeholder="Nume produs" />
     <label style={S.label}>Linkuri</label><div style={{ display: "flex", gap: 6, marginBottom: 8 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={newLink} onChange={function(e) { setNewLink(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addLink(); }} placeholder="https://..." /><button style={S.primBtn} onClick={addLink}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>{(f.links || []).map(function(l, i) { return <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 12 }}><Ic d={Icons.link} size={12} color="#2563EB" /><a href={l} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l}</a><button style={S.iconBtn} onClick={function() { set("links", (f.links || []).filter(function(_, idx) { return idx !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
-    <label style={S.label}>Tags</label>
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>{(f.tags || []).map(function(tag) { return <span key={tag} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 12, background: "#ECFDF5", color: GR, fontSize: 11, fontWeight: 600 }}>#{tag}<button style={{ border: "none", background: "none", cursor: "pointer", padding: 0, lineHeight: 1 }} onClick={function() { set("tags", (f.tags || []).filter(function(t) { return t !== tag; })); }}>×</button></span>; })}</div>
-    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><input style={Object.assign({}, S.input, { flex: 1, fontSize: 12 })} value={newTag} onChange={function(e) { setNewTag(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} placeholder="Tag nou (Enter)" list="tag-sugg" /><datalist id="tag-sugg">{(allTags || []).map(function(t) { return <option key={t} value={t} />; })}</datalist><button style={Object.assign({}, S.primBtn, { padding: "4px 10px" })} onClick={addTag}>+</button></div>
-    <label style={S.label}>Subtaskuri</label>{(f.subtasks || []).map(function(st, i) { return <div key={st.id || i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4 }}><input type="checkbox" checked={st.done} onChange={function() { var ns = (f.subtasks || []).map(function(s, j) { return j === i ? Object.assign({}, s, { done: !s.done }) : s; }); set("subtasks", ns); }} /><input style={Object.assign({}, S.input, { flex: 1 })} value={st.text} onChange={function(e) { var ns = (f.subtasks || []).map(function(s, j) { return j === i ? Object.assign({}, s, { text: e.target.value }) : s; }); set("subtasks", ns); }} /><button style={S.iconBtn} onClick={function() { set("subtasks", (f.subtasks || []).filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}<div style={{ display: "flex", gap: 6, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1 })} placeholder="Subtask nou..." value={newSub} onChange={function(e) { setNewSub(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter" && newSub.trim()) { set("subtasks", (f.subtasks || []).concat([{ id: gid(), text: newSub.trim(), done: false }])); setNewSub(""); } }} /><button style={S.primBtn} onClick={function() { if (newSub.trim()) { set("subtasks", (f.subtasks || []).concat([{ id: gid(), text: newSub.trim(), done: false }])); setNewSub(""); } }}><Ic d={Icons.plus} size={14} color="#fff" /></button></div>
     <label style={S.label}>Produse Campaign (mega-task)</label>
     <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>Adauga produse/items - la finalizare selectezi cate ai completat si se adauga la target.</div>
     {(f.campaignItems || []).map(function(ci, i) { return <div key={ci.id || i} style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: 3, padding: "4px 8px", background: "#F8FAFC", borderRadius: 6, flexWrap: "wrap" }}><span style={{ fontSize: 11, color: "#94A3B8", width: 22 }}>{i + 1}.</span><input style={Object.assign({}, S.input, { flex: 2, fontSize: 12, padding: "4px 8px", minWidth: 120 })} value={ci.name} onChange={function(e) { var nc = (f.campaignItems || []).map(function(x, j) { return j === i ? Object.assign({}, x, { name: e.target.value }) : x; }); set("campaignItems", nc); }} placeholder="Produs" /><input style={Object.assign({}, S.input, { flex: 3, fontSize: 11, padding: "4px 8px", minWidth: 140 })} value={ci.link || ""} onChange={function(e) { var nc = (f.campaignItems || []).map(function(x, j) { return j === i ? Object.assign({}, x, { link: e.target.value }) : x; }); set("campaignItems", nc); }} placeholder="Link produs..." /><button style={S.iconBtn} onClick={function() { set("campaignItems", (f.campaignItems || []).filter(function(_, j) { return j !== i; })); }}><Ic d={Icons.x} size={12} color="#EF4444" /></button></div>; })}
