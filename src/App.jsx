@@ -509,6 +509,8 @@ export default function App() {
     return tasks.filter(function(t) {
       // Only hide tasks explicitly marked as campaign parents
       if (t._campaignParent === true) return false;
+      // For pipeline tasks, only check assignee (not createdBy) so previous assignee doesn't see them
+      if (t._fromPipeline) return visUsers.includes(t.assignee);
       return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy);
     });
   }, [tasks, visUsers, user]);
@@ -742,7 +744,7 @@ export default function App() {
         var pipeDesc = prevTask.description || "";
         if (lastComment) pipeDesc = pipeDesc + "\n\nObservatii: " + lastComment.text;
         var pipeLinks = prevTask._replacedLink ? [prevTask._replacedLink] : (prevTask.links || []).slice();
-        var pipeTask = { id: gid(), title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: prevTask.deadline, links: pipeLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.assignee, createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id };
+        var pipeTask = { id: gid(), title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: prevTask.deadline, links: pipeLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id };
         setTasks(function(p) { return [pipeTask].concat(p); });
         setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTask.id] = [{ status: "To Do", at: ts() }]; return n; });
         addNotif("pipeline", "Task pipeline: \"" + pipeTask.title + "\"", pipeTask.id, prevTask._pipelineNext);
