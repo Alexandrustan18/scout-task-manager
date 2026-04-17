@@ -4758,101 +4758,156 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
 
 function BrandStatsPage({ tasks, team, shops, timers, isMob }) {
   var [selectedShop, setSelectedShop] = useState(shops[0] || "");
+  var [dateRange, setDateRange] = useState("30");
+  var [customFrom, setCustomFrom] = useState("");
+  var [customTo, setCustomTo] = useState("");
+
+  // Date filter
+  var filterByDate = function(t) {
+    if (!t.createdAt && !t.updatedAt) return true;
+    var taskDate = t.updatedAt || t.createdAt;
+    if (dateRange === "all") return true;
+    if (dateRange === "today") return ds(taskDate) === TD;
+    if (dateRange === "yesterday") { var y = new Date(); y.setDate(y.getDate() - 1); return ds(taskDate) === ds(y); }
+    if (dateRange === "custom" && customFrom) {
+      var d = ds(taskDate);
+      if (d < customFrom) return false;
+      if (customTo && d > customTo) return false;
+      return true;
+    }
+    var daysAgo = parseInt(dateRange) || 30;
+    var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - daysAgo);
+    return new Date(taskDate) >= cutoff;
+  };
 
   var shopTasks = tasks.filter(function(t) { return t.shop === selectedShop && !t._campaignParent; });
-  var doneTasks = shopTasks.filter(function(t) { return t.status === "Done"; });
-  var activeTasks = shopTasks.filter(function(t) { return t.status !== "Done"; });
-  var overdueTasks = shopTasks.filter(function(t) { return t.status !== "Done" && isP(t.deadline); });
+  var filteredShopTasks = shopTasks.filter(filterByDate);
+  var doneTasks = filteredShopTasks.filter(function(t) { return t.status === "Done"; });
+  var activeTasks = filteredShopTasks.filter(function(t) { return t.status !== "Done"; });
+  var overdueTasks = filteredShopTasks.filter(function(t) { return t.status !== "Done" && isP(t.deadline); });
 
-  // Weekly done trend (8 weeks)
-  var weeklyData = [];
-  for (var w = 7; w >= 0; w--) {
-    var weekStart = new Date(); weekStart.setDate(weekStart.getDate() - (w * 7 + weekStart.getDay()));
-    var weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
-    var wDone = doneTasks.filter(function(t) {
-      if (!t.updatedAt) return false;
-      var d = new Date(t.updatedAt);
-      return d >= weekStart && d <= weekEnd;
-    }).length;
-    weeklyData.push({ week: "S" + (8 - w), done: wDone });
+  // Daily done trend
+  var days = parseInt(dateRange) || 30;
+  if (dateRange === "today" || dateRange === "yesterday") days = 1;
+  if (dateRange === "all") days = 60;
+  var dailyData = [];
+  for (var dd = Math.min(days, 30) - 1; dd >= 0; dd--) {
+    var dt = new Date(); dt.setDate(dt.getDate() - dd);
+    var dStr = ds(dt);
+    var dayDone = shopTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === dStr; }).length;
+    var dayCreated = shopTasks.filter(function(t) { return t.createdAt && ds(t.createdAt) === dStr; }).length;
+    dailyData.push({ date: dStr, label: dt.getDate() + " " + MN[dt.getMonth()].substring(0, 3), done: dayDone, created: dayCreated });
   }
-  var maxWeekly = Math.max.apply(null, weeklyData.map(function(d) { return d.done; }).concat([1]));
+  var maxDaily = Math.max.apply(null, dailyData.map(function(d) { return Math.max(d.done, d.created); }).concat([1]));
 
   // Task type distribution
   var typeDistribution = {};
-  shopTasks.forEach(function(t) { var tp = t.taskType || "General"; typeDistribution[tp] = (typeDistribution[tp] || 0) + 1; });
+  filteredShopTasks.forEach(function(t) { var tp = t.taskType || "General"; typeDistribution[tp] = (typeDistribution[tp] || 0) + 1; });
   var typeData = Object.keys(typeDistribution).map(function(k) { return { label: k, count: typeDistribution[k] }; }).sort(function(a, b) { return b.count - a.count; });
   var totalType = typeData.reduce(function(acc, d) { return acc + d.count; }, 0);
 
-  // Top performers on this brand
+  // Platform distribution
+  var platDistribution = {};
+  filteredShopTasks.forEach(function(t) { var p = t.platform || "Altele"; platDistribution[p] = (platDistribution[p] || 0) + 1; });
+  var platData = Object.keys(platDistribution).map(function(k) { return { label: k, count: platDistribution[k] }; }).sort(function(a, b) { return b.count - a.count; });
+
+  // Status breakdown
+  var statusBreakdown = {};
+  filteredShopTasks.forEach(function(t) { statusBreakdown[t.status] = (statusBreakdown[t.status] || 0) + 1; });
+
+  // Top performers
   var performerMap = {};
   doneTasks.forEach(function(t) { performerMap[t.assignee] = (performerMap[t.assignee] || 0) + 1; });
   var performers = Object.keys(performerMap).map(function(u) { return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", done: performerMap[u] }; }).sort(function(a, b) { return b.done - a.done; });
   var maxPerf = performers.length > 0 ? performers[0].done : 1;
 
-  // Average time per task
+  // Avg time
   var timedTasks = doneTasks.filter(function(t) { return timers[t.id] && timers[t.id].total > 0; });
   var avgTime = timedTasks.length > 0 ? Math.round(timedTasks.reduce(function(acc, t) { return acc + timers[t.id].total; }, 0) / timedTasks.length) : 0;
-
-  // Completion rate
-  var completionRate = shopTasks.length > 0 ? Math.round((doneTasks.length / shopTasks.length) * 100) : 0;
-
-  // Score (0-100)
+  var completionRate = filteredShopTasks.length > 0 ? Math.round((doneTasks.length / filteredShopTasks.length) * 100) : 0;
   var score = Math.max(0, Math.min(100, completionRate - (overdueTasks.length * 5)));
   var scoreColor = score >= 70 ? "#10B981" : score >= 40 ? "#D97706" : "#DC2626";
-
   var typeColors = ["#3B82F6", "#10B981", "#F59E0B", "#7C3AED", "#EC4899", "#06B6D4", "#EA580C", "#94A3B8"];
 
+  // Per-shop summary (all shops)
+  var shopSummary = shops.map(function(s) {
+    var st = tasks.filter(function(t) { return t.shop === s && !t._campaignParent; });
+    var stFiltered = st.filter(filterByDate);
+    var sDone = stFiltered.filter(function(t) { return t.status === "Done"; }).length;
+    var sActive = stFiltered.filter(function(t) { return t.status !== "Done"; }).length;
+    return { shop: s, total: stFiltered.length, done: sDone, active: sActive };
+  }).filter(function(s) { return s.total > 0; }).sort(function(a, b) { return b.total - a.total; });
+
   return <div>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
       <div>
         <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Brand Analytics</h2>
-        <div style={{ fontSize: 12, color: "#64748B" }}>Performanta detaliata per magazin. Selecteaza un brand.</div>
+        <div style={{ fontSize: 12, color: "#64748B" }}>Performanta detaliata per magazin.</div>
       </div>
-      <select style={Object.assign({}, S.fSel, { fontSize: 14, padding: "10px 16px", fontWeight: 700 })} value={selectedShop} onChange={function(e) { setSelectedShop(e.target.value); }}>
-        {shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
-      </select>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <select style={Object.assign({}, S.fSel, { fontSize: 13, padding: "8px 14px", fontWeight: 700 })} value={selectedShop} onChange={function(e) { setSelectedShop(e.target.value); }}>
+          {shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}
+        </select>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[{ id: "today", l: "Azi" }, { id: "yesterday", l: "Ieri" }, { id: "7", l: "7z" }, { id: "14", l: "14z" }, { id: "30", l: "30z" }, { id: "all", l: "Tot" }, { id: "custom", l: "Custom" }].map(function(r) {
+            return <button key={r.id} onClick={function() { setDateRange(r.id); }} style={Object.assign({}, S.chip, { background: dateRange === r.id ? GR : "#F1F5F9", color: dateRange === r.id ? "#fff" : "#475569", fontWeight: dateRange === r.id ? 600 : 400, fontSize: 11, padding: "5px 10px" })}>{r.l}</button>;
+          })}
+        </div>
+        {dateRange === "custom" && <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={customFrom} onChange={function(e) { setCustomFrom(e.target.value); }} />
+          <span style={{ color: "#94A3B8" }}>-</span>
+          <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={customTo} onChange={function(e) { setCustomTo(e.target.value); }} />
+        </div>}
+      </div>
     </div>
 
-    {/* Hero KPIs */}
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 10, marginBottom: 16 }}>
+    {/* KPIs */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 10, marginBottom: 16 }}>
       {[
-        { l: "Total", v: shopTasks.length, c: "#475569" },
+        { l: "Total", v: filteredShopTasks.length, c: "#475569" },
         { l: "Active", v: activeTasks.length, c: "#2563EB" },
         { l: "Done", v: doneTasks.length, c: "#10B981" },
         { l: "Overdue", v: overdueTasks.length, c: "#DC2626" },
         { l: "Score", v: score + "%", c: scoreColor },
+        { l: "Timp Mediu", v: avgTime > 0 ? ft(avgTime) : "-", c: "#7C3AED" },
       ].map(function(s) {
-        return <Card key={s.l} style={{ borderTop: "3px solid " + s.c, textAlign: "center" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: s.c }}>{s.v}</div>
-          <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div>
+        return <Card key={s.l} style={{ borderTop: "3px solid " + s.c, textAlign: "center", padding: 12 }}>
+          <div style={{ fontSize: 24, fontWeight: 800, color: s.c }}>{s.v}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{s.l}</div>
         </Card>;
       })}
     </div>
 
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
-      {/* Weekly velocity */}
-      <Card>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Taskuri Done / Saptamana</div>
-        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Ultimele 8 saptamani</div>
-        <svg viewBox="0 0 400 140" style={{ width: "100%", height: "auto" }}>
-          {weeklyData.map(function(d, i) {
-            var barW = 35;
-            var x = 20 + i * 47;
-            var h = (d.done / maxWeekly) * 90;
-            return <g key={i}>
-              <rect x={x} y={110 - h} width={barW} height={Math.max(h, 2)} fill="#10B981" opacity="0.85" rx="4" />
-              {d.done > 0 && <text x={x + barW / 2} y={110 - h - 5} fontSize="10" fill="#10B981" textAnchor="middle" fontWeight="700">{d.done}</text>}
-              <text x={x + barW / 2} y="128" fontSize="9" fill="#94A3B8" textAnchor="middle">{d.week}</text>
-            </g>;
-          })}
-        </svg>
-      </Card>
+    {/* Daily trend chart */}
+    {dailyData.length > 1 && <Card style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Evolutie zilnica - {selectedShop}</div>
+      <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Done vs Creat</div>
+      <svg viewBox="0 0 700 180" style={{ width: "100%", height: "auto" }}>
+        {dailyData.map(function(d, i) {
+          var barW = Math.min(30, (640 / dailyData.length) * 0.35);
+          var xBase = 50 + i * (640 / dailyData.length);
+          var hDone = (d.done / maxDaily) * 120;
+          var hCreated = (d.created / maxDaily) * 120;
+          var showLabel = dailyData.length <= 15 || i % Math.ceil(dailyData.length / 15) === 0;
+          return <g key={i}>
+            <rect x={xBase} y={140 - hCreated} width={barW} height={Math.max(hCreated, 1)} fill="#3B82F6" opacity="0.7" rx="2" />
+            <rect x={xBase + barW + 2} y={140 - hDone} width={barW} height={Math.max(hDone, 1)} fill="#10B981" opacity="0.9" rx="2" />
+            {showLabel && <text x={xBase + barW} y="158" fontSize="9" fill="#94A3B8" textAnchor="middle">{d.label}</text>}
+            {d.done > 0 && <text x={xBase + barW + 2 + barW / 2} y={140 - hDone - 4} fontSize="9" fill="#10B981" textAnchor="middle" fontWeight="700">{d.done}</text>}
+          </g>;
+        })}
+      </svg>
+      <div style={{ display: "flex", gap: 14, fontSize: 10, marginTop: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: "#3B82F6", borderRadius: 2 }} /><span style={{ color: "#64748B" }}>Creat</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: "#10B981", borderRadius: 2 }} /><span style={{ color: "#64748B" }}>Done</span></div>
+      </div>
+    </Card>}
 
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
       {/* Task type breakdown */}
       <Card>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Distributie pe Tip Task</div>
-        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>{totalType} taskuri total</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Per Tip Task</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>{totalType} taskuri</div>
         {typeData.length > 0 ? typeData.map(function(d, i) {
           var pct = totalType > 0 ? Math.round((d.count / totalType) * 100) : 0;
           return <div key={d.label} style={{ marginBottom: 8 }}>
@@ -4868,18 +4923,35 @@ function BrandStatsPage({ tasks, team, shops, timers, isMob }) {
           </div>;
         }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt taskuri.</div>}
       </Card>
+
+      {/* Platform breakdown */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Per Platforma</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>{filteredShopTasks.length} taskuri</div>
+        {platData.length > 0 ? platData.map(function(d, i) {
+          var pct = filteredShopTasks.length > 0 ? Math.round((d.count / filteredShopTasks.length) * 100) : 0;
+          return <div key={d.label} style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+              <span style={{ color: "#475569", fontWeight: 600 }}>{d.label}</span>
+              <span style={{ color: "#94A3B8" }}>{d.count} ({pct}%)</span>
+            </div>
+            <div style={{ height: 6, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: pct + "%", background: typeColors[(i + 3) % typeColors.length], borderRadius: 3 }} />
+            </div>
+          </div>;
+        }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt date.</div>}
+      </Card>
     </div>
 
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
       {/* Top performers */}
       <Card>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Top Performeri - {selectedShop}</div>
-        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Dupa taskuri finalizate</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Top Performeri - {selectedShop}</div>
         {performers.length > 0 ? performers.map(function(p, i) {
           var pct = maxPerf > 0 ? (p.done / maxPerf) * 100 : 0;
           return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: i < 3 ? "#EAB308" : "#94A3B8", width: 20 }}>{i + 1}</span>
-            <Av color={p.color} size={26} fs={10}>{p.name[0]}</Av>
+            <Av color={p.color} size={26} fs={10} userId={p.user}>{p.name[0]}</Av>
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
                 <span style={{ fontWeight: 600, color: "#1E293B" }}>{p.name}</span>
@@ -4893,29 +4965,48 @@ function BrandStatsPage({ tasks, team, shops, timers, isMob }) {
         }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt date.</div>}
       </Card>
 
-      {/* Stats summary */}
+      {/* Status + stats */}
       <Card>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Statistici</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <div style={{ padding: "12px", background: "#F0FDF4", borderRadius: 8, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#10B981" }}>{completionRate}%</div>
-            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Rata completare</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Status si Statistici</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+          {["To Do", "In Progress", "Review", "Done"].map(function(st) {
+            return <div key={st} style={{ padding: "8px", background: (SC[st] || "#94A3B8") + "12", borderRadius: 6, textAlign: "center" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: SC[st] || "#94A3B8" }}>{statusBreakdown[st] || 0}</div>
+              <div style={{ fontSize: 10, color: "#64748B" }}>{st}</div>
+            </div>;
+          })}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ padding: "10px", background: "#F0FDF4", borderRadius: 6, textAlign: "center" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#10B981" }}>{completionRate}%</div>
+            <div style={{ fontSize: 10, color: "#64748B" }}>Rata completare</div>
           </div>
-          <div style={{ padding: "12px", background: "#F5F3FF", borderRadius: 8, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#7C3AED" }}>{avgTime > 0 ? ft(avgTime) : "-"}</div>
-            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Timp mediu/task</div>
-          </div>
-          <div style={{ padding: "12px", background: "#EFF6FF", borderRadius: 8, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#2563EB" }}>{performers.length}</div>
-            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Oameni implicati</div>
-          </div>
-          <div style={{ padding: "12px", background: scoreColor + "12", borderRadius: 8, textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: scoreColor }}>{score}</div>
-            <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Health Score</div>
+          <div style={{ padding: "10px", background: "#EFF6FF", borderRadius: 6, textAlign: "center" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#2563EB" }}>{performers.length}</div>
+            <div style={{ fontSize: 10, color: "#64748B" }}>Oameni implicati</div>
           </div>
         </div>
       </Card>
     </div>
+
+    {/* All shops comparison */}
+    {shopSummary.length > 1 && <Card>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Comparatie toate magazinele</div>
+      {shopSummary.map(function(s) {
+        var maxS = shopSummary[0].total || 1;
+        var donePct = s.total > 0 ? (s.done / s.total) * 100 : 0;
+        return <div key={s.shop} style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+            <span style={{ fontWeight: s.shop === selectedShop ? 700 : 500, color: s.shop === selectedShop ? GR : "#475569" }}>{s.shop}</span>
+            <span style={{ color: "#94A3B8" }}>{s.done} done / {s.active} active</span>
+          </div>
+          <div style={{ display: "flex", height: 8, borderRadius: 3, overflow: "hidden", width: (s.total / maxS * 100) + "%", background: "#F1F5F9" }}>
+            <div style={{ width: donePct + "%", background: "#10B981" }} />
+            <div style={{ width: (100 - donePct) + "%", background: "#60A5FA", opacity: 0.5 }} />
+          </div>
+        </div>;
+      })}
+    </Card>}
   </div>;
 }
 
@@ -5102,10 +5193,10 @@ function ConfigPage({ taskTypes, setTaskTypes, platforms, setPlatforms, departme
   var [dragIdx, setDragIdx] = useState(null);
 
   var tabs = [
-    { id: "taskTypes", label: "Tip Task", icon: "🏷️", items: taskTypes, setItems: setTaskTypes, color: "#7C3AED" },
-    { id: "platforms", label: "Platforme", icon: "📡", items: platforms, setItems: setPlatforms, color: "#2563EB" },
-    { id: "departments", label: "Departamente", icon: "🏢", items: departments, setItems: setDepartments, color: "#EA580C" },
-    { id: "shops", label: "Magazine", icon: "🏪", items: shops, setItems: setShops, color: "#0C7E3E" },
+    { id: "taskTypes", label: "Tip Task", icon: "", items: taskTypes, setItems: setTaskTypes, color: "#7C3AED" },
+    { id: "platforms", label: "Platforme", icon: "", items: platforms, setItems: setPlatforms, color: "#2563EB" },
+    { id: "departments", label: "Departamente", icon: "", items: departments, setItems: setDepartments, color: "#EA580C" },
+    { id: "shops", label: "Magazine", icon: "", items: shops, setItems: setShops, color: "#0C7E3E" },
   ];
 
   var currentTab = tabs.find(function(t) { return t.id === activeTab; }) || tabs[0];
