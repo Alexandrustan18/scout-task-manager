@@ -214,7 +214,7 @@ export default function App() {
   var [viewTask, setViewTask] = useState(null);
   var [mobNav, setMobNav] = useState(false);
   var [isMob, setIsMob] = useState(typeof window !== "undefined" && window.innerWidth < 820);
-  var [dateF, setDateF] = useState("all");
+  var [dateF, setDateF] = useState("today");
   var [statusF, setStatusF] = useState("all");
   var [prioF, setPrioF] = useState("all");
   var [assignF, setAssignF] = useState("all");
@@ -1270,7 +1270,7 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
       <div style={Object.assign({}, S.groupHdr, { color: "#DC2626" })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />URGENT</span><span style={S.countBadge}>{statusGroups["Urgent"].length}</span></div>
       {statusGroups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
     </div>}
-    {["In Progress", "Review", "To Do", "Done"].map(function(status) {
+    {["In Progress", "Review", "To Do"].map(function(status) {
       var sectionTasks = statusGroups[status];
       if (!sectionTasks || sectionTasks.length === 0) return null;
       return <div key={status} style={{ marginBottom: 20 }}>
@@ -1278,7 +1278,26 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
         {sectionTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
       </div>;
     })}
-    {filtered.length === 0 && <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>Niciun task.</Card>}
+    {(!statusGroups["Urgent"] || statusGroups["Urgent"].length === 0) && (!statusGroups["In Progress"] || statusGroups["In Progress"].length === 0) && (!statusGroups["Review"] || statusGroups["Review"].length === 0) && (!statusGroups["To Do"] || statusGroups["To Do"].length === 0) && <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>Niciun task activ.</Card>}
+    <DoneCollapse tasks={statusGroups["Done"] || []} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />
+  </div>;
+}
+
+function DoneCollapse({ tasks, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer, bulkMode, selectedTasks, toggleSel, canEdit, canDelete, onExplode, allTasks }) {
+  var [open, setOpen] = useState(false);
+  if (!tasks || tasks.length === 0) return null;
+  return <div style={{ marginTop: 24 }}>
+    <div onClick={function() { setOpen(!open); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: open ? GR + "12" : "#F8FAFC", borderRadius: 8, cursor: "pointer", border: "1px solid " + (open ? GR + "30" : "#E2E8F0"), transition: "all 0.15s" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: GR }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: GR }}>Finalizate</span>
+        <span style={{ fontSize: 11, color: "#64748B" }}>{tasks.length} task{tasks.length > 1 ? "uri" : ""}</span>
+      </div>
+      <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>{open ? "Ascunde ▲" : "Vezi toate ▼"}</span>
+    </div>
+    {open && <div style={{ marginTop: 10, opacity: 0.85 }}>
+      {tasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={allTasks} />; })}
+    </div>}
   </div>;
 }
 
