@@ -788,6 +788,19 @@ export default function App() {
         setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTask.id] = [{ status: "To Do", at: ts() }]; return n; });
         addNotif("pipeline", "Task pipeline: \"" + pipeTask.title + "\"", pipeTask.id, prevTask._pipelineNext);
       }
+      // Secondary pipeline: Mara Poze Done -> Carla (Ads task, deadline next day)
+      if (prevTask.assignee === "mara_poze" && prevTask._fromPipeline) {
+        // Original title is "X - Foto Produs", strip it to get product name
+        var cleanTitle = (prevTask.title || "").replace(/ - Foto Produs$/, "");
+        var nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1);
+        var adsDeadline = ds(nextDay);
+        var adsLinks = (prevTask.links || []).slice();
+        var adsTask = { id: gid(), title: cleanTitle + " - Ads", description: "Pune ads pentru acest produs. Foto produs gata.\n\n" + (prevTask.description || ""), assignee: "carla", status: "To Do", priority: prevTask.priority, platform: "Meta Ads", taskType: "Ad Creation", department: "AD", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: adsDeadline, links: adsLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id, _adsPipeline: true };
+        setTasks(function(p) { return [adsTask].concat(p); });
+        setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[adsTask.id] = [{ status: "To Do", at: ts() }]; return n; });
+        addNotif("pipeline", "Task Ads pregatit: \"" + adsTask.title + "\"", adsTask.id, "carla");
+        addLog("PIPELINE", "Mara Poze -> Carla: " + adsTask.title);
+      }
     }
   };
 
@@ -875,7 +888,17 @@ export default function App() {
         <div style={S.logoArea}><span style={S.logoH}>HeyAds</span><span style={S.logoSub}>Task Manager</span></div>
         {canCreate && <div style={{ padding: "0 16px", marginBottom: 4 }}><button style={S.newBtn} onClick={function() { setEditTask(null); setShowAdd(true); setMobNav(false); }}><Ic d={Icons.plus} size={16} color="#fff" /> New Task</button></div>}
         <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
-          {accessibleNav.map(function(n) { return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}><Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} /><span style={{ flex: 1 }}>{n.label}</span>{n.count != null && <span style={S.navBadge}>{n.count}</span>}{n.id === "anomalies" && anomalies.length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626" }} />}{n.id === "announce" && announcements.filter(function(a) { return !a.readBy || !a.readBy.includes(user); }).length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB" }} />}</div>; })}
+          {accessibleNav.map(function(n) {
+            var myActiveCount = n.id === "tasks" ? tasks.filter(function(t) { return t.assignee === user && t.status !== "Done" && !t._campaignParent; }).length : null;
+            return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}>
+              <Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} />
+              <span style={{ flex: 1 }}>{n.label}</span>
+              {n.id === "tasks" && myActiveCount > 0 && <span style={{ fontSize: 11, background: "#16A34A", color: "#fff", padding: "2px 8px", borderRadius: 12, fontWeight: 700, minWidth: 20, textAlign: "center", boxShadow: "0 1px 4px rgba(22,163,74,0.4)", animation: myActiveCount > 0 ? "pulse 2s infinite" : "none" }}>{myActiveCount}</span>}
+              {n.id !== "tasks" && n.count != null && <span style={S.navBadge}>{n.count}</span>}
+              {n.id === "anomalies" && anomalies.length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626" }} />}
+              {n.id === "announce" && announcements.filter(function(a) { return !a.readBy || !a.readBy.includes(user); }).length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB" }} />}
+            </div>;
+          })}
         </nav>
         {/* FEATURE 6: Export button in sidebar */}
         {isAdmin && <div style={{ padding: "0 16px 8px" }}><button style={Object.assign({}, S.logoutBtn, { color: "#4ADE80", borderColor: GR + "40" })} onClick={exportData}><Ic d={Icons.export} size={15} color="#4ADE80" /> Export Backup</button></div>}
@@ -1253,33 +1276,66 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
 
 function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer, bulkMode, selectedTasks, toggleSel, canEdit, canDelete, onExplode, tasks }) {
   var st = fProps.stats;
-  var statusGroups = useMemo(function() {
+  var me = team[user] || {};
+  var showTeamSection = me.role === "admin" || me.role === "pm";
+
+  // Split filtered into mine vs team
+  var mine = filtered.filter(function(t) { return t.assignee === user; });
+  var teamOnly = filtered.filter(function(t) { return t.assignee !== user; });
+
+  var groupBy = function(arr) {
     var groups = {};
-    var sortAdminFirst = function(arr) { return arr.sort(function(a, b) { var aA = a.createdBy === "admin" ? 0 : 1; var bA = b.createdBy === "admin" ? 0 : 1; return aA - bA; }); };
-    var urgent = filtered.filter(function(t) { return t.priority === "Urgent" && t.status !== "Done"; });
-    var rest = filtered.filter(function(t) { return !(t.priority === "Urgent" && t.status !== "Done"); });
+    var sortAdminFirst = function(a) { return a.sort(function(x, y) { var xA = x.createdBy === "admin" ? 0 : 1; var yA = y.createdBy === "admin" ? 0 : 1; return xA - yA; }); };
+    var urgent = arr.filter(function(t) { return t.priority === "Urgent" && t.status !== "Done"; });
+    var rest = arr.filter(function(t) { return !(t.priority === "Urgent" && t.status !== "Done"); });
     groups["Urgent"] = sortAdminFirst(urgent);
     STATUSES.forEach(function(s) { groups[s] = sortAdminFirst(rest.filter(function(t) { return t.status === s; })); });
     return groups;
-  }, [filtered]);
+  };
+
+  var mineGroups = useMemo(function() { return groupBy(mine); }, [mine]);
+  var teamGroups = useMemo(function() { return groupBy(teamOnly); }, [teamOnly]);
+
+  var renderSection = function(groups, title, color, icon) {
+    var hasUrgent = groups["Urgent"] && groups["Urgent"].length > 0;
+    var hasActive = hasUrgent || (groups["In Progress"] && groups["In Progress"].length > 0) || (groups["Review"] && groups["Review"].length > 0) || (groups["To Do"] && groups["To Do"].length > 0);
+    var totalActive = (groups["Urgent"] || []).length + (groups["In Progress"] || []).length + (groups["Review"] || []).length + (groups["To Do"] || []).length;
+    return <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, paddingBottom: 8, borderBottom: "2px solid " + color + "20" }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: color + "18", display: "flex", alignItems: "center", justifyContent: "center" }}><Ic d={icon} size={16} color={color} /></div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#1E293B" }}>{title}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{totalActive} taskuri active{groups["Done"] && groups["Done"].length > 0 ? " | " + groups["Done"].length + " finalizate" : ""}</div>
+        </div>
+      </div>
+      {hasUrgent && <div style={{ marginBottom: 20 }}>
+        <div style={Object.assign({}, S.groupHdr, { color: "#DC2626" })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />URGENT</span><span style={S.countBadge}>{groups["Urgent"].length}</span></div>
+        {groups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
+      </div>}
+      {["In Progress", "Review", "To Do"].map(function(status) {
+        var sectionTasks = groups[status];
+        if (!sectionTasks || sectionTasks.length === 0) return null;
+        return <div key={status} style={{ marginBottom: 20 }}>
+          <div style={Object.assign({}, S.groupHdr, { borderLeft: "3px solid " + SC[status], paddingLeft: 10 })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[status] }} />{status}</span><span style={S.countBadge}>{sectionTasks.length}</span></div>
+          {sectionTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
+        </div>;
+      })}
+      {!hasActive && <Card style={{ textAlign: "center", padding: 30, color: "#94A3B8", fontSize: 13 }}>Niciun task activ.</Card>}
+      <DoneCollapse tasks={groups["Done"] || []} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />
+    </div>;
+  };
 
   return <div>
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>{[{ l: "Total", v: st.total, c: "#475569", i: Icons.tasks }, { l: "Azi", v: st.today, c: "#2563EB", i: Icons.work }, { l: "In Progress", v: st.inProg, c: "#D97706", i: Icons.work }, { l: "Intarziate", v: st.overdue, c: "#DC2626", i: Icons.work }, { l: "Finalizate", v: st.done, c: GR, i: Icons.tasks }].map(function(s) { return <Card key={s.l} style={{ display: "flex", alignItems: "center", gap: 12, background: s.c + "08" }}><div style={{ width: 40, height: 40, borderRadius: 10, background: s.c + "18", display: "flex", alignItems: "center", justifyContent: "center" }}><Ic d={s.i} size={20} color={s.c} /></div><div><div style={{ fontSize: 22, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: s.c + "99" }}>{s.l}</div></div></Card>; })}</div>
     <FiltersBar {...fProps} />
-    {statusGroups["Urgent"].length > 0 && <div style={{ marginBottom: 20 }}>
-      <div style={Object.assign({}, S.groupHdr, { color: "#DC2626" })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />URGENT</span><span style={S.countBadge}>{statusGroups["Urgent"].length}</span></div>
-      {statusGroups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
-    </div>}
-    {["In Progress", "Review", "To Do"].map(function(status) {
-      var sectionTasks = statusGroups[status];
-      if (!sectionTasks || sectionTasks.length === 0) return null;
-      return <div key={status} style={{ marginBottom: 20 }}>
-        <div style={Object.assign({}, S.groupHdr, { borderLeft: "3px solid " + SC[status], paddingLeft: 10 })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[status] }} />{status}</span><span style={S.countBadge}>{sectionTasks.length}</span></div>
-        {sectionTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
-      </div>;
-    })}
-    {(!statusGroups["Urgent"] || statusGroups["Urgent"].length === 0) && (!statusGroups["In Progress"] || statusGroups["In Progress"].length === 0) && (!statusGroups["Review"] || statusGroups["Review"].length === 0) && (!statusGroups["To Do"] || statusGroups["To Do"].length === 0) && <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>Niciun task activ.</Card>}
-    <DoneCollapse tasks={statusGroups["Done"] || []} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />
+    {showTeamSection ? <div>
+      <div style={{ marginBottom: 30 }}>
+        {renderSection(mineGroups, "Taskurile mele", "#2563EB", Icons.work)}
+      </div>
+      <div style={{ marginTop: 40 }}>
+        {renderSection(teamGroups, "Taskurile echipei", "#7C3AED", Icons.team)}
+      </div>
+    </div> : renderSection(mineGroups, "Taskurile mele", "#2563EB", Icons.work)}
   </div>;
 }
 
