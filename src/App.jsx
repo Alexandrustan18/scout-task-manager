@@ -90,6 +90,12 @@ function isOv(t) { return isP(t.deadline) && t.status !== "Done"; }
 function ft(s) { if (!s) return "0:00"; var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60; return (h ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(sc).padStart(2, "0"); }
 function dl(i) { if (!i) return "Fara data"; if (isTd(i)) return "Azi"; if (isTm(i)) return "Maine"; if (isP(i)) return "Trecut"; return fd(i); }
 function hDiff(a, b) { if (!a || !b) return 0; return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 3600000); }
+function isOnLeave(leaves, userId, date) {
+  if (!leaves || !userId) return false;
+  var userLeaves = leaves[userId] || [];
+  var d = date ? (typeof date === "string" ? date : ds(date)) : TD;
+  return userLeaves.includes(d);
+}
 
 // FEATURE 3: Auto-priority based on deadline
 function autoPriority(deadline, currentPriority) {
@@ -262,10 +268,11 @@ export default function App() {
   // FEATURE 15: Draft auto-save handled in TaskModal
   // Slas kept for backwards compat but removed from nav
   var [slas, setSlas] = useState({});
+  var [leaves, setLeaves] = useState({});
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -289,6 +296,7 @@ export default function App() {
         cloudLoad("loginHistory", []),
         cloudLoad("announcements", []),
         cloudLoad("slas", {}),
+        cloudLoad("leaves", {}),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -313,6 +321,7 @@ export default function App() {
       setLoginHistory(lh || []);
       setAnnouncements(ann || []);
       setSlas(sl || {});
+      setLeaves(lv || {});
       var savedUser = localStorage.getItem("s7_user");
       if (savedUser) { try { setUser(JSON.parse(savedUser)); } catch(e) {} }
       setLoading(false);
@@ -388,6 +397,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("loginHistory", loginHistory, 2000); }, [loginHistory]);
   useEffect(function() { if (!loading) debouncedSave("announcements", announcements, 1000); }, [announcements]);
   useEffect(function() { if (!loading) debouncedSave("slas", slas, 1000); }, [slas]);
+  useEffect(function() { if (!loading) debouncedSave("leaves", leaves, 1000); }, [leaves]);
 
   // Auto-backup: daily snapshot of all tasks
   var [taskBackups, setTaskBackups] = useState([]);
@@ -887,6 +897,7 @@ export default function App() {
     { id: "targets", label: "Targets", icon: Icons.target },
     { id: "templates", label: "Templates", icon: Icons.tpl },
     { id: "recurring", label: "Recurring", icon: Icons.recur },
+    { id: "leaves", label: "Concedii", icon: Icons.cal },
     { id: "workload", label: "Workload", icon: Icons.work },
     { id: "team", label: "Echipa", icon: Icons.team },
     { id: "performance", label: "Performance", icon: Icons.perf },
@@ -970,14 +981,15 @@ export default function App() {
             <select style={S.fSel} onChange={function(e) { if (e.target.value) bulkChgPrio(e.target.value); e.target.value = ""; }}><option value="">Prioritate...</option>{PRIORITIES.map(function(p2) { return <option key={p2} value={p2}>{p2}</option>; })}</select>
             <button style={S.cancelBtn} onClick={function() { setSelectedTasks([]); }}>Deselecteaza</button>
           </Card>}
-          {page === "dashboard" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} />}
+          {page === "dashboard" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
           {page === "calendar" && <CalendarPage tasks={visTasks} user={user} team={team} calDate={calDate} setCalDate={setCalDate} onView={setViewTask} isMob={isMob} me={me} />}
-          {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} taskTypes={taskTypes} departments={departments} />}
+          {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} taskTypes={taskTypes} departments={departments} leaves={leaves} />}
           {page === "templates" && <TemplatesPage templates={templates} setTemplates={setTemplates} canEdit={canCreate} isAdmin={isAdmin} shops={shops} onCreateFromTpl={function(tpl) { setEditTask({ title: tpl.name, description: tpl.description, shop: tpl.shop || "", subtasks: tpl.subtasks.map(function(s) { return { id: gid(), text: s, done: false }; }) }); setShowAdd(true); }} />}
           {page === "recurring" && <RecurringPage recurringTasks={recurringTasks} setRecurringTasks={setRecurringTasks} team={team} assUsers={assUsers} shops={shops} departments={departments} canEdit={canCreate} />}
+          {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
           {page === "performance" && <PerfPage users={visUsers} team={team} getPerf={getPerf} isMob={isMob} />}
@@ -996,7 +1008,7 @@ export default function App() {
           {page === "manage_users" && <UsersPage team={team} setTeam={setTeam} addLog={addLog} />}
         </div>
       </main>
-      {showAdd && <TaskModal task={editTask} team={team} assUsers={assUsers} shops={shops} products={products} onSave={saveTask} onClose={function() { setShowAdd(false); setEditTask(null); localStorage.removeItem("scout_task_draft"); }} taskTypes={taskTypes} departments={departments} allTasks={tasks} allTags={allTags} taskEditors={taskEditors} user={user} setTaskEditors={setTaskEditors} />}
+      {showAdd && <TaskModal task={editTask} team={team} assUsers={assUsers} shops={shops} products={products} onSave={saveTask} onClose={function() { setShowAdd(false); setEditTask(null); localStorage.removeItem("scout_task_draft"); }} taskTypes={taskTypes} departments={departments} allTasks={tasks} allTags={allTags} taskEditors={taskEditors} user={user} setTaskEditors={setTaskEditors} leaves={leaves} />}
       {viewTask && <ViewTaskModal task={viewTask} team={team} user={user} tasks={tasks} setTasks={setTasks} timers={timers} getTS={getTS} togTimer={togTimer} products={products} onClose={function() { setViewTask(null); }} onEdit={function() { setEditTask(viewTask); setViewTask(null); setShowAdd(true); }} statusHistory={statusHistory} isAdmin={isAdmin} />}
       {showFinalize && <CampaignFinalizeModal task={showFinalize} onFinalize={function(count) {
         var tid = showFinalize.id;
@@ -1042,7 +1054,7 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
   </div>;
 }
 
-function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements }) {
+function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves }) {
   var [dashFrom, setDashFrom] = useState(TD);
   var [dashTo, setDashTo] = useState(TD);
   var [dashPreset, setDashPreset] = useState("today");
@@ -1116,11 +1128,11 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
             <div style={{ fontSize: 18, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div>
           </div>
           {me && me.role === "admin" && <div style={{ display: "flex", gap: 8, fontSize: 10, color: "#94A3B8", marginBottom: 8, flexWrap: "wrap" }}>
-            <Badge bg={d.hasLoggedToday ? "#ECFDF5" : "#FEF2F2"} color={d.hasLoggedToday ? GR : "#DC2626"}>{d.hasLoggedToday ? "Activ azi" : "Nu a intrat azi"}</Badge>
+            {isOnLeave(leaves, d.key, TD) ? <Badge bg="#FFFBEB" color="#D97706">🏖 Concediu azi</Badge> : <Badge bg={d.hasLoggedToday ? "#ECFDF5" : "#FEF2F2"} color={d.hasLoggedToday ? GR : "#DC2626"}>{d.hasLoggedToday ? "Activ azi" : "Nu a intrat azi"}</Badge>}
             {d.firstLogin && <span>Prima: {new Date(d.firstLogin).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}</span>}
             {d.lastLogin && <span>Ultima: {new Date(d.lastLogin).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}</span>}
           </div>}
-          {me && me.role === "admin" && d.userTargets.length > 0 && d.userTargets.map(function(tgt) {
+          {me && me.role === "admin" && !isOnLeave(leaves, d.key, TD) && d.userTargets.length > 0 && d.userTargets.map(function(tgt) {
             var normM = tgt.metric;
             if (normM && normM !== "all" && !normM.startsWith("type:") && !normM.startsWith("dept:") && !normM.startsWith("plat:")) normM = "type:" + normM;
             var tgtDoneToday = allTasks.filter(function(t) {
@@ -1651,7 +1663,7 @@ function LoginHistoryPage({ loginHistory, team, isMob }) {
   </div>;
 }
 
-function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUsers, taskTypes, departments }) {
+function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUsers, taskTypes, departments, leaves }) {
   var [showForm, setShowForm] = useState(false);
   var [editId, setEditId] = useState(null);
   var [editForm, setEditForm] = useState({});
@@ -1743,9 +1755,10 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
         }).reduce(function(acc) { return acc + 1; }, 0);
         var dow = dt.getDay();
         var isWorkday = dow >= 1 && dow <= (tgt.daysPerWeek >= 6 ? 6 : 5);
-        var expected = isWorkday ? tgt.target : 0;
+        var onLeave = isOnLeave(leaves, tgt.userId, dStr);
+        var expected = (isWorkday && !onLeave) ? tgt.target : 0;
         totalExpected += expected; totalActual += dayDone;
-        histDays.push({ date: dStr, label: dt.getDate() + " " + MN[dt.getMonth()], done: dayDone, expected: expected, deficit: expected - dayDone });
+        histDays.push({ date: dStr, label: dt.getDate() + " " + MN[dt.getMonth()], done: dayDone, expected: expected, deficit: expected - dayDone, onLeave: onLeave });
       }
       var totalDeficit = totalExpected - totalActual;
       var borderC = pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626";
@@ -1789,6 +1802,14 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
             <div style={{ fontWeight: 600, color: "#94A3B8", padding: 4, textAlign: "center" }}>+/-</div>
             {histDays.map(function(h) {
               var isToday2 = h.date === TD;
+              if (h.onLeave) {
+                return [
+                  <div key={h.date + "l"} style={{ padding: "3px 4px", background: isToday2 ? "#FEF3C7" : "#FFFBEB", fontWeight: isToday2 ? 700 : 400, borderRadius: 3 }}>{h.label}{isToday2 ? " (azi)" : ""}</div>,
+                  <div key={h.date + "e"} style={{ padding: "3px 4px", textAlign: "center", background: "#FFFBEB", borderRadius: 3, color: "#D97706", fontSize: 10, fontWeight: 600 }}>Concediu</div>,
+                  <div key={h.date + "d"} style={{ padding: "3px 4px", textAlign: "center", background: "#FFFBEB", borderRadius: 3, color: "#D97706" }}>-</div>,
+                  <div key={h.date + "df"} style={{ padding: "3px 4px", textAlign: "center", borderRadius: 3, color: "#D97706", background: "#FFFBEB" }}>-</div>
+                ];
+              }
               return [
                 <div key={h.date + "l"} style={{ padding: "3px 4px", background: isToday2 ? GR + "12" : "#F8FAFC", fontWeight: isToday2 ? 700 : 400, borderRadius: 3 }}>{h.label}{isToday2 ? " (azi)" : ""}</div>,
                 <div key={h.date + "e"} style={{ padding: "3px 4px", textAlign: "center", background: "#F8FAFC", borderRadius: 3 }}>{h.expected || "-"}</div>,
@@ -2001,6 +2022,117 @@ function BackupPage({ taskBackups, setTaskBackups, tasks, setTasks, team, user, 
         </div>}
       </Card>;
     })}
+  </div>;
+}
+
+function LeavesPage({ leaves, setLeaves, team, user, visUsers, me, addLog }) {
+  var [selectedUser, setSelectedUser] = useState(visUsers.filter(function(u) { return u !== "admin" && team[u] && team[u].role !== "admin"; })[0] || "");
+  var [calMonth, setCalMonth] = useState(new Date());
+
+  var canEditUser = function(uid) {
+    if (!team[uid]) return false;
+    if (me.role === "admin") return true;
+    if (me.role === "pm") {
+      var myTeam = me.team || [];
+      return myTeam.includes(uid) || uid === user;
+    }
+    return uid === user;
+  };
+
+  var editableUsers = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin" && canEditUser(u); });
+
+  var toggleDate = function(dateStr) {
+    if (!selectedUser || !canEditUser(selectedUser)) return;
+    setLeaves(function(prev) {
+      var copy = Object.assign({}, prev);
+      var userLeaves = (copy[selectedUser] || []).slice();
+      var idx = userLeaves.indexOf(dateStr);
+      if (idx >= 0) { userLeaves.splice(idx, 1); addLog("LEAVE", "Scos concediu " + (team[selectedUser] || {}).name + " - " + dateStr); }
+      else { userLeaves.push(dateStr); addLog("LEAVE", "Adaugat concediu " + (team[selectedUser] || {}).name + " - " + dateStr); }
+      copy[selectedUser] = userLeaves.sort();
+      return copy;
+    });
+  };
+
+  var y = calMonth.getFullYear(), m = calMonth.getMonth();
+  var dim = new Date(y, m + 1, 0).getDate();
+  var fd1 = new Date(y, m, 1).getDay();
+  var offset = fd1 === 0 ? 6 : fd1 - 1; // Monday-first
+  var cells = [];
+  for (var i = 0; i < offset; i++) cells.push(null);
+  for (var d = 1; d <= dim; d++) cells.push(d);
+
+  var userLeaves = (leaves[selectedUser] || []);
+  var todayOnLeave = editableUsers.filter(function(u) { return isOnLeave(leaves, u, TD); });
+
+  return <div>
+    <div style={{ marginBottom: 16 }}>
+      <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Concedii</h3>
+      <div style={{ fontSize: 12, color: "#94A3B8" }}>Click pe zi pentru a adauga / scoate concediu. Zilele de concediu nu afecteaza targetul si performance-ul.</div>
+    </div>
+
+    {todayOnLeave.length > 0 && <Card style={{ marginBottom: 16, borderLeft: "3px solid #D97706", background: "#FFFBEB" }}>
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#D97706", marginBottom: 6 }}>Azi in concediu</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{todayOnLeave.map(function(u) { var t = team[u] || {}; return <Badge key={u} bg="#FEF3C7" color="#92400E">{t.name}</Badge>; })}</div>
+    </Card>}
+
+    <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 16 }}>
+      {/* User sidebar */}
+      <Card style={{ padding: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Selecteaza user</div>
+        {editableUsers.map(function(u) {
+          var t = team[u] || {};
+          var count = (leaves[u] || []).length;
+          var isSel = selectedUser === u;
+          return <div key={u} onClick={function() { setSelectedUser(u); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: isSel ? GR + "15" : "transparent", marginBottom: 3, border: "1px solid " + (isSel ? GR + "30" : "transparent") }}>
+            <Av color={t.color} size={26} fs={11}>{(t.name || "?")[0]}</Av>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 500, color: isSel ? GR : "#1E293B" }}>{t.name}</div>
+              <div style={{ fontSize: 10, color: "#94A3B8" }}>{count} zile concediu</div>
+            </div>
+          </div>;
+        })}
+      </Card>
+
+      {/* Calendar */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <button style={S.cancelBtn} onClick={function() { var n = new Date(calMonth); n.setMonth(n.getMonth() - 1); setCalMonth(n); }}>&lt;</button>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>{MN[m]} {y}</div>
+          <button style={S.cancelBtn} onClick={function() { var n = new Date(calMonth); n.setMonth(n.getMonth() + 1); setCalMonth(n); }}>&gt;</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+          {["L", "Ma", "Mi", "J", "V", "S", "D"].map(function(d, i) { return <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#94A3B8", padding: 4 }}>{d}</div>; })}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+          {cells.map(function(cell, i) {
+            if (cell === null) return <div key={i} style={{ padding: 8 }} />;
+            var dStr = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(cell).padStart(2, "0");
+            var isToday = dStr === TD;
+            var isLeave = userLeaves.includes(dStr);
+            var dt = new Date(y, m, cell);
+            var dow = dt.getDay();
+            var isWeekend = dow === 0 || dow === 6;
+            return <div key={i} onClick={function() { toggleDate(dStr); }} style={{
+              padding: "10px 0",
+              textAlign: "center",
+              cursor: selectedUser ? "pointer" : "default",
+              borderRadius: 6,
+              background: isLeave ? "#D97706" : isToday ? GR + "20" : isWeekend ? "#F8FAFC" : "#fff",
+              color: isLeave ? "#fff" : isWeekend ? "#94A3B8" : "#1E293B",
+              fontWeight: isLeave ? 700 : isToday ? 700 : 500,
+              fontSize: 13,
+              border: "1px solid " + (isLeave ? "#D97706" : isToday ? GR : "#E2E8F0"),
+              transition: "all 0.1s"
+            }}>{cell}</div>;
+          })}
+        </div>
+        {selectedUser && <div style={{ marginTop: 14, padding: 10, background: "#F8FAFC", borderRadius: 6, fontSize: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: "#475569" }}>Concediu {(team[selectedUser] || {}).name}: {userLeaves.length} zile</div>
+          {userLeaves.length > 0 ? <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{userLeaves.slice(0, 20).map(function(d) { return <Badge key={d} bg="#FEF3C7" color="#92400E">{d}</Badge>; })}{userLeaves.length > 20 && <Badge bg="#F1F5F9" color="#64748B">+{userLeaves.length - 20}</Badge>}</div> : <div style={{ color: "#94A3B8" }}>Niciun concediu inca.</div>}
+        </div>}
+      </Card>
+    </div>
   </div>;
 }
 
@@ -2297,7 +2429,7 @@ function EditUserInline({ u, m, team, setTeam }) {
 
 // FEATURE 15: TaskModal with auto-save draft + FEATURE 16: conflict detection + FEATURE 4: tags
 // Feature 6 + 12: Task modal with custom types and departments
-function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, taskTypes, departments, allTasks, allTags, taskEditors, user, setTaskEditors }) {
+function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, taskTypes, departments, allTasks, allTags, taskEditors, user, setTaskEditors, leaves }) {
   var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", department: "", shop: "", product: "", productName: "", deadline: TD, links: [], subtasks: [], comments: [], dependsOn: [], campaignItems: [], assignees: [], tags: [], _pipelineNext: "" });
   var [newLink, setNewLink] = useState(""); var [newSub, setNewSub] = useState("");
   var [customType, setCustomType] = useState("");
@@ -2335,6 +2467,7 @@ function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, tas
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ fontSize: 17, fontWeight: 700 }}>{task ? "Editeaza Task" : "Task Nou"}</h2><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
     <label style={S.label}>Titlu *</label><input style={S.input} value={f.title} onChange={function(e) { set("title", e.target.value); }} placeholder="Ce trebuie facut?" autoFocus />
     <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Persoana</label><select style={S.fSelF} value={f.assignee} onChange={function(e) { set("assignee", e.target.value); }}>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select>
+    {f.assignee && leaves && isOnLeave(leaves, f.assignee, f.deadline || TD) && <div style={{ fontSize: 11, color: "#D97706", background: "#FFFBEB", padding: "4px 8px", borderRadius: 4, marginTop: 4, border: "1px solid #FDE68A" }}>⚠️ {(team[f.assignee] || {}).name} este in concediu pe {f.deadline || "azi"}. Taskul nu se va contoriza la target.</div>}
     <label style={Object.assign({}, S.label, { marginTop: 6 })}>Multi-assign (optional)</label>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>{assUsers.map(function(u) { var active = multiAssign.includes(u); return <button key={u} type="button" onClick={function() { var na = active ? multiAssign.filter(function(x) { return x !== u; }) : multiAssign.concat([u]); setMultiAssign(na); set("assignees", na); }} style={Object.assign({}, S.chip, { background: active ? GR : "#F1F5F9", color: active ? "#fff" : "#475569", fontSize: 10, padding: "3px 8px" })}>{(team[u] || {}).name}</button>; })}</div>
     {multiAssign.length > 1 && <div style={{ fontSize: 10, color: GR }}>Se vor crea {multiAssign.length} taskuri separate.</div>}
