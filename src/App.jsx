@@ -1054,6 +1054,266 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
   </div>;
 }
 
+function AdminInsights({ allTasks, team, visUsers, timers, isMob }) {
+  // === 7-day productivity trend ===
+  var trendData = [];
+  for (var i = 6; i >= 0; i--) {
+    var dt = new Date(); dt.setDate(dt.getDate() - i);
+    var dStr = ds(dt);
+    var done = allTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === dStr && !t._campaignParent; }).length;
+    var created = allTasks.filter(function(t) { return t.createdAt && ds(t.createdAt) === dStr && !t._campaignParent; }).length;
+    trendData.push({ date: dStr, label: dt.getDate() + " " + MN[dt.getMonth()].substring(0, 3), done: done, created: created, dow: dt.getDay() });
+  }
+  var maxTrend = Math.max.apply(null, trendData.map(function(d) { return Math.max(d.done, d.created); }).concat([1]));
+
+  // === Platform breakdown ===
+  var platformCount = {};
+  allTasks.forEach(function(t) { if (t.status !== "Done" && !t._campaignParent) { var p = t.platform || "Alta"; platformCount[p] = (platformCount[p] || 0) + 1; } });
+  var platformData = Object.keys(platformCount).map(function(k) { return { label: k, value: platformCount[k] }; }).sort(function(a, b) { return b.value - a.value; }).slice(0, 6);
+  var totalPlatform = platformData.reduce(function(acc, p) { return acc + p.value; }, 0);
+
+  // === Shop performance (Done last 7 days) ===
+  var shopStats = {};
+  allTasks.forEach(function(t) {
+    if (!t.shop || t._campaignParent) return;
+    if (!shopStats[t.shop]) shopStats[t.shop] = { done: 0, total: 0, active: 0 };
+    shopStats[t.shop].total++;
+    if (t.status === "Done") { var daysAgo = Math.floor((Date.now() - new Date(t.updatedAt || t.createdAt).getTime()) / 86400000); if (daysAgo <= 7) shopStats[t.shop].done++; }
+    else shopStats[t.shop].active++;
+  });
+  var shopData = Object.keys(shopStats).map(function(k) { return { label: k, done: shopStats[k].done, active: shopStats[k].active }; }).sort(function(a, b) { return (b.done + b.active) - (a.done + a.active); }).slice(0, 8);
+  var maxShop = Math.max.apply(null, shopData.map(function(s) { return s.done + s.active; }).concat([1]));
+
+  // === Top performers this week ===
+  var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  var perfData = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) {
+    var userDone = allTasks.filter(function(t) { return t.assignee === u && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekAgo && !t._campaignParent; }).length;
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", done: userDone };
+  }).sort(function(a, b) { return b.done - a.done; });
+  var maxPerf = Math.max.apply(null, perfData.map(function(p) { return p.done; }).concat([1]));
+
+  // === Blockers (stuck > 48h in same status) ===
+  var now = Date.now();
+  var blockers = allTasks.filter(function(t) {
+    if (t.status === "Done" || t._campaignParent) return false;
+    var lastUpdate = new Date(t.updatedAt || t.createdAt).getTime();
+    var hoursStuck = (now - lastUpdate) / 3600000;
+    return hoursStuck > 48;
+  }).sort(function(a, b) { return new Date(a.updatedAt || a.createdAt).getTime() - new Date(b.updatedAt || b.createdAt).getTime(); }).slice(0, 5);
+
+  // === Overdue alert ===
+  var overdueAll = allTasks.filter(function(t) { return t.status !== "Done" && !t._campaignParent && isP(t.deadline); });
+  var urgentAll = allTasks.filter(function(t) { return t.priority === "Urgent" && t.status !== "Done" && !t._campaignParent; });
+
+  // === Avg time per type (from timers) ===
+  var typeTimeMap = {};
+  allTasks.forEach(function(t) {
+    if (t.status !== "Done" || !t.taskType) return;
+    var tm = timers[t.id]; if (!tm || !tm.total) return;
+    if (!typeTimeMap[t.taskType]) typeTimeMap[t.taskType] = { total: 0, count: 0 };
+    typeTimeMap[t.taskType].total += tm.total;
+    typeTimeMap[t.taskType].count++;
+  });
+  var typeTimeData = Object.keys(typeTimeMap).map(function(k) { return { label: k, avg: Math.round(typeTimeMap[k].total / typeTimeMap[k].count) }; }).sort(function(a, b) { return b.avg - a.avg; }).slice(0, 5);
+
+  // === Today vs Yesterday comparison ===
+  var todayDone = allTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD && !t._campaignParent; }).length;
+  var yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  var yDone = allTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(yesterday) && !t._campaignParent; }).length;
+  var deltaPct = yDone > 0 ? Math.round(((todayDone - yDone) / yDone) * 100) : (todayDone > 0 ? 100 : 0);
+
+  var chartColors = { done: GR, created: "#2563EB", pending: "#94A3B8", urgent: "#DC2626", review: "#D97706" };
+
+  return <div style={{ marginBottom: 24 }}>
+    {/* Alert strip */}
+    {(overdueAll.length > 0 || urgentAll.length > 0 || blockers.length > 0) && <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+      {overdueAll.length > 0 && <Card style={{ borderLeft: "3px solid #DC2626", background: "#FEF2F2", padding: 12 }}>
+        <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 2 }}>INTARZIATE</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#DC2626" }}>{overdueAll.length}</div>
+        <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>Taskuri cu deadline depasit</div>
+      </Card>}
+      {urgentAll.length > 0 && <Card style={{ borderLeft: "3px solid #EA580C", background: "#FFF7ED", padding: 12 }}>
+        <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 2 }}>URGENTE</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#EA580C" }}>{urgentAll.length}</div>
+        <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>Prioritate urgenta, nefinalizate</div>
+      </Card>}
+      {blockers.length > 0 && <Card style={{ borderLeft: "3px solid #7C3AED", background: "#F5F3FF", padding: 12 }}>
+        <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 2 }}>BLOCAJE</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#7C3AED" }}>{blockers.length}</div>
+        <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>Fara miscare &gt; 48h</div>
+      </Card>}
+    </div>}
+
+    {/* Main grid: trend + platform */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "2fr 1fr", gap: 12, marginBottom: 12 }}>
+      {/* 7-day productivity trend */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Productivitate ultimele 7 zile</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Done vs Creat pe zi</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 6, background: deltaPct >= 0 ? "#ECFDF5" : "#FEF2F2" }}>
+            <span style={{ fontSize: 11, color: deltaPct >= 0 ? GR : "#DC2626", fontWeight: 700 }}>{deltaPct >= 0 ? "+" : ""}{deltaPct}%</span>
+            <span style={{ fontSize: 9, color: "#94A3B8" }}>vs ieri</span>
+          </div>
+        </div>
+        <svg viewBox="0 0 700 220" style={{ width: "100%", height: "auto" }}>
+          {/* grid lines */}
+          {[0, 0.25, 0.5, 0.75, 1].map(function(r, i) { return <line key={i} x1="40" y1={30 + 150 * r} x2="680" y2={30 + 150 * r} stroke="#F1F5F9" strokeWidth="1" />; })}
+          {/* Y axis labels */}
+          {[0, 0.5, 1].map(function(r, i) { return <text key={i} x="32" y={30 + 150 * (1 - r) + 4} fontSize="10" fill="#94A3B8" textAnchor="end">{Math.round(maxTrend * r)}</text>; })}
+          {/* bars */}
+          {trendData.map(function(d, i) {
+            var barW = 640 / trendData.length / 3;
+            var xBase = 50 + i * (640 / trendData.length) + (640 / trendData.length) / 6;
+            var hDone = (d.done / maxTrend) * 150;
+            var hCreated = (d.created / maxTrend) * 150;
+            var isWeekend = d.dow === 0 || d.dow === 6;
+            return <g key={i}>
+              <rect x={xBase} y={180 - hCreated} width={barW} height={hCreated} fill={chartColors.created} opacity={isWeekend ? 0.4 : 0.85} rx="3" />
+              <rect x={xBase + barW + 4} y={180 - hDone} width={barW} height={hDone} fill={chartColors.done} opacity={isWeekend ? 0.4 : 0.95} rx="3" />
+              <text x={xBase + barW + 2} y="200" fontSize="10" fill={isWeekend ? "#CBD5E1" : "#64748B"} textAnchor="middle" fontWeight={d.date === TD ? "700" : "400"}>{d.label}</text>
+              {d.done > 0 && <text x={xBase + barW + 4 + barW / 2} y={180 - hDone - 4} fontSize="9" fill={GR} textAnchor="middle" fontWeight="700">{d.done}</text>}
+            </g>;
+          })}
+        </svg>
+        <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: chartColors.created, borderRadius: 2 }} /><span style={{ color: "#64748B" }}>Creat</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: chartColors.done, borderRadius: 2 }} /><span style={{ color: "#64748B" }}>Done</span></div>
+        </div>
+      </Card>
+
+      {/* Platform breakdown donut */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Platforma (active)</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>{totalPlatform} taskuri nefinalizate</div>
+        {platformData.length > 0 ? <div>
+          <svg viewBox="0 0 200 200" style={{ width: "100%", maxWidth: 160, display: "block", margin: "0 auto" }}>
+            {(function() {
+              var accumulated = 0;
+              var palette = ["#2563EB", "#16A34A", "#D97706", "#7C3AED", "#DC2626", "#EC4899"];
+              return platformData.map(function(p, i) {
+                var frac = p.value / totalPlatform;
+                var start = accumulated * 2 * Math.PI - Math.PI / 2;
+                var end = (accumulated + frac) * 2 * Math.PI - Math.PI / 2;
+                accumulated += frac;
+                var r = 70, cx = 100, cy = 100;
+                var x1 = cx + r * Math.cos(start), y1 = cy + r * Math.sin(start);
+                var x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
+                var largeArc = frac > 0.5 ? 1 : 0;
+                return <path key={i} d={"M " + cx + " " + cy + " L " + x1 + " " + y1 + " A " + r + " " + r + " 0 " + largeArc + " 1 " + x2 + " " + y2 + " Z"} fill={palette[i % palette.length]} opacity="0.9" />;
+              });
+            })()}
+            <circle cx="100" cy="100" r="45" fill="#fff" />
+            <text x="100" y="95" fontSize="22" fill="#1E293B" textAnchor="middle" fontWeight="800">{totalPlatform}</text>
+            <text x="100" y="112" fontSize="10" fill="#94A3B8" textAnchor="middle">taskuri</text>
+          </svg>
+          <div style={{ marginTop: 10 }}>
+            {platformData.map(function(p, i) {
+              var palette = ["#2563EB", "#16A34A", "#D97706", "#7C3AED", "#DC2626", "#EC4899"];
+              var pct = Math.round((p.value / totalPlatform) * 100);
+              return <div key={p.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "3px 0" }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: palette[i % palette.length] }} />
+                <span style={{ flex: 1, color: "#475569" }}>{p.label}</span>
+                <span style={{ color: "#94A3B8" }}>{p.value}</span>
+                <span style={{ color: "#1E293B", fontWeight: 700, minWidth: 32, textAlign: "right" }}>{pct}%</span>
+              </div>;
+            })}
+          </div>
+        </div> : <div style={{ textAlign: "center", padding: 30, color: "#94A3B8", fontSize: 12 }}>Nu sunt taskuri active</div>}
+      </Card>
+    </div>
+
+    {/* Second row: performers + shops */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
+      {/* Top performers */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Top performeri - saptamana</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Taskuri finalizate ultimele 7 zile</div>
+        {perfData.slice(0, 7).map(function(p, i) {
+          var pct = maxPerf > 0 ? (p.done / maxPerf) * 100 : 0;
+          return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 18, height: 18, borderRadius: "50%", background: i === 0 ? "#FDE047" : i === 1 ? "#E5E7EB" : i === 2 ? "#F97316" : "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: i < 3 ? "#fff" : "#94A3B8", flexShrink: 0 }}>{i + 1}</div>
+            <Av color={p.color} size={22} fs={9}>{p.name[0]}</Av>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#1E293B" }}>{p.name}</span>
+                <span style={{ fontSize: 11, color: p.done > 0 ? GR : "#94A3B8", fontWeight: 700 }}>{p.done}</span>
+              </div>
+              <div style={{ height: 6, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: pct + "%", background: i === 0 ? GR : i < 3 ? "#60A5FA" : "#CBD5E1", borderRadius: 3, transition: "width 0.3s" }} />
+              </div>
+            </div>
+          </div>;
+        })}
+      </Card>
+
+      {/* Shop performance */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Magazine - activitate</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Done (7zile) vs Active</div>
+        {shopData.length > 0 ? shopData.map(function(s) {
+          var total = s.done + s.active;
+          var donePct = total > 0 ? (s.done / total) * 100 : 0;
+          var widthTotal = total / maxShop * 100;
+          return <div key={s.label} style={{ marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+              <span style={{ color: "#475569", fontWeight: 600 }}>{s.label}</span>
+              <span style={{ color: "#94A3B8" }}>{s.done} done / {s.active} active</span>
+            </div>
+            <div style={{ display: "flex", height: 10, borderRadius: 3, overflow: "hidden", width: widthTotal + "%", background: "#F1F5F9" }}>
+              <div style={{ width: donePct + "%", background: GR }} />
+              <div style={{ width: (100 - donePct) + "%", background: "#60A5FA", opacity: 0.6 }} />
+            </div>
+          </div>;
+        }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt magazine cu activitate</div>}
+      </Card>
+    </div>
+
+    {/* Third row: time per type + blockers */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
+      {/* Avg time per type */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Timp mediu pe tip task</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Pe baza timer-elor taskurilor finalizate</div>
+        {typeTimeData.length > 0 ? typeTimeData.map(function(t) {
+          var maxVal = typeTimeData[0].avg;
+          var pct = (t.avg / maxVal) * 100;
+          return <div key={t.label} style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+              <span style={{ color: "#475569", fontWeight: 600 }}>{t.label}</span>
+              <span style={{ color: "#1E293B", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{ft(t.avg)}</span>
+            </div>
+            <div style={{ height: 6, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: pct + "%", background: "#7C3AED", opacity: 0.75, borderRadius: 3 }} />
+            </div>
+          </div>;
+        }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt date de timer</div>}
+      </Card>
+
+      {/* Blockers */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Blocaje (nu s-au miscat &gt; 48h)</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Taskuri ramase fara progres</div>
+        {blockers.length > 0 ? blockers.map(function(t) {
+          var hours = Math.floor((Date.now() - new Date(t.updatedAt || t.createdAt).getTime()) / 3600000);
+          var days = Math.floor(hours / 24);
+          var a = team[t.assignee] || {};
+          return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", marginBottom: 4, borderRadius: 5, background: "#FFFBEB", borderLeft: "2px solid #D97706" }}>
+            {a.color && <Av color={a.color} size={20} fs={9}>{(a.name || "?")[0]}</Av>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+              <div style={{ fontSize: 9, color: "#94A3B8" }}>{a.name || "?"} | {t.status}</div>
+            </div>
+            <span style={{ fontSize: 10, color: "#D97706", fontWeight: 700, flexShrink: 0 }}>{days > 0 ? days + "z" : hours + "h"}</span>
+          </div>;
+        }) : <div style={{ textAlign: "center", padding: 20, color: GR, fontSize: 12, fontWeight: 600 }}>✓ Fara blocaje</div>}
+      </Card>
+    </div>
+  </div>;
+}
+
 function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves }) {
   var [dashFrom, setDashFrom] = useState(TD);
   var [dashTo, setDashTo] = useState(TD);
@@ -1118,6 +1378,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     </div>
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[{ l: "Total", v: rangeStats.total, c: "#475569" }, { l: "To Do", v: rangeStats.todo, c: "#94A3B8" }, { l: "In Progress", v: rangeStats.inProg, c: "#2563EB" }, { l: "Review", v: rangeStats.review, c: "#D97706" }, { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626" }, { l: "Done", v: rangeStats.done, c: GR }].map(function(s) { return <Card key={s.l} style={{ borderTop: "3px solid " + s.c }}><div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div></Card>; })}</div>
     {activeTimers.length > 0 && <Card style={{ marginBottom: 20, borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card>}
+    {me && me.role === "admin" && <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} />}
     <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(380px,1fr))", gap: 12 }}>{ppl.map(function(d) {
       return <Card key={d.key} style={{ cursor: "pointer" }}>
@@ -1171,7 +1432,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
             {d.assignedTasks.filter(function(t) { return t.status === "To Do"; }).slice(0, 2).map(function(t) { return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, padding: "3px 8px", marginBottom: 2, borderRadius: 5, background: "#F8FAFC", opacity: 0.85 }}><span style={{ width: 5, height: 5, borderRadius: "50%", background: "#94A3B8", flexShrink: 0 }} /><span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#64748B" }}>{t.title}</span>{t.shop && <span style={{ fontSize: 9, color: "#94A3B8", flexShrink: 0 }}>{t.shop}</span>}</div>; })}
             {/* Summary line */}
             {d.assignedTasks.length > 0 && <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 4, display: "flex", gap: 8 }}><span>{d.workingTasks.length > 0 ? d.workingTasks.length + " in lucru" : ""}</span><span>{d.assignedTasks.filter(function(t){return t.status==="To Do";}).length > 0 ? d.assignedTasks.filter(function(t){return t.status==="To Do";}).length + " to do" : ""}</span><span style={{ color: GR }}>{d.rangeDone > 0 ? d.rangeDone + " done" : ""}</span></div>}
-            {me && me.role === "admin" && d.assignedTasks.length === 0 && <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 600 }}>Fara taskuri active!</div>}
+            {me && me.role === "admin" && d.assignedTasks.length === 0 && <div style={{ fontSize: 11, fontWeight: 700, marginTop: 4, padding: "6px 10px", borderRadius: 6, background: d.rangeDone > 0 ? "#ECFDF5" : "#FEF2F2", color: d.rangeDone > 0 ? GR : "#DC2626", display: "flex", alignItems: "center", gap: 6 }}>{d.rangeDone > 0 ? <span>✓ Taskuri finalizate ({d.rangeDone})</span> : <span>⚠ Fara taskuri active</span>}</div>}
           </div>
         </div>
       </Card>;
