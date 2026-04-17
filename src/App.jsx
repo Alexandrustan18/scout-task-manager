@@ -41,7 +41,7 @@ var DEF_TEAM = {
 var DEF_SHOPS = ["Grandia", "Bonhaus", "Casa Ofertelor", "Gento", "MagDeal", "Reduceri Bune", "Apreciat"];
 var STATUSES = ["To Do", "In Progress", "Review", "Done"];
 var PRIORITIES = ["Low", "Normal", "High", "Urgent"];
-var PLATFORMS = ["Meta Ads", "TikTok Ads", "Google Ads", "Shopify", "Creativ", "UGC", "Foto Produs", "Altele"];
+var DEF_PLATFORMS = ["Meta Ads", "TikTok Ads", "Google Ads", "Shopify", "Creativ", "UGC", "Foto Produs", "Altele"];
 var DEF_TASK_TYPES = ["Ad Creation", "Product Launch", "Creative", "Copy", "Landing Page", "Tracking/Pixel", "Raportare", "General"];
 var DEF_DEPARTMENTS = ["AD", "PRODUCT LAUNCH", "CREATIVE VIDEO", "UGC", "FOTO PRODUS", "COPY", "TRACKING"];
 var RECUR_OPTS = ["Zilnic", "Saptamanal", "Lunar"];
@@ -267,6 +267,7 @@ export default function App() {
   var [loading, setLoading] = useState(true);
   var [taskTypes, setTaskTypes] = useState(DEF_TASK_TYPES);
   var [departments, setDepartments] = useState(DEF_DEPARTMENTS);
+  var [platforms, setPlatforms] = useState(DEF_PLATFORMS);
   var [toasts, setToasts] = useState([]);
   var [loginTrack, setLoginTrack] = useState({});
   var [deptFilter, setDeptFilter] = useState("all");
@@ -310,7 +311,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd, plf] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -336,6 +337,7 @@ export default function App() {
         cloudLoad("slas", {}),
         cloudLoad("leaves", {}),
         cloudLoad("branding", { title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" }),
+        cloudLoad("platforms", DEF_PLATFORMS),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -350,6 +352,7 @@ export default function App() {
       setNotifications(nf || []);
       if (tt && tt.length > 0) setTaskTypes(tt); else { setTaskTypes(DEF_TASK_TYPES); cloudSave("taskTypes", DEF_TASK_TYPES); }
       if (dp && dp.length > 0) setDepartments(dp); else { setDepartments(DEF_DEPARTMENTS); cloudSave("departments", DEF_DEPARTMENTS); }
+      if (plf && plf.length > 0) setPlatforms(plf); else { setPlatforms(DEF_PLATFORMS); cloudSave("platforms", DEF_PLATFORMS); }
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -427,6 +430,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("notifs", notifications, 2000); }, [notifications]);
   useEffect(function() { if (!loading) debouncedSave("taskTypes", taskTypes, 1000); }, [taskTypes]);
   useEffect(function() { if (!loading) debouncedSave("departments", departments, 1000); }, [departments]);
+  useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
   useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
   useEffect(function() { if (!loading) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
   useEffect(function() { if (!loading) debouncedSave("statusHistory", statusHistory, 1000); }, [statusHistory]);
@@ -1064,7 +1068,7 @@ export default function App() {
 
   if (profUser) return <div style={S.app}><style>{CSS}</style><ToastBanner toasts={toasts} onDismiss={dismissToast} />{achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}<ProfileView pu={profUser} team={team} tasks={tasks} timers={timers} getTS={getTS} logs={logs} sessions={sessions} getPerf={getPerf} range={profRange} setRange={setProfRange} onBack={function() { setProfUser(null); }} isMob={isMob} statusHistory={statusHistory} achievements={achievements} loginHistory={loginHistory} /></div>;
 
-  var fProps = { stats: stats, dateF: dateF, setDateF: setDateF, statusF: statusF, setStatusF: setStatusF, prioF: prioF, setPrioF: setPrioF, assignF: assignF, setAssignF: setAssignF, shopF: shopF, setShopF: setShopF, visUsers: visUsers, shops: shops, count: filtered.length, team: team, departments: departments, deptFilter: deptFilter, setDeptFilter: setDeptFilter, platformFilter: platformFilter, setPlatformFilter: setPlatformFilter, allTags: allTags, tagFilter: tagFilter, setTagFilter: setTagFilter };
+  var fProps = { stats: stats, dateF: dateF, setDateF: setDateF, statusF: statusF, setStatusF: setStatusF, prioF: prioF, setPrioF: setPrioF, assignF: assignF, setAssignF: setAssignF, shopF: shopF, setShopF: setShopF, visUsers: visUsers, shops: shops, count: filtered.length, team: team, departments: departments, deptFilter: deptFilter, setDeptFilter: setDeptFilter, platformFilter: platformFilter, setPlatformFilter: setPlatformFilter, allTags: allTags, tagFilter: tagFilter, setTagFilter: setTagFilter, platforms: platforms };
 
   var navItems = [
     { id: "dashboard", label: "Dashboard", icon: Icons.dash },
@@ -1087,6 +1091,7 @@ export default function App() {
     { id: "sheets", label: "Sheets", icon: Icons.sheet },
     { id: "manage_users", label: "Manage Users", icon: Icons.usrs },
     { id: "branding", label: "Branding", icon: Icons.settings },
+    { id: "config", label: "Configurare Rapida", icon: Icons.filter },
   ];
 
   var navGroups = [
@@ -1094,7 +1099,7 @@ export default function App() {
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
     { label: "Echipa", items: ["workload", "performance", "league", "digest", "achievements"] },
     { label: "Comunicare", items: ["announce"] },
-    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "backups"] },
+    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "backups"] },
   ];
 
   var accessibleNav = navItems.filter(function(n) {
@@ -1208,6 +1213,7 @@ export default function App() {
           {page === "recurring" && <RecurringPage recurringTasks={recurringTasks} setRecurringTasks={setRecurringTasks} team={team} assUsers={assUsers} shops={shops} departments={departments} canEdit={canCreate} />}
           {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
+          {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
           {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
@@ -1227,7 +1233,7 @@ export default function App() {
           {page === "manage_users" && <UsersPage team={team} setTeam={setTeam} addLog={addLog} />}
         </div>
       </main>
-      {showAdd && <TaskModal task={editTask} team={team} assUsers={assUsers} shops={shops} products={products} onSave={saveTask} onClose={function() { setShowAdd(false); setEditTask(null); localStorage.removeItem("scout_task_draft"); }} taskTypes={taskTypes} departments={departments} allTasks={tasks} allTags={allTags} taskEditors={taskEditors} user={user} setTaskEditors={setTaskEditors} leaves={leaves} />}
+      {showAdd && <TaskModal task={editTask} team={team} assUsers={assUsers} shops={shops} products={products} onSave={saveTask} onClose={function() { setShowAdd(false); setEditTask(null); localStorage.removeItem("scout_task_draft"); }} taskTypes={taskTypes} departments={departments} allTasks={tasks} allTags={allTags} taskEditors={taskEditors} user={user} setTaskEditors={setTaskEditors} leaves={leaves} platforms={platforms} />}
       {viewTask && <ViewTaskModal task={viewTask} team={team} user={user} tasks={tasks} setTasks={setTasks} timers={timers} getTS={getTS} togTimer={togTimer} products={products} onClose={function() { setViewTask(null); }} onEdit={function() { setEditTask(viewTask); setViewTask(null); setShowAdd(true); }} statusHistory={statusHistory} isAdmin={isAdmin} />}
       {showFinalize && <CampaignFinalizeModal task={showFinalize} onFinalize={function(count) {
         var tid = showFinalize.id;
@@ -1256,7 +1262,7 @@ function LoginScreen({ team, onLogin, announcements }) {
   </div></div>;
 }
 
-function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPrioF, assignF, setAssignF, shopF, setShopF, visUsers, shops, count, team, noStatus, departments, deptFilter, setDeptFilter, platformFilter, setPlatformFilter, allTags, tagFilter, setTagFilter }) {
+function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPrioF, assignF, setAssignF, shopF, setShopF, visUsers, shops, count, team, noStatus, departments, deptFilter, setDeptFilter, platformFilter, setPlatformFilter, allTags, tagFilter, setTagFilter, platforms }) {
   var chips = [{ id: "all", l: "Toate" }, { id: "today", l: "Azi", n: stats.today }, { id: "yesterday", l: "Ieri" }, { id: "tomorrow", l: "Maine" }, { id: "overdue", l: "Intarziate", n: stats.overdue }, { id: "upcoming", l: "Viitoare" }, { id: "nodate", l: "Fara data" }];
   return <div>
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{chips.map(function(c) { return <button key={c.id} onClick={function() { setDateF(c.id); }} style={Object.assign({}, S.chip, { background: dateF === c.id ? GR : "#F1F5F9", color: dateF === c.id ? "#fff" : "#475569", fontWeight: dateF === c.id ? 600 : 400 })}>{c.l}{c.n > 0 && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.8 }}>({c.n})</span>}</button>; })}</div>
@@ -1266,7 +1272,7 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
       <select style={S.fSel} value={assignF} onChange={function(e) { setAssignF(e.target.value); }}><option value="all">Persoana: Toti</option>{visUsers.filter(function(u) { return u !== "admin"; }).map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name || u}</option>; })}</select>
       <select style={S.fSel} value={shopF} onChange={function(e) { setShopF(e.target.value); }}><option value="all">Magazin: Toate</option>{shops.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
       {departments && <select style={S.fSel} value={deptFilter || "all"} onChange={function(e) { if (setDeptFilter) setDeptFilter(e.target.value); }}><option value="all">Dept: Toate</option>{departments.map(function(d) { return <option key={d} value={d}>{d}</option>; })}</select>}
-      <select style={S.fSel} value={platformFilter || "all"} onChange={function(e) { if (setPlatformFilter) setPlatformFilter(e.target.value); }}><option value="all">Platforma: Toate</option>{PLATFORMS.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select>
+      <select style={S.fSel} value={platformFilter || "all"} onChange={function(e) { if (setPlatformFilter) setPlatformFilter(e.target.value); }}><option value="all">Platforma: Toate</option>{(platforms || DEF_PLATFORMS).map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select>
       {allTags && allTags.length > 0 && <select style={S.fSel} value={tagFilter || "all"} onChange={function(e) { if (setTagFilter) setTagFilter(e.target.value); }}><option value="all">Tag: Toate</option>{allTags.map(function(t) { return <option key={t} value={t}>#{t}</option>; })}</select>}
       <span style={{ fontSize: 12, color: "#94A3B8" }}>{count} taskuri</span>
     </div>
@@ -2868,7 +2874,7 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
   var metricOptions = [{ id: "all", l: "Toate taskurile" }].concat(
     (taskTypes || DEF_TASK_TYPES).map(function(t) { return { id: "type:" + t, l: "Tip: " + t }; }),
     (departments || DEF_DEPARTMENTS).map(function(d) { return { id: "dept:" + d, l: "Dept: " + d }; }),
-    PLATFORMS.map(function(p) { return { id: "plat:" + p, l: "Platforma: " + p }; })
+    DEF_PLATFORMS.map(function(p) { return { id: "plat:" + p, l: "Platforma: " + p }; })
   );
 
   var normM = function(metric) {
@@ -2876,7 +2882,7 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
     if (metric.startsWith("type:") || metric.startsWith("dept:") || metric.startsWith("plat:")) return metric;
     if ((taskTypes || DEF_TASK_TYPES).includes(metric)) return "type:" + metric;
     if ((departments || DEF_DEPARTMENTS).includes(metric)) return "dept:" + metric;
-    if (PLATFORMS.includes(metric)) return "plat:" + metric;
+    if (DEF_PLATFORMS.includes(metric)) return "plat:" + metric;
     return "type:" + metric;
   };
 
@@ -3975,7 +3981,7 @@ function EditUserInline({ u, m, team, setTeam }) {
 
 // FEATURE 15: TaskModal with auto-save draft + FEATURE 16: conflict detection + FEATURE 4: tags
 // Feature 6 + 12: Task modal with custom types and departments
-function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, taskTypes, departments, allTasks, allTags, taskEditors, user, setTaskEditors, leaves }) {
+function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, taskTypes, departments, allTasks, allTags, taskEditors, user, setTaskEditors, leaves, platforms }) {
   var [f, setF] = useState(task || { title: "", description: "", assignee: assUsers[0] || "", status: "To Do", priority: "Normal", platform: "", taskType: "", department: "", shop: "", product: "", productName: "", deadline: TD, links: [], subtasks: [], comments: [], dependsOn: [], campaignItems: [], assignees: [], tags: [], _pipelineNext: "" });
   var [newLink, setNewLink] = useState(""); var [newSub, setNewSub] = useState("");
   var [customType, setCustomType] = useState("");
@@ -4024,7 +4030,7 @@ function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, tas
     {f._pipelineNext && <div style={{ fontSize: 10, color: "#2563EB", marginTop: 2 }}>La Done, se creaza automat task pentru {(team[f._pipelineNext] || {}).name}.</div>}
     </div>}
     </div></div>
-    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Platforma</label><select style={S.fSelF} value={f.platform} onChange={function(e) { set("platform", e.target.value); }}><option value="">--</option>{PLATFORMS.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Tip Task</label><select style={S.fSelF} value={f.taskType} onChange={function(e) { set("taskType", e.target.value); }}><option value="">--</option>{allTypes.map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select><div style={{ display: "flex", gap: 4, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1, fontSize: 11, padding: "4px 8px" })} value={customType} onChange={function(e) { setCustomType(e.target.value); }} placeholder="Tip nou..." /><button style={Object.assign({}, S.primBtn, { fontSize: 10, padding: "4px 8px" })} onClick={function() { if (customType.trim()) { set("taskType", customType.trim()); setCustomType(""); } }}>+</button></div></div></div>
+    <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Platforma</label><select style={S.fSelF} value={f.platform} onChange={function(e) { set("platform", e.target.value); }}><option value="">--</option>{(platforms || DEF_PLATFORMS).map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Tip Task</label><select style={S.fSelF} value={f.taskType} onChange={function(e) { set("taskType", e.target.value); }}><option value="">--</option>{allTypes.map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select><div style={{ display: "flex", gap: 4, marginTop: 4 }}><input style={Object.assign({}, S.input, { flex: 1, fontSize: 11, padding: "4px 8px" })} value={customType} onChange={function(e) { setCustomType(e.target.value); }} placeholder="Tip nou..." /><button style={Object.assign({}, S.primBtn, { fontSize: 10, padding: "4px 8px" })} onClick={function() { if (customType.trim()) { set("taskType", customType.trim()); setCustomType(""); } }}>+</button></div></div></div>
     <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Departament</label><select style={S.fSelF} value={f.department || ""} onChange={function(e) { set("department", e.target.value); }}><option value="">--</option>{(departments || DEF_DEPARTMENTS).map(function(d) { return <option key={d} value={d}>{d}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Prioritate</label><select style={S.fSelF} value={f.priority} onChange={function(e) { set("priority", e.target.value); }}>{PRIORITIES.map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div></div>
     <div style={S.fRow}><div style={S.fCol}><label style={S.label}>Status</label><select style={S.fSelF} value={f.status} onChange={function(e) { set("status", e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div><div style={S.fCol}><label style={S.label}>Deadline</label><input style={S.fSelF} type="date" value={f.deadline} onChange={function(e) { set("deadline", e.target.value); }} /></div></div>
     {products.length > 0 && <div><label style={S.label}>Produs (lista)</label><select style={S.fSelF} value={f.product || ""} onChange={function(e) { selProd(e.target.value); }}><option value="">--</option>{products.map(function(p) { return <option key={p.id} value={p.id}>{p.name}{p.store ? " (" + p.store + ")" : ""}</option>; })}</select></div>}
@@ -4098,6 +4104,169 @@ function CampaignFinalizeModal({ task, onFinalize, onClose }) {
     <div style={{ fontSize: 12, color: "#64748B", marginTop: 8, marginBottom: 16 }}>{count} produse se adauga la targetul zilnic. {total - count > 0 ? (total - count) + " ramase." : "Toate finalizate!"}</div>
     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button><button style={S.primBtn} onClick={function() { onFinalize(count); }}>Finalizeaza ({count})</button></div>
   </div></div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIG PAGE — Centralized settings for Task Types, Platforms,
+// Departments, Shops. Drag to reorder, inline edit, add/remove.
+// ═══════════════════════════════════════════════════════════════
+function ConfigPage({ taskTypes, setTaskTypes, platforms, setPlatforms, departments, setDepartments, shops, setShops, addLog }) {
+  var [activeTab, setActiveTab] = useState("taskTypes");
+  var [newItem, setNewItem] = useState("");
+  var [editIdx, setEditIdx] = useState(null);
+  var [editVal, setEditVal] = useState("");
+  var [dragIdx, setDragIdx] = useState(null);
+
+  var tabs = [
+    { id: "taskTypes", label: "Tip Task", icon: "🏷️", items: taskTypes, setItems: setTaskTypes, color: "#7C3AED" },
+    { id: "platforms", label: "Platforme", icon: "📡", items: platforms, setItems: setPlatforms, color: "#2563EB" },
+    { id: "departments", label: "Departamente", icon: "🏢", items: departments, setItems: setDepartments, color: "#EA580C" },
+    { id: "shops", label: "Magazine", icon: "🏪", items: shops, setItems: setShops, color: "#0C7E3E" },
+  ];
+
+  var currentTab = tabs.find(function(t) { return t.id === activeTab; }) || tabs[0];
+  var items = currentTab.items || [];
+  var setItems = currentTab.setItems;
+  var tabColor = currentTab.color;
+
+  var addItem = function() {
+    var val = newItem.trim();
+    if (!val) return;
+    if (activeTab === "departments") val = val.toUpperCase();
+    if (items.includes(val)) { setNewItem(""); return; }
+    setItems(function(p) { return p.concat([val]); });
+    addLog("CONFIG", "Adaugat " + currentTab.label + ": " + val);
+    setNewItem("");
+  };
+
+  var removeItem = function(idx) {
+    var val = items[idx];
+    if (!window.confirm("Stergi \"" + val + "\"?")) return;
+    setItems(function(p) { return p.filter(function(_, i) { return i !== idx; }); });
+    addLog("CONFIG", "Sters " + currentTab.label + ": " + val);
+  };
+
+  var startEdit = function(idx) {
+    setEditIdx(idx);
+    setEditVal(items[idx]);
+  };
+
+  var saveEdit = function() {
+    if (editIdx === null) return;
+    var val = editVal.trim();
+    if (activeTab === "departments") val = val.toUpperCase();
+    if (!val) return;
+    var old = items[editIdx];
+    setItems(function(p) { return p.map(function(x, i) { return i === editIdx ? val : x; }); });
+    addLog("CONFIG", "Redenumit " + currentTab.label + ": " + old + " -> " + val);
+    setEditIdx(null);
+    setEditVal("");
+  };
+
+  var moveItem = function(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return;
+    setItems(function(p) {
+      var arr = p.slice();
+      var item = arr.splice(fromIdx, 1)[0];
+      arr.splice(toIdx, 0, item);
+      return arr;
+    });
+  };
+
+  var resetToDefault = function() {
+    if (!window.confirm("Resetezi " + currentTab.label + " la valorile default?")) return;
+    var defaults = { taskTypes: ["Ad Creation", "Product Launch", "Creative", "Copy", "Landing Page", "Tracking/Pixel", "Raportare", "General"], platforms: ["Meta Ads", "TikTok Ads", "Google Ads", "Shopify", "Creativ", "UGC", "Foto Produs", "Altele"], departments: ["AD", "PRODUCT LAUNCH", "CREATIVE VIDEO", "UGC", "FOTO PRODUS", "COPY", "TRACKING"], shops: ["Grandia", "Bonhaus", "Casa Ofertelor", "Gento", "MagDeal", "Reduceri Bune", "Apreciat"] };
+    setItems(defaults[activeTab] || []);
+    addLog("CONFIG", "Reset " + currentTab.label + " la default");
+  };
+
+  return <div style={{ maxWidth: 900 }}>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Configurare Rapida</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Editeaza tipurile de task, platformele, departamentele si magazinele. Modificarile se salveaza automat si se reflecta in toata platforma.</div>
+    </div>
+
+    {/* Tab switcher */}
+    <div style={{ display: "flex", gap: 4, marginBottom: 20, padding: 4, background: "#F1F5F9", borderRadius: 10, flexWrap: "wrap" }}>
+      {tabs.map(function(t) {
+        var isActive = activeTab === t.id;
+        return <button key={t.id} onClick={function() { setActiveTab(t.id); setEditIdx(null); setNewItem(""); }} style={{ padding: "10px 18px", borderRadius: 7, border: "none", background: isActive ? "#fff" : "transparent", color: isActive ? t.color : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: isActive ? "0 1px 4px rgba(0,0,0,0.08)" : "none", display: "flex", alignItems: "center", gap: 6 }}>
+          <span>{t.icon}</span>
+          {t.label}
+          <span style={{ fontSize: 10, background: isActive ? t.color + "18" : "#E2E8F0", color: isActive ? t.color : "#94A3B8", padding: "2px 8px", borderRadius: 10, fontWeight: 700 }}>{(t.items || []).length}</span>
+        </button>;
+      })}
+    </div>
+
+    {/* Add new item */}
+    <Card style={{ marginBottom: 16, borderLeft: "3px solid " + tabColor }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input style={Object.assign({}, S.input, { flex: 1, fontSize: 14 })} value={newItem} onChange={function(e) { setNewItem(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addItem(); }} placeholder={"Adauga " + currentTab.label.toLowerCase() + " nou..."} />
+        <button style={Object.assign({}, S.primBtn, { padding: "10px 20px" })} onClick={addItem}>
+          <Ic d={Icons.plus} size={14} color="#fff" /> Adauga
+        </button>
+        <button style={Object.assign({}, S.cancelBtn, { padding: "10px 14px", fontSize: 11 })} onClick={resetToDefault}>
+          Reset Default
+        </button>
+      </div>
+    </Card>
+
+    {/* Items list */}
+    <Card>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{currentTab.icon} {currentTab.label} ({items.length})</div>
+        <div style={{ fontSize: 11, color: "#94A3B8" }}>Trage ☰ pentru a reordona</div>
+      </div>
+
+      {items.length === 0 && <div style={{ textAlign: "center", padding: 30, color: "#94A3B8", fontSize: 13 }}>Niciun element. Adauga unul mai sus.</div>}
+
+      {items.map(function(item, idx) {
+        var isEditing = editIdx === idx;
+        var isDragTarget = dragIdx !== null && dragIdx !== idx;
+        return <div key={idx}
+          draggable={!isEditing}
+          onDragStart={function(e) { setDragIdx(idx); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(idx)); }}
+          onDragEnd={function() { setDragIdx(null); }}
+          onDragOver={function(e) { e.preventDefault(); }}
+          onDrop={function(e) { e.preventDefault(); var from = parseInt(e.dataTransfer.getData("text/plain")); moveItem(from, idx); setDragIdx(null); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", marginBottom: 4, borderRadius: 8,
+            background: dragIdx === idx ? tabColor + "10" : isEditing ? "#FFFBEB" : "#F8FAFC",
+            border: "1px solid " + (isDragTarget ? tabColor + "40" : isEditing ? "#D97706" : "#E2E8F0"),
+            opacity: dragIdx === idx ? 0.5 : 1, cursor: isEditing ? "default" : "grab", transition: "all 0.1s"
+          }}>
+          {/* Drag handle */}
+          <span style={{ fontSize: 14, color: "#94A3B8", cursor: "grab", userSelect: "none", flexShrink: 0 }}>☰</span>
+
+          {/* Index */}
+          <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 700, minWidth: 22, flexShrink: 0 }}>{idx + 1}.</span>
+
+          {/* Color dot */}
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: tabColor, flexShrink: 0, opacity: 0.7 }} />
+
+          {/* Content */}
+          {isEditing ? <div style={{ flex: 1, display: "flex", gap: 6 }}>
+            <input style={Object.assign({}, S.input, { flex: 1, fontSize: 13, padding: "6px 10px" })} value={editVal} onChange={function(e) { setEditVal(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditIdx(null); }} autoFocus />
+            <button style={Object.assign({}, S.primBtn, { padding: "6px 12px", fontSize: 11 })} onClick={saveEdit}>OK</button>
+            <button style={Object.assign({}, S.cancelBtn, { padding: "6px 12px", fontSize: 11 })} onClick={function() { setEditIdx(null); }}>X</button>
+          </div> : <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#1E293B" }}>{item}</div>}
+
+          {/* Actions */}
+          {!isEditing && <div style={{ display: "flex", gap: 4 }}>
+            <button style={S.iconBtn} onClick={function() { startEdit(idx); }} title="Editeaza"><Ic d={Icons.edit} size={14} color="#64748B" /></button>
+            <button style={S.iconBtn} onClick={function() { removeItem(idx); }} title="Sterge"><Ic d={Icons.del} size={14} color="#EF4444" /></button>
+            {idx > 0 && <button style={S.iconBtn} onClick={function() { moveItem(idx, idx - 1); }} title="Muta sus"><span style={{ fontSize: 12, color: "#64748B" }}>▲</span></button>}
+            {idx < items.length - 1 && <button style={S.iconBtn} onClick={function() { moveItem(idx, idx + 1); }} title="Muta jos"><span style={{ fontSize: 12, color: "#64748B" }}>▼</span></button>}
+          </div>}
+        </div>;
+      })}
+    </Card>
+
+    {/* Info box */}
+    <div style={{ marginTop: 16, padding: "12px 16px", background: "#F0FDF4", borderRadius: 8, border: "1px solid #0C7E3E30", fontSize: 12, color: "#0C7E3E" }}>
+      <span style={{ fontWeight: 700 }}>Unde se reflecta modificarile:</span> Formularul de creare task, filtrele din lista de taskuri, formularul de targets, recurring tasks, si toate raportarile din platforma.
+    </div>
+  </div>;
 }
 
 
