@@ -1470,13 +1470,6 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
                 </div>
               </div>}
 
-              {/* Weekly bar */}
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #F1F5F9" }}>
-                <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4 }}>Finalizate 7 zile vs top</div>
-                <div style={{ height: 4, background: "#F1F5F9", borderRadius: 2, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: (up.doneWeek / maxUserPerf * 100) + "%", background: i === 0 ? GR : i < 3 ? "#60A5FA" : "#CBD5E1" }} />
-                </div>
-              </div>
             </Card>;
           })}
         </div>
@@ -2433,6 +2426,10 @@ function DoneCollapse({ tasks, user, team, onEdit, onView, onDel, onDup, onChgSt
 function KanbanPage({ fProps, tasks, user, team, onView, onEdit, onDel, onDup, onChgSt, dragId, setDragId, handleDrop, isMob, timers, getTS, togTimer }) {
   var [dropTarget, setDropTarget] = useState(null);
   var dragIdRef = useRef(null);
+  var me = team[user] || {};
+
+  // PMs and Members only see their own tasks in Kanban (no status change on team)
+  var visibleTasks = me.role === "admin" ? tasks : tasks.filter(function(t) { return t.assignee === user; });
 
   var onDragStartCard = function(e, tid) {
     dragIdRef.current = tid;
@@ -2457,7 +2454,7 @@ function KanbanPage({ fProps, tasks, user, team, onView, onEdit, onDel, onDup, o
     <FiltersBar {...fProps} noStatus />
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(4,1fr)", gap: 14, alignItems: "start" }}>
       {STATUSES.map(function(st) {
-        var col = tasks.filter(function(t) { return t.status === st; });
+        var col = visibleTasks.filter(function(t) { return t.status === st; });
         var isOver = dropTarget === st;
         return <div key={st}
           onDragOver={function(e) { e.preventDefault(); e.stopPropagation(); if (dropTarget !== st) setDropTarget(st); }}
@@ -2696,6 +2693,7 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
   var [editId, setEditId] = useState(null);
   var [editForm, setEditForm] = useState({});
   var [form, setForm] = useState({ userId: "", metric: "all", target: 25, daysPerWeek: 5 });
+  var [histRanges, setHistRanges] = useState({}); // { [tgtId]: { from, to } }
 
   var metricOptions = [{ id: "all", l: "Toate taskurile" }].concat(
     (taskTypes || DEF_TASK_TYPES).map(function(t) { return { id: "type:" + t, l: "Tip: " + t }; }),
@@ -2767,10 +2765,20 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
       var metricLabel = (metricOptions.find(function(o) { return o.id === nm; }) || {}).l || tgt.metric;
       var isEd = editId === tgt.id;
 
-      // Build 14-day history
+      // Build history with custom range (default: last 14 days)
+      var range = histRanges[tgt.id];
+      var fromDate, toDate;
+      if (range && range.from && range.to) {
+        fromDate = new Date(range.from + "T00:00:00");
+        toDate = new Date(range.to + "T00:00:00");
+      } else {
+        toDate = new Date(); toDate.setHours(0, 0, 0, 0);
+        fromDate = new Date(toDate); fromDate.setDate(fromDate.getDate() - 13);
+      }
+      var daysSpan = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000) + 1);
       var histDays = []; var totalExpected = 0; var totalActual = 0;
-      for (var d = 13; d >= 0; d--) {
-        var dt = new Date(); dt.setDate(dt.getDate() - d); var dStr = ds(dt);
+      for (var d = 0; d < daysSpan; d++) {
+        var dt = new Date(fromDate); dt.setDate(dt.getDate() + d); var dStr = ds(dt);
         var dayDone = tasks.filter(function(t2) {
           if (t2.assignee !== tgt.userId || t2.status !== "Done" || !t2.updatedAt || ds(t2.updatedAt) !== dStr) return false;
           if (t2._campaignParent === true) return false;
@@ -2816,8 +2824,14 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
         {rem > 0 && <div style={{ marginTop: 6, fontSize: 12, color: "#DC2626", fontWeight: 600 }}>Ramas azi: {rem}</div>}
 
         <div style={{ marginTop: 10, padding: 10, background: totalDeficit > 0 ? "#FEF2F2" : "#F0FDF4", borderRadius: 8 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600 }}>
-            <span>Ultimele 14 zile</span>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span>Istoric:</span>
+              <input type="date" value={(range && range.from) || ds(fromDate)} onChange={function(e) { setHistRanges(function(p) { var n = Object.assign({}, p); n[tgt.id] = { from: e.target.value, to: (p[tgt.id] && p[tgt.id].to) || ds(toDate) }; return n; }); }} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid #CBD5E1", fontSize: 11, background: "#fff" }} />
+              <span>-</span>
+              <input type="date" value={(range && range.to) || ds(toDate)} onChange={function(e) { setHistRanges(function(p) { var n = Object.assign({}, p); n[tgt.id] = { from: (p[tgt.id] && p[tgt.id].from) || ds(fromDate), to: e.target.value }; return n; }); }} style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid #CBD5E1", fontSize: 11, background: "#fff" }} />
+              {range && <button onClick={function() { setHistRanges(function(p) { var n = Object.assign({}, p); delete n[tgt.id]; return n; }); }} style={{ padding: "3px 10px", borderRadius: 4, border: "1px solid #CBD5E1", fontSize: 10, background: "#fff", cursor: "pointer", color: "#64748B" }}>Reset (14z)</button>}
+            </div>
             <span style={{ color: totalDeficit > 0 ? "#DC2626" : GR }}>Asteptat: {totalExpected} | Facut: {totalActual} | {totalDeficit > 0 ? "Deficit: " + totalDeficit : "Surplus: +" + Math.abs(totalDeficit)}</span>
           </div>
         </div>
@@ -3724,7 +3738,7 @@ function EditUserInline({ u, m, team, setTeam }) {
   var curPerms = m.permissions || {};
   var upd = function(field, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { [field]: val }); return n; }); };
   var updPerm = function(perm, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { permissions: Object.assign({}, n[u].permissions || {}, { [perm]: val }) }); return n; }); };
-  var pages = ["dashboard", "tasks", "kanban", "calendar", "targets", "templates", "recurring", "workload", "team", "performance", "digest", "achievements", "announce", "challenge", "anomalies", "log", "loginhistory", "departments", "shops", "products", "sheets", "manage_users", "birdseye"];
+  var pages = ["dashboard", "tasks", "kanban", "calendar", "targets", "templates", "recurring", "leaves", "workload", "team", "performance", "digest", "achievements", "league", "announce", "challenge", "anomalies", "log", "loginhistory", "departments", "shops", "products", "sheets", "manage_users", "branding", "backups", "birdseye"];
   var curAccess = m.access || [];
 
   return <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #F1F5F9" }}>
