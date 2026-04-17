@@ -1050,6 +1050,8 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
             if (normM && normM !== "all" && !normM.startsWith("type:") && !normM.startsWith("dept:") && !normM.startsWith("plat:")) normM = "type:" + normM;
             var tgtDoneToday = allTasks.filter(function(t) {
               if (t.assignee !== d.key || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
+              // Exclude pipeline-generated tasks (would double-count for original assignee)
+              if (t._fromPipeline) return false;
               if (!normM || normM === "all") return true;
               if (normM.startsWith("type:") && t.taskType === normM.replace("type:", "")) return true;
               if (normM.startsWith("dept:") && t.department === normM.replace("dept:", "")) return true;
