@@ -53,6 +53,14 @@ var SBG = { "To Do": "#F8FAFC", "In Progress": "#EFF6FF", Review: "#FFFBEB", Don
 var SI = { "To Do": "o", "In Progress": "~", Review: "?", Done: "*" };
 var GR = "#0C7E3E";
 
+// ═══ LEVEL SYSTEM GLOBALS ═══
+var LEVEL_THRESHOLDS = [0, 50, 120, 210, 320, 450, 600, 780, 980, 1200, 1450, 1730, 2040, 2380, 2750, 3150, 3600, 4100, 4650, 5250, 5900, 6600, 7350, 8150, 9000, 9900, 10850, 11850, 12900, 14000, 15200, 16500, 17900, 19400, 21000, 22700, 24500, 26400, 28400, 30500, 32700, 35000, 37400, 39900, 42500, 45200, 48000, 50900, 53900, 57000];
+var LEVEL_TITLES = ["Recrut", "Incepator", "Novice", "Ucenic", "Apprentice", "Junior", "Cadet", "Operator", "Specialist", "Avansat", "Profesionist", "Expert", "Veteran", "Senior", "Elite", "Master", "Grandmaster", "Champion", "Hero", "Legend", "Mythic", "Immortal", "Titan", "Overlord", "Supreme", "Ascendant", "Celestial", "Transcendent", "Omniscient", "Apex", "Ethereal", "Quantum", "Cosmic", "Stellar", "Galactic", "Universal", "Infinite", "Eternal", "Divine", "Absolute", "Omega", "Alpha Supreme", "Ultra", "Mega", "Giga", "Tera", "Peta", "Exa", "Zetta", "GOAT"];
+function getLevel(xp) { var lvl = 0; for (var i = 0; i < LEVEL_THRESHOLDS.length; i++) { if (xp >= LEVEL_THRESHOLDS[i]) lvl = i + 1; else break; } return Math.min(lvl, 50); }
+function getLevelTitle(lvl) { return LEVEL_TITLES[Math.min(Math.max(lvl - 1, 0), LEVEL_TITLES.length - 1)]; }
+function getLevelProgress(xp) { var lvl = getLevel(xp); if (lvl >= 50) return 100; var current = LEVEL_THRESHOLDS[lvl - 1] || 0; var next = LEVEL_THRESHOLDS[lvl] || current + 100; return Math.round(((xp - current) / (next - current)) * 100); }
+function getLevelColor(lvl) { if (lvl >= 40) return "#7C3AED"; if (lvl >= 30) return "#EAB308"; if (lvl >= 20) return "#3B82F6"; if (lvl >= 10) return "#10B981"; return "#94A3B8"; }
+
 // FEATURE 10: Achievements definitions
 var TIERS = { bronze: { color: "#CD7F32", bg: "#FEF3C7", name: "Bronze" }, silver: { color: "#94A3B8", bg: "#F1F5F9", name: "Silver" }, gold: { color: "#EAB308", bg: "#FEFCE8", name: "Gold" }, platinum: { color: "#7C3AED", bg: "#F3E8FF", name: "Platinum" } };
 
@@ -282,8 +290,6 @@ export default function App() {
   // FEATURE 4: Tags
   var [allTags, setAllTags] = useState([]);
   var [tagFilter, setTagFilter] = useState("all");
-  // FEATURE 6: Export state
-  var [showExport, setShowExport] = useState(false);
   // FEATURE 7: Anomalies
   var [anomalies, setAnomalies] = useState([]);
   // FEATURE 10: Achievements
@@ -313,6 +319,8 @@ export default function App() {
   var [undoStack, setUndoStack] = useState([]);
   // User XP & Levels
   var [userXP, setUserXP] = useState({});
+  // Monthly bonus reward
+  var [monthlyBonus, setMonthlyBonus] = useState({ amount: 0, currency: "RON", enabled: false });
   var [expandedGroups, setExpandedGroups] = useState(function() {
     try { var saved = localStorage.getItem("s7_nav_groups"); if (saved) return JSON.parse(saved); } catch(e) {}
     return { "Operational": true, "Echipa": true, "Comunicare": false, "Configurare": false };
@@ -320,7 +328,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd, plf, plr, uxp] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd, plf, plr, uxp, mb] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -349,6 +357,7 @@ export default function App() {
         cloudLoad("platforms", DEF_PLATFORMS),
         cloudLoad("pipelineRules", []),
         cloudLoad("userXP", {}),
+        cloudLoad("monthlyBonus", { amount: 0, currency: "RON", enabled: false }),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -366,6 +375,7 @@ export default function App() {
       if (plf && plf.length > 0) setPlatforms(plf); else { setPlatforms(DEF_PLATFORMS); cloudSave("platforms", DEF_PLATFORMS); }
       setPipelineRules(plr || []);
       setUserXP(uxp || {});
+      if (mb) setMonthlyBonus(mb);
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -446,6 +456,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
   useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
   useEffect(function() { if (!loading) debouncedSave("userXP", userXP, 1000); }, [userXP]);
+  useEffect(function() { if (!loading) debouncedSave("monthlyBonus", monthlyBonus, 1000); }, [monthlyBonus]);
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
   useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
   useEffect(function() { if (!loading) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
@@ -785,49 +796,19 @@ export default function App() {
   // ═══ XP & LEVEL SYSTEM ═══
   var XP_PER_TASK = { "Ad Creation": 15, "Product Launch": 20, "Creative": 12, "Copy": 10, "Landing Page": 18, "Tracking/Pixel": 15, "Foto Produs": 12, "Raportare": 8, "General": 10 };
   var XP_BONUS = { fast: 5, streak_day: 10, no_overdue: 15, target_hit: 25 };
-  var LEVEL_THRESHOLDS = [0, 50, 120, 210, 320, 450, 600, 780, 980, 1200, 1450, 1730, 2040, 2380, 2750, 3150, 3600, 4100, 4650, 5250, 5900, 6600, 7350, 8150, 9000, 9900, 10850, 11850, 12900, 14000, 15200, 16500, 17900, 19400, 21000, 22700, 24500, 26400, 28400, 30500, 32700, 35000, 37400, 39900, 42500, 45200, 48000, 50900, 53900, 57000];
-  var LEVEL_TITLES = ["Recrut", "Incepator", "Novice", "Ucenic", "Apprentice", "Junior", "Cadet", "Operator", "Specialist", "Avansat", "Profesionist", "Expert", "Veteran", "Senior", "Elite", "Master", "Grandmaster", "Champion", "Hero", "Legend", "Mythic", "Immortal", "Titan", "Overlord", "Supreme", "Ascendant", "Celestial", "Transcendent", "Omniscient", "Apex", "Ethereal", "Quantum", "Cosmic", "Stellar", "Galactic", "Universal", "Infinite", "Eternal", "Divine", "Absolute", "Omega", "Alpha Supreme", "Ultra", "Mega", "Giga", "Tera", "Peta", "Exa", "Zetta", "GOAT"];
-
-  var getLevel = function(xp) {
-    var lvl = 0;
-    for (var i = 0; i < LEVEL_THRESHOLDS.length; i++) {
-      if (xp >= LEVEL_THRESHOLDS[i]) lvl = i + 1;
-      else break;
-    }
-    return Math.min(lvl, 50);
-  };
-  var getLevelTitle = function(lvl) { return LEVEL_TITLES[Math.min(Math.max(lvl - 1, 0), LEVEL_TITLES.length - 1)]; };
-  var getLevelProgress = function(xp) {
-    var lvl = getLevel(xp);
-    if (lvl >= 50) return 100;
-    var current = LEVEL_THRESHOLDS[lvl - 1] || 0;
-    var next = LEVEL_THRESHOLDS[lvl] || current + 100;
-    return Math.round(((xp - current) / (next - current)) * 100);
-  };
-  var getLevelColor = function(lvl) {
-    if (lvl >= 40) return "#7C3AED";
-    if (lvl >= 30) return "#EAB308";
-    if (lvl >= 20) return "#3B82F6";
-    if (lvl >= 10) return "#10B981";
-    return "#94A3B8";
-  };
 
   var awardXP = function(userId, amount, reason) {
     if (!userId || amount <= 0) return;
-    setUserXP(function(p) {
-      var n = Object.assign({}, p);
-      var old = n[userId] || 0;
-      var newXP = old + amount;
-      var oldLevel = getLevel(old);
-      var newLevel = getLevel(newXP);
-      n[userId] = newXP;
-      if (newLevel > oldLevel && userId === user) {
-        playSound("levelup");
-        setCelebration({ type: "levelup", id: gid(), level: newLevel, title: getLevelTitle(newLevel) });
-        setTimeout(function() { setCelebration(null); }, 3000);
-      }
-      return n;
-    });
+    var oldXP = (userXP || {})[userId] || 0;
+    var newXP = oldXP + amount;
+    var oldLevel = getLevel(oldXP);
+    var newLevel = getLevel(newXP);
+    setUserXP(function(p) { var n = Object.assign({}, p); n[userId] = newXP; return n; });
+    if (newLevel > oldLevel && userId === user) {
+      playSound("levelup");
+      setCelebration({ type: "levelup", id: gid(), level: newLevel, title: getLevelTitle(newLevel) });
+      setTimeout(function() { setCelebration(null); }, 3000);
+    }
   };
 
   var handleLogin = function(u, pw) {
@@ -1183,15 +1164,6 @@ export default function App() {
   var selectAllFiltered = function() { setSelectedTasks(filtered.map(function(t) { return t.id; })); };
   var toggleSel = function(tid) { setSelectedTasks(function(p) { return p.includes(tid) ? p.filter(function(x) { return x !== tid; }) : p.concat([tid]); }); };
 
-  // FEATURE 6: Export all data
-  var exportData = function() {
-    var data = { exportedAt: ts(), tasks: tasks, team: team, logs: logs, products: products, shops: shops, targets: targets, achievements: achievements, announcements: announcements, loginHistory: loginHistory };
-    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a"); a.href = url; a.download = "scout_backup_" + TD + ".json"; a.click();
-    addLog("EXPORT", "Backup exportat de " + (team[user] ? team[user].name : "?"));
-  };
-
   var myNotifs = useMemo(function() { if (!user) return []; var r = team[user] ? team[user].role : ""; return notifications.filter(function(n) { if (r === "admin") return true; return n.forUser === user; }); }, [notifications, user, team]);
   var unreadNotifs = useMemo(function() { return myNotifs.filter(function(n) { return !n.read; }); }, [myNotifs]);
 
@@ -1303,8 +1275,6 @@ export default function App() {
             </div>;
           })}
         </nav>
-        {/* FEATURE 6: Export button in sidebar */}
-        {isAdmin && <div style={{ padding: "0 16px 8px" }}><button style={Object.assign({}, S.logoutBtn, { color: "#4ADE80", borderColor: GR + "40" })} onClick={exportData}><Ic d={Icons.export} size={15} color="#4ADE80" /> Export Backup</button></div>}
         <div style={S.sidebarUser}><div style={{ position: "relative" }}><Av color={me.color} size={32}>{me.name[0]}</Av>{user !== "admin" && <div style={{ position: "absolute", bottom: -3, right: -3, background: getLevelColor(getLevel((userXP || {})[user] || 0)), color: "#fff", fontSize: 7, fontWeight: 800, padding: "1px 3px", borderRadius: 3, border: "1.5px solid hsl(216,22%,11%)" }}>{getLevel((userXP || {})[user] || 0)}</div>}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#D1D9E6" }}>{me.name}</div><div style={{ fontSize: 10, color: "#7A8BA0" }}>{me.role === "pm" ? "PM" : me.role}{user !== "admin" ? " | Lv." + getLevel((userXP || {})[user] || 0) + " " + getLevelTitle(getLevel((userXP || {})[user] || 0)) : ""}</div></div></div>
         <div style={{ padding: "0 16px 16px" }}><button style={S.logoutBtn} onClick={handleLogout}><Ic d={Icons.out} size={15} color="#7A8BA0" /> Sign out</button></div>
       </aside>
@@ -1369,13 +1339,13 @@ export default function App() {
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
           {page === "pipeline" && <PipelinePage pipelineRules={pipelineRules} setPipelineRules={setPipelineRules} team={team} assUsers={assUsers} shops={shops} taskTypes={taskTypes} departments={departments} platforms={platforms} addLog={addLog} />}
-          {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} />}
+          {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
           {page === "performance" && <PerfPage users={visUsers} team={team} getPerf={getPerf} isMob={isMob} />}
           {page === "digest" && <DigestPage team={team} tasks={tasks} timers={timers} getPerf={getPerf} visUsers={visUsers} isMob={isMob} />}
           {page === "achievements" && <AchievementsPage achievements={achievements} team={team} visUsers={visUsers} tasks={tasks} isMob={isMob} userXP={userXP} />}
-          {page === "wallfame" && <WallOfFamePage tasks={tasks} team={team} timers={timers} visUsers={visUsers} isMob={isMob} userXP={userXP} achievements={achievements} />}
+          {page === "wallfame" && <WallOfFamePage tasks={tasks} team={team} timers={timers} visUsers={visUsers} isMob={isMob} userXP={userXP} achievements={achievements} monthlyBonus={monthlyBonus} />}
           {page === "brandstats" && <BrandStatsPage tasks={tasks} team={team} shops={shops} timers={timers} isMob={isMob} />}
           {page === "announce" && <AnnouncePage announcements={announcements} setAnnouncements={setAnnouncements} isAdmin={isAdmin} user={user} team={team} />}
           {page === "challenge" && <ChallengePage dailyChallenge={dailyChallenge} setDailyChallenge={setDailyChallenge} isAdmin={isAdmin} team={team} tasks={tasks} user={user} visUsers={visUsers} />}
@@ -2427,36 +2397,18 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
 
     {(function() {
-      // Sparkline data: last 7 days for each KPI
-      var sparkData = {};
-      ["total", "todo", "inProg", "review", "overdue", "done"].forEach(function(key) {
-        sparkData[key] = [];
-        for (var sd = 6; sd >= 0; sd--) {
-          var sdt = new Date(); sdt.setDate(sdt.getDate() - sd); var sdStr = ds(sdt);
-          var dayTasks = allTasks.filter(function(t) { return !t._campaignParent; });
-          if (key === "done") { sparkData[key].push(dayTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === sdStr; }).length); }
-          else if (key === "total") { sparkData[key].push(dayTasks.filter(function(t) { var cd = t.createdAt ? ds(t.createdAt) : ""; return cd === sdStr; }).length); }
-          else if (key === "todo") { sparkData[key].push(dayTasks.filter(function(t) { return t.status === "To Do" && t.createdAt && ds(t.createdAt) === sdStr; }).length); }
-          else if (key === "inProg") { sparkData[key].push(dayTasks.filter(function(t) { return t.status === "In Progress" && t.updatedAt && ds(t.updatedAt) === sdStr; }).length); }
-          else if (key === "review") { sparkData[key].push(dayTasks.filter(function(t) { return t.status === "Review" && t.updatedAt && ds(t.updatedAt) === sdStr; }).length); }
-          else if (key === "overdue") { sparkData[key].push(dayTasks.filter(function(t) { return t.deadline === sdStr && t.status !== "Done"; }).length); }
-        }
-      });
-      var sparkKeys = ["total", "todo", "inProg", "review", "overdue", "done"];
-
       var renderBlock = function(id) {
         if (id === "kpiRow") return <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12 }}>{[
-          { l: "Total", v: rangeStats.total, c: "#475569", filter: function(t) { return true; }, sk: "total" },
-          { l: "To Do", v: rangeStats.todo, c: "#94A3B8", filter: function(t) { return t.status === "To Do"; }, sk: "todo" },
-          { l: "In Progress", v: rangeStats.inProg, c: "#2563EB", filter: function(t) { return t.status === "In Progress"; }, sk: "inProg" },
-          { l: "Review", v: rangeStats.review, c: "#D97706", filter: function(t) { return t.status === "Review"; }, sk: "review" },
-          { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626", filter: function(t) { return isOv(t); }, sk: "overdue" },
-          { l: "Done", v: rangeStats.done, c: GR, filter: function(t) { return t.status === "Done"; }, sk: "done" }
+          { l: "Total", v: rangeStats.total, c: "#475569", filter: function(t) { return true; } },
+          { l: "To Do", v: rangeStats.todo, c: "#94A3B8", filter: function(t) { return t.status === "To Do"; } },
+          { l: "In Progress", v: rangeStats.inProg, c: "#2563EB", filter: function(t) { return t.status === "In Progress"; } },
+          { l: "Review", v: rangeStats.review, c: "#D97706", filter: function(t) { return t.status === "Review"; } },
+          { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626", filter: function(t) { return isOv(t); } },
+          { l: "Done", v: rangeStats.done, c: GR, filter: function(t) { return t.status === "Done"; } }
         ].map(function(s) {
-          return <Card key={s.l} onClick={editMode ? undefined : function() { setKpiModal({ title: s.l + " (" + dashPreset + ")", color: s.c, tasks: rangeTasks.filter(s.filter) }); }} style={{ borderTop: "3px solid " + s.c, cursor: editMode ? "default" : "pointer", transition: "all 0.15s", position: "relative", overflow: "hidden" }} onMouseEnter={function(e) { if (!editMode) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; } }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
-            <div style={{ position: "absolute", bottom: 4, right: 8 }}><Sparkline data={sparkData[s.sk]} color={s.c} height={28} /></div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: s.c, position: "relative", zIndex: 1 }}>{s.v}</div>
-            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2, position: "relative", zIndex: 1 }}>{s.l}</div>
+          return <Card key={s.l} onClick={editMode ? undefined : function() { setKpiModal({ title: s.l + " (" + dashPreset + ")", color: s.c, tasks: rangeTasks.filter(s.filter) }); }} style={{ borderTop: "3px solid " + s.c, cursor: editMode ? "default" : "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { if (!editMode) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; } }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div>
           </Card>;
         })}</div>;
         if (id === "live") return activeTimers.length > 0 ? <Card style={{ borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card> : null;
@@ -2865,6 +2817,7 @@ function CalendarPage({ tasks, user, team, calDate, setCalDate, onView, isMob, m
 
 // FEATURE 10: Achievements Page
 function AchievementsPage({ achievements, team, visUsers, tasks, isMob, userXP }) {
+  try {
   var users = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; });
   return <div>
     <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Achievements Echipa</h3>
@@ -2900,6 +2853,7 @@ function AchievementsPage({ achievements, team, visUsers, tasks, isMob, userXP }
       })}
     </div>
   </div>;
+  } catch(err) { return <Card style={{ padding: 30, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>Eroare Achievements</div><div style={{ fontSize: 12, color: "#64748B" }}>{err.message}</div></Card>; }
 }
 
 // FEATURE 14: Announcement Board
@@ -3581,7 +3535,7 @@ function PodiumCompact({ leaderboard, onNavigate }) {
   </Card>;
 }
 
-function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, visUsers, isMob }) {
+function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, visUsers, isMob, monthlyBonus, setMonthlyBonus, userXP }) {
   // Calculate start of current week (Monday)
   var now = new Date();
   var dow = now.getDay();
@@ -3737,6 +3691,46 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
       })}
       {leaderboard.length === 0 && <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nu sunt useri in liga.</div>}
     </Card>
+
+    {/* Monthly Bonus Prize */}
+    {monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && <Card style={{ marginTop: 16, background: "linear-gradient(135deg, #FEFCE8, #FFF 60%)", borderLeft: "4px solid #EAB308", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 8, right: 12, fontSize: 40, opacity: 0.15 }}>💰</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Premiu lunar - Locul 1</div>
+      <div style={{ fontSize: 32, fontWeight: 900, color: "#1E293B", marginBottom: 4 }}>{monthlyBonus.amount} {monthlyBonus.currency}</div>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Persoana cu cel mai mare scor la sfarsitul lunii primeste bonusul. Scorul se reseteaza lunar.</div>
+      {leaderboard.length > 0 && <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#EAB30812", borderRadius: 8 }}>
+        <span style={{ fontSize: 20 }}>👑</span>
+        <Av color={leaderboard[0].color} size={28} fs={11}>{leaderboard[0].name[0]}</Av>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{leaderboard[0].name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>Lider curent cu {leaderboard[0].score} puncte{userXP ? " | Lv." + getLevel((userXP || {})[leaderboard[0].user] || 0) : ""}</div>
+        </div>
+      </div>}
+    </Card>}
+
+    {/* Admin: Set bonus */}
+    {me.role === "admin" && <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premiu Lunar (doar admin)</div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+          <input type="checkbox" checked={monthlyBonus.enabled} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { enabled: e.target.checked })); }} style={{ accentColor: "#7C3AED" }} />
+          Activ
+        </label>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <label style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Suma:</label>
+          <input type="number" min="0" step="10" value={monthlyBonus.amount} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { amount: parseInt(e.target.value) || 0 })); }} style={Object.assign({}, S.input, { width: 100, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <label style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Moneda:</label>
+          <select value={monthlyBonus.currency} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { currency: e.target.value })); }} style={Object.assign({}, S.fSel, { padding: "6px 10px" })}>
+            <option value="RON">RON</option>
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>Bonusul se afiseaza pe pagina Liga Saptamanii. Toti membrii echipei il vad. Plateste-l manual la sfarsitul lunii celui cu scorul cel mai mare.</div>
+    </Card>}
 
     {/* Scoring explanation */}
     <Card style={{ marginTop: 16, background: "#F8FAFC" }}>
@@ -4096,15 +4090,17 @@ function EditUserInline({ u, m, team, setTeam }) {
   var curPerms = m.permissions || {};
   var upd = function(field, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { [field]: val }); return n; }); };
   var updPerm = function(perm, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { permissions: Object.assign({}, n[u].permissions || {}, { [perm]: val }) }); return n; }); };
-  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "league", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "backups"];
+  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "wallfame", "brandstats", "league", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "backups"];
   var pageLabels = {
     dashboard: "Dashboard", tasks: "Taskuri", kanban: "Kanban Board",
     targets: "Targets", templates: "Templates", recurring: "Recurring",
     leaves: "Concedii", workload: "Workload", performance: "Performance",
-    digest: "Weekly Digest", achievements: "Achievements", league: "Liga Saptamanii",
+    digest: "Weekly Digest", achievements: "Achievements", wallfame: "Wall of Fame",
+    brandstats: "Brand Analytics", league: "Liga Saptamanii",
     announce: "Announcements", departments: "Departamente", shops: "Magazine",
     products: "Produse", sheets: "Sheets", manage_users: "Manage Users",
-    branding: "Branding", backups: "Backup Taskuri"
+    branding: "Branding", config: "Configurare Rapida", pipeline: "Pipeline Builder",
+    backups: "Backup Taskuri"
   };
   var curAccess = m.access || [];
 
@@ -4337,7 +4333,8 @@ function Sparkline({ data, color, height }) {
 // ═══════════════════════════════════════════════════════════════
 // WALL OF FAME — All-time records, streaks, speed records
 // ═══════════════════════════════════════════════════════════════
-function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievements }) {
+function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievements, monthlyBonus }) {
+  try {
   var users = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; });
   var doneTasks = tasks.filter(function(t) { return t.status === "Done" && !t._campaignParent; });
 
@@ -4417,6 +4414,18 @@ function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievem
       <div style={{ fontSize: 12, color: "#64748B" }}>Recorduri all-time, nivele si clasament permanent al echipei.</div>
     </div>
 
+    {/* Monthly bonus banner */}
+    {monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && leaderboard.length > 0 && <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FEFCE8, #FEF3C7)", borderLeft: "4px solid #EAB308" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ fontSize: 40 }}>💰</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1 }}>Premiu luna aceasta</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#1E293B" }}>{monthlyBonus.amount} {monthlyBonus.currency}</div>
+          <div style={{ fontSize: 12, color: "#64748B" }}>Lider curent: <b>{leaderboard[0].name}</b> ({leaderboard[0].xp} XP, Level {leaderboard[0].level})</div>
+        </div>
+      </div>
+    </Card>}
+
     {/* Records cards */}
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))", gap: 12, marginBottom: 24 }}>
       {records.map(function(r, i) {
@@ -4471,11 +4480,8 @@ function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievem
       })}
     </Card>
   </div>;
+  } catch(err) { return <Card style={{ padding: 30, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>Eroare Wall of Fame</div><div style={{ fontSize: 12, color: "#64748B" }}>{err.message}</div></Card>; }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// BRAND STATS — Analytics per shop/brand
-// ═══════════════════════════════════════════════════════════════
 function BrandStatsPage({ tasks, team, shops, timers, isMob }) {
   var [selectedShop, setSelectedShop] = useState(shops[0] || "");
 
