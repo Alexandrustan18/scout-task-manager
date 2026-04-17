@@ -783,7 +783,7 @@ export default function App() {
         var pipeDesc = prevTask.description || "";
         if (lastComment) pipeDesc = pipeDesc + "\n\nObservatii: " + lastComment.text;
         var pipeLinks = prevTask._replacedLink ? [prevTask._replacedLink] : (prevTask.links || []).slice();
-        var pipeTask = { id: gid(), title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: prevTask.deadline, links: pipeLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id };
+        var pipeTask = { id: gid(), title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: TD, links: pipeLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id };
         setTasks(function(p) { return [pipeTask].concat(p); });
         setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTask.id] = [{ status: "To Do", at: ts() }]; return n; });
         addNotif("pipeline", "Task pipeline: \"" + pipeTask.title + "\"", pipeTask.id, prevTask._pipelineNext);
@@ -795,14 +795,33 @@ export default function App() {
         if (!existingAds) {
           // Original title is "X - Foto Produs", strip it to get product name
           var cleanTitle = (prevTask.title || "").replace(/ - Foto Produs$/, "");
-          var nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1);
-          var adsDeadline = ds(nextDay);
+          // Smart deadline calc:
+          // - "Work day" ends at 06:00 next morning. If Mara finishes between 00:00-06:00, counts as previous day.
+          // - Carla's deadline = next business day (Mon-Fri) after Mara's "effective" finish day
+          // - Fri finish -> Monday (skip weekend)
+          // - Sat finish -> Monday
+          // - Sun finish -> Monday
+          var now = new Date();
+          var effectiveDate = new Date(now);
+          if (now.getHours() < 6) {
+            // Before 6 AM = previous day's work
+            effectiveDate.setDate(effectiveDate.getDate() - 1);
+          }
+          var adsDate = new Date(effectiveDate);
+          adsDate.setDate(adsDate.getDate() + 1); // default: next day
+          var dow = adsDate.getDay(); // 0=Sun, 6=Sat
+          if (dow === 0) { // Sunday -> Monday
+            adsDate.setDate(adsDate.getDate() + 1);
+          } else if (dow === 6) { // Saturday -> Monday
+            adsDate.setDate(adsDate.getDate() + 2);
+          }
+          var adsDeadline = ds(adsDate);
           var adsLinks = (prevTask.links || []).slice();
           var adsTask = { id: gid(), title: cleanTitle + " - Ads", description: "Pune ads pentru acest produs. Foto produs gata.\n\n" + (prevTask.description || ""), assignee: "carla", status: "To Do", priority: prevTask.priority, platform: "Meta Ads", taskType: "Ad Creation", department: "AD", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: adsDeadline, links: adsLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id, _adsPipeline: true };
           setTasks(function(p) { return [adsTask].concat(p); });
           setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[adsTask.id] = [{ status: "To Do", at: ts() }]; return n; });
           addNotif("pipeline", "Task Ads pregatit: \"" + adsTask.title + "\"", adsTask.id, "carla");
-          addLog("PIPELINE", "Mara Poze -> Carla: " + adsTask.title);
+          addLog("PIPELINE", "Mara Poze -> Carla: " + adsTask.title + " (deadline: " + adsDeadline + ")");
         }
       }
     }
