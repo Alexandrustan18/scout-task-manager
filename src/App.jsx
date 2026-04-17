@@ -671,7 +671,7 @@ export default function App() {
     setTasks(function(p) {
       return p.map(function(x) { return x.id === parentId ? Object.assign({}, x, { _campaignParent: true }) : x; }).concat(childTasks);
     });
-    addLog("EXPLODE", """ + t.title + "" exploded in " + childTasks.length + " taskuri");
+    addLog("EXPLODE", "Split: " + t.title + " -> " + childTasks.length + " taskuri");
   };
 
   var delTask = function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) addLog("DELETE", "Sters \"" + t.title + "\""); setTasks(function(p) { return p.filter(function(x) { return x.id !== tid; }); }); };
