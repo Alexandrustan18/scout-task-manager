@@ -1268,7 +1268,7 @@ function KanbanPage({ fProps, tasks, user, team, onEdit, onDel, onDup, onChgSt, 
           onDragOver={function(e) { e.preventDefault(); e.stopPropagation(); if (dropTarget !== st) setDropTarget(st); }}
           onDragLeave={function(e) { if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget(null); }}
           onDrop={function(e) { onDropCol(e, st); }}
-          style={{ background: isOver ? SC[st] + "15" : "#FAFBFC", borderRadius: 12, padding: 12, minHeight: 200, border: "2px solid " + (isOver ? SC[st] : "transparent"), transition: "all 0.15s" }}>
+          style={{ background: isOver ? SC[st] + "15" : "#FAFBFC", borderRadius: 12, padding: 12, minHeight: 500, border: "2px solid " + (isOver ? SC[st] : "transparent"), transition: "all 0.15s" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[st] }} />
@@ -1287,6 +1287,8 @@ function KanbanPage({ fProps, tasks, user, team, onEdit, onDel, onDup, onChgSt, 
               draggable={true}
               onDragStart={function(e) { onDragStartCard(e, t.id); }}
               onDragEnd={onDragEndCard}
+              onDragOver={function(e) { e.preventDefault(); if (dropTarget !== st) setDropTarget(st); }}
+              onDrop={function(e) { onDropCol(e, st); }}
               style={{ opacity: dragId === t.id ? 0.35 : 1, marginBottom: 8, transform: dragId === t.id ? "rotate(2deg)" : "none", transition: "opacity 0.15s, transform 0.15s" }}>
               <Card style={{ padding: 12, cursor: "grab", borderLeft: "3px solid " + (ov ? "#EF4444" : SC[st]), background: SBG[st] }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t.title}</div>
