@@ -1032,7 +1032,8 @@ export default function App() {
             <select style={S.fSel} onChange={function(e) { if (e.target.value) bulkChgPrio(e.target.value); e.target.value = ""; }}><option value="">Prioritate...</option>{PRIORITIES.map(function(p2) { return <option key={p2} value={p2}>{p2}</option>; })}</select>
             <button style={S.cancelBtn} onClick={function() { setSelectedTasks([]); }}>Deselecteaza</button>
           </Card>}
-          {page === "dashboard" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} />}
+          {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} />}
+          {page === "dashboard" && me.role !== "member" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
@@ -1103,6 +1104,248 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
       {allTags && allTags.length > 0 && <select style={S.fSel} value={tagFilter || "all"} onChange={function(e) { if (setTagFilter) setTagFilter(e.target.value); }}><option value="all">Tag: Toate</option>{allTags.map(function(t) { return <option key={t} value={t}>#{t}</option>; })}</select>}
       <span style={{ fontSize: 12, color: "#94A3B8" }}>{count} taskuri</span>
     </div>
+  </div>;
+}
+
+function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements }) {
+  var myTasks = allTasks.filter(function(t) { return t.assignee === user && !t._campaignParent; });
+  var todayDone = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
+  var activeTasks = myTasks.filter(function(t) { return t.status !== "Done"; });
+  var overdueTasks = myTasks.filter(function(t) { return t.status !== "Done" && isOv(t); });
+  var todoCount = myTasks.filter(function(t) { return t.status === "To Do"; }).length;
+  var inProgCount = myTasks.filter(function(t) { return t.status === "In Progress"; }).length;
+  var reviewCount = myTasks.filter(function(t) { return t.status === "Review"; }).length;
+
+  // Yesterday comparison
+  var yStr = ds(new Date(Date.now() - 86400000));
+  var yDone = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === yStr; }).length;
+  var deltaPct = yDone > 0 ? Math.round(((todayDone - yDone) / yDone) * 100) : (todayDone > 0 ? 100 : 0);
+
+  // 7-day trend
+  var trendData = [];
+  for (var i = 6; i >= 0; i--) {
+    var dt = new Date(); dt.setDate(dt.getDate() - i);
+    var dStr = ds(dt);
+    var done = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === dStr; }).length;
+    var onLeave = isOnLeave(leaves, user, dStr);
+    trendData.push({ date: dStr, label: dt.getDate() + " " + MN[dt.getMonth()].substring(0, 3), done: done, dow: dt.getDay(), onLeave: onLeave });
+  }
+  var maxTrend = Math.max.apply(null, trendData.map(function(d) { return d.done; }).concat([1]));
+  var weekTotal = trendData.reduce(function(acc, d) { return acc + d.done; }, 0);
+
+  // Target progress
+  var myTargets = targets.filter(function(t) { return t.userId === user && t.active !== false; });
+
+  // Avg time per task (finalized with timers)
+  var finishedWithTime = myTasks.filter(function(t) { return t.status === "Done" && timers[t.id] && timers[t.id].total > 0; });
+  var avgTime = finishedWithTime.length > 0 ? Math.round(finishedWithTime.reduce(function(acc, t) { return acc + timers[t.id].total; }, 0) / finishedWithTime.length) : 0;
+  var totalTimeWorked = Object.keys(timers).reduce(function(acc, tid) { var t = myTasks.find(function(x) { return x.id === tid; }); if (!t) return acc; return acc + (timers[tid].total || 0); }, 0);
+
+  // Streak: consecutive days with target met
+  var streak = 0;
+  if (myTargets.length > 0) {
+    for (var s = 0; s < 30; s++) {
+      var sdt = new Date(); sdt.setDate(sdt.getDate() - s);
+      var sdow = sdt.getDay();
+      var sdStr = ds(sdt);
+      var onLeaveS = isOnLeave(leaves, user, sdStr);
+      // Skip weekends and leave days (they don't break streak)
+      if (sdow === 0 || sdow === 6 || onLeaveS) continue;
+      var tgtMain = myTargets[0];
+      var targetNum = tgtMain.target || 0;
+      var doneThatDay = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === sdStr; }).length;
+      if (doneThatDay >= targetNum) streak++;
+      else break;
+    }
+  }
+
+  // Achievements count
+  var myAch = (achievements && achievements[user]) ? achievements[user] : [];
+  var totalAchievements = 8; // matches existing system
+
+  var perf = getPerf(user);
+
+  return <div>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>Salut, {me.name}!</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Uite cum merge ziua ta</div>
+    </div>
+
+    {/* Hero KPI row */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
+      <Card style={{ borderLeft: "3px solid " + GR, padding: 14 }}>
+        <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Done azi</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+          <div style={{ fontSize: 32, fontWeight: 800, color: GR }}>{todayDone}</div>
+          <div style={{ fontSize: 11, color: deltaPct >= 0 ? GR : "#DC2626", fontWeight: 700 }}>{deltaPct >= 0 ? "+" : ""}{deltaPct}%</div>
+        </div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>vs ieri ({yDone})</div>
+      </Card>
+      <Card style={{ borderLeft: "3px solid #2563EB", padding: 14 }}>
+        <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Active</div>
+        <div style={{ fontSize: 32, fontWeight: 800, color: "#2563EB" }}>{activeTasks.length}</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{inProgCount} in progres | {todoCount} to do{reviewCount > 0 ? " | " + reviewCount + " review" : ""}</div>
+      </Card>
+      <Card style={{ borderLeft: "3px solid " + (overdueTasks.length > 0 ? "#DC2626" : "#94A3B8"), padding: 14 }}>
+        <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Intarziate</div>
+        <div style={{ fontSize: 32, fontWeight: 800, color: overdueTasks.length > 0 ? "#DC2626" : "#94A3B8" }}>{overdueTasks.length}</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{overdueTasks.length > 0 ? "Atentie - deadline depasit" : "Totul la zi"}</div>
+      </Card>
+      <Card style={{ borderLeft: "3px solid #D97706", padding: 14 }}>
+        <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Streak</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#D97706" }}>{streak}</div>
+          <span style={{ fontSize: 14 }}>🔥</span>
+        </div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>zile consecutive cu target</div>
+      </Card>
+    </div>
+
+    {/* Target progress */}
+    {myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Target-urile tale</div>
+      {myTargets.map(function(tgt) {
+        var normM = tgt.metric;
+        if (normM && normM !== "all" && !normM.startsWith("type:") && !normM.startsWith("dept:") && !normM.startsWith("plat:")) normM = "type:" + normM;
+        var tgtDoneToday = myTasks.filter(function(t) {
+          if (t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
+          if (!normM || normM === "all") return true;
+          if (normM.startsWith("type:") && t.taskType === normM.replace("type:", "")) return true;
+          if (normM.startsWith("dept:") && t.department === normM.replace("dept:", "")) return true;
+          if (normM.startsWith("plat:") && t.platform === normM.replace("plat:", "")) return true;
+          return false;
+        }).length;
+        var pct = tgt.target > 0 ? Math.min(100, (tgtDoneToday / tgt.target) * 100) : 0;
+        var rem = Math.max(0, tgt.target - tgtDoneToday);
+        var mLabel = normM === "all" ? "Toate" : (normM || "").replace(/^(type:|dept:|plat:)/, "");
+        return <div key={tgt.id} style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}>
+            <span style={{ color: "#475569", fontWeight: 600 }}>{mLabel}</span>
+            <span style={{ fontWeight: 700, color: pct >= 100 ? GR : "#475569" }}>{tgtDoneToday}/{tgt.target}</span>
+          </div>
+          <div style={{ height: 10, background: "#F1F5F9", borderRadius: 5, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: pct + "%", background: pct >= 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626", transition: "width 0.4s" }} />
+          </div>
+          <div style={{ fontSize: 10, color: pct >= 100 ? GR : "#64748B", marginTop: 4, fontWeight: 600 }}>{pct >= 100 ? "✓ Target atins! Felicitari!" : "Mai ai " + rem + " pana la target"}</div>
+        </div>;
+      })}
+    </Card>}
+
+    {/* 7-day trend + Avg time */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "2fr 1fr", gap: 12, marginBottom: 16 }}>
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Productivitatea ta - 7 zile</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Total saptamana: <b style={{ color: GR }}>{weekTotal}</b> taskuri finalizate</div>
+          </div>
+        </div>
+        <svg viewBox="0 0 700 220" style={{ width: "100%", height: "auto" }}>
+          {[0, 0.25, 0.5, 0.75, 1].map(function(r, i) { return <line key={i} x1="40" y1={30 + 150 * r} x2="680" y2={30 + 150 * r} stroke="#F1F5F9" strokeWidth="1" />; })}
+          {[0, 0.5, 1].map(function(r, i) { return <text key={i} x="32" y={30 + 150 * (1 - r) + 4} fontSize="10" fill="#94A3B8" textAnchor="end">{Math.round(maxTrend * r)}</text>; })}
+          {trendData.map(function(d, i) {
+            var barW = (640 / trendData.length) * 0.6;
+            var xBase = 50 + i * (640 / trendData.length) + (640 / trendData.length - barW) / 2;
+            var hDone = (d.done / maxTrend) * 150;
+            var isWeekend = d.dow === 0 || d.dow === 6;
+            var isToday = d.date === TD;
+            var color = d.onLeave ? "#D97706" : isWeekend ? "#CBD5E1" : isToday ? GR : "#60A5FA";
+            return <g key={i}>
+              <rect x={xBase} y={180 - hDone} width={barW} height={Math.max(hDone, 2)} fill={color} opacity={d.onLeave ? 0.6 : 0.95} rx="4" />
+              {d.onLeave && <text x={xBase + barW / 2} y={180 - hDone - 18} fontSize="9" fill="#D97706" textAnchor="middle" fontWeight="700">🏖</text>}
+              <text x={xBase + barW / 2} y="200" fontSize="10" fill={isWeekend ? "#CBD5E1" : "#64748B"} textAnchor="middle" fontWeight={isToday ? "700" : "400"}>{d.label}</text>
+              {d.done > 0 && <text x={xBase + barW / 2} y={180 - hDone - 4} fontSize="10" fill={isToday ? GR : "#475569"} textAnchor="middle" fontWeight="700">{d.done}</text>}
+            </g>;
+          })}
+        </svg>
+        <div style={{ display: "flex", gap: 14, marginTop: 4, fontSize: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: GR, borderRadius: 2 }} /><span style={{ color: "#64748B" }}>Azi</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: "#60A5FA", borderRadius: 2 }} /><span style={{ color: "#64748B" }}>Zile de lucru</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: "#D97706", borderRadius: 2, opacity: 0.6 }} /><span style={{ color: "#64748B" }}>Concediu</span></div>
+        </div>
+      </Card>
+
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 4 }}>Timp pe task</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Din timerele taskurilor tale</div>
+        <div style={{ padding: "14px 0", textAlign: "center", borderBottom: "1px solid #F1F5F9", marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Medie</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: "#7C3AED", fontVariantNumeric: "tabular-nums" }}>{avgTime > 0 ? ft(avgTime) : "-"}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>pe task finalizat</div>
+        </div>
+        <div style={{ padding: "8px 0", textAlign: "center" }}>
+          <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Total lucrat</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#1E293B", fontVariantNumeric: "tabular-nums" }}>{totalTimeWorked > 0 ? ft(totalTimeWorked) : "-"}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{finishedWithTime.length} taskuri cronometrate</div>
+        </div>
+      </Card>
+    </div>
+
+    {/* Performance gauge + Achievements */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 2fr", gap: 12, marginBottom: 16 }}>
+      {/* Performance gauge */}
+      <Card style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 4 }}>Performance</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 14 }}>Scorul tau general</div>
+        <svg viewBox="0 0 200 130" style={{ width: "100%", maxWidth: 200 }}>
+          <path d="M 20 110 A 80 80 0 0 1 180 110" fill="none" stroke="#F1F5F9" strokeWidth="18" strokeLinecap="round" />
+          {(function() {
+            var angle = (perf.score / 100) * 180;
+            var endX = 100 - 80 * Math.cos((angle * Math.PI) / 180);
+            var endY = 110 - 80 * Math.sin((angle * Math.PI) / 180);
+            var largeArc = angle > 180 ? 1 : 0;
+            var col = perf.score >= 70 ? GR : perf.score >= 40 ? "#D97706" : "#DC2626";
+            return <path d={"M 20 110 A 80 80 0 " + largeArc + " 1 " + endX + " " + endY} fill="none" stroke={col} strokeWidth="18" strokeLinecap="round" />;
+          })()}
+          <text x="100" y="98" textAnchor="middle" fontSize="32" fontWeight="800" fill={perf.score >= 70 ? GR : perf.score >= 40 ? "#D97706" : "#DC2626"}>{perf.score}</text>
+          <text x="100" y="115" textAnchor="middle" fontSize="11" fill="#94A3B8">%</text>
+        </svg>
+        <div style={{ fontSize: 11, color: "#64748B", marginTop: 6 }}>{perf.score >= 70 ? "Excelent! Continua asa!" : perf.score >= 40 ? "Bine, dar mai e loc" : "Concentreaza-te"}</div>
+      </Card>
+
+      {/* Achievements */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Achievements</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Ai deblocat {myAch.length} din {totalAchievements}</div>
+          </div>
+          <div style={{ fontSize: 11, color: GR, fontWeight: 700 }}>{Math.round((myAch.length / totalAchievements) * 100)}%</div>
+        </div>
+        <div style={{ height: 8, background: "#F1F5F9", borderRadius: 4, overflow: "hidden", marginBottom: 14 }}>
+          <div style={{ height: "100%", width: (myAch.length / totalAchievements * 100) + "%", background: "linear-gradient(90deg, " + GR + ", #4ADE80)", transition: "width 0.4s" }} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+          {["🎯 Prima Sarcina", "✅ Zero Intarzieri", "⚡ Productiv", "🔥 Streak 5", "🏆 100 Taskuri", "⏱ Rapid", "💎 Calitate", "🌟 Best of Month"].map(function(a, i) {
+            var unlocked = myAch.length > i;
+            return <div key={i} style={{ padding: "10px 6px", borderRadius: 8, background: unlocked ? "#ECFDF5" : "#F8FAFC", textAlign: "center", opacity: unlocked ? 1 : 0.4, border: "1px solid " + (unlocked ? GR + "30" : "#E2E8F0") }}>
+              <div style={{ fontSize: 18, marginBottom: 2 }}>{a.split(" ")[0]}</div>
+              <div style={{ fontSize: 9, color: unlocked ? GR : "#94A3B8", fontWeight: 600 }}>{a.split(" ").slice(1).join(" ")}</div>
+            </div>;
+          })}
+        </div>
+      </Card>
+    </div>
+
+    {/* Your tasks teaser */}
+    {activeTasks.length > 0 && <Card>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Taskurile tale active ({activeTasks.length})</div>
+      </div>
+      {activeTasks.slice(0, 5).map(function(t) {
+        var ov = isOv(t);
+        var running = timers[t.id] && timers[t.id].running;
+        return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 6, background: running ? "#FEF2F2" : ov ? "#FEF2F2" : "#F8FAFC", borderLeft: "3px solid " + (running ? "#DC2626" : ov ? "#DC2626" : t.status === "In Progress" ? "#2563EB" : "#94A3B8"), marginBottom: 4 }}>
+          {running && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite", flexShrink: 0 }} />}
+          <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
+          {t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}
+          <Badge bg={SBG[t.status]} color={SC[t.status]}>{t.status}</Badge>
+          {ov && <Badge bg="#FEF2F2" color="#DC2626">Intarziat</Badge>}
+          {running && <span style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft((timers[t.id].total || 0) + (timers[t.id].startedAt ? Math.floor((Date.now() - new Date(timers[t.id].startedAt).getTime()) / 1000) : 0))}</span>}
+        </div>;
+      })}
+      {activeTasks.length > 5 && <div style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 6 }}>...si inca {activeTasks.length - 5} taskuri. Vezi toate in pagina Taskuri.</div>}
+    </Card>}
   </div>;
 }
 
