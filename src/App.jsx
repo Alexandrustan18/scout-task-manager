@@ -1276,6 +1276,37 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
 function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers, setPage }) {
   var [tab, setTab] = useState("personal"); // personal | team
   var [pmKpiModal, setPmKpiModal] = useState(null);
+  var [pmEditMode, setPmEditMode] = useState(false);
+  var [pmDragId, setPmDragId] = useState(null);
+  var [pmLayout, setPmLayout] = useState(function() {
+    try { var s = localStorage.getItem("s7_pm_layout"); if (s) return JSON.parse(s); } catch(e) {}
+    return [
+      { id: "podium", visible: true },
+      { id: "tabs", visible: true }
+    ];
+  });
+  useEffect(function() { try { localStorage.setItem("s7_pm_layout", JSON.stringify(pmLayout)); } catch(e) {} }, [pmLayout]);
+
+  var pmMoveBlock = function(fromId, toId) {
+    if (!fromId || !toId || fromId === toId) return;
+    setPmLayout(function(p) {
+      var arr = p.slice();
+      var f = arr.findIndex(function(b) { return b.id === fromId; });
+      var t = arr.findIndex(function(b) { return b.id === toId; });
+      if (f < 0 || t < 0) return p;
+      var item = arr.splice(f, 1)[0];
+      arr.splice(t, 0, item);
+      return arr;
+    });
+  };
+  var pmToggleVisibility = function(id) {
+    setPmLayout(function(p) { return p.map(function(b) { return b.id === id ? Object.assign({}, b, { visible: !b.visible }) : b; }); });
+  };
+  var pmResetLayout = function() {
+    if (!window.confirm("Reset layout dashboard?")) return;
+    setPmLayout([{ id: "podium", visible: true }, { id: "tabs", visible: true }]);
+  };
+  var pmBlockLabels = { podium: "Liga Saptamanii - Podium", tabs: "Tab-uri Personal/Echipa" };
 
   // === TEAM DATA ===
   var teamUsers = (me.team || []).filter(function(u) { return team[u]; });
@@ -1332,31 +1363,51 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
   var teamTargetPct = teamTargetTotal > 0 ? Math.min(100, (teamTargetDone / teamTargetTotal) * 100) : 0;
 
   return <div>
-    <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>Salut, {me.name}!</h2>
-      <div style={{ fontSize: 12, color: "#64748B" }}>Dashboard PM - {teamUsers.length} persoane in echipa</div>
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+      <div>
+        <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>Salut, {me.name}!</h2>
+        <div style={{ fontSize: 12, color: "#64748B" }}>Dashboard PM - {teamUsers.length} persoane in echipa</div>
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {pmEditMode && <button onClick={pmResetLayout} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#fff", color: "#64748B", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↻ Reset</button>}
+        <button onClick={function() { setPmEditMode(!pmEditMode); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid " + (pmEditMode ? GR : "#CBD5E1"), background: pmEditMode ? GR : "#fff", color: pmEditMode ? "#fff" : "#475569", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+          {pmEditMode ? "✓ Gata" : "✎ Customizeaza"}
+        </button>
+      </div>
     </div>
 
-    {/* Podium */}
-    <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("league"); } : null} />
+    {pmEditMode && <Card style={{ marginBottom: 14, background: "#EFF6FF", borderLeft: "3px solid #2563EB" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#1E40AF", marginBottom: 6 }}>Mod customizare activat</div>
+      <div style={{ fontSize: 11, color: "#475569", marginBottom: 10 }}>Trage blocurile de manerul (☰) ca sa le reordonezi.</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {pmLayout.map(function(b) {
+          return <label key={b.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: b.visible ? "#fff" : "#F1F5F9", border: "1px solid " + (b.visible ? "#2563EB40" : "#CBD5E1"), fontSize: 11, cursor: "pointer" }}>
+            <input type="checkbox" checked={b.visible} onChange={function() { pmToggleVisibility(b.id); }} />
+            <span style={{ color: b.visible ? "#1E293B" : "#94A3B8", fontWeight: 600 }}>{pmBlockLabels[b.id] || b.id}</span>
+          </label>;
+        })}
+      </div>
+    </Card>}
 
-    {/* Tab switcher */}
-    <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
-      <button onClick={function() { setTab("personal"); }} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: tab === "personal" ? "#fff" : "transparent", color: tab === "personal" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: tab === "personal" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>Personal</button>
-      <button onClick={function() { setTab("team"); }} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: tab === "team" ? "#fff" : "transparent", color: tab === "team" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: tab === "team" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
-        Echipa mea
-        {teamOverdue.length > 0 && <span style={{ background: "#DC2626", color: "#fff", fontSize: 10, padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>{teamOverdue.length}</span>}
-      </button>
-    </div>
-
-    {tab === "personal" && <MemberDashboard me={me} user={user} allTasks={allTasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} hideHeader={true} visUsers={visUsers} setPage={setPage} />}
-
-    {tab === "team" && <div>
-      {pmKpiModal && <TaskDetailModal title={pmKpiModal.title} color={pmKpiModal.color} tasks={pmKpiModal.tasks} team={team} onClose={function() { setPmKpiModal(null); }} setPage={setPage} />}
-      {/* Team hero KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
-        <Card onClick={function() { setPmKpiModal({ title: "Done azi - echipa", color: GR, tasks: allTasks.filter(function(t) { return teamUsers.includes(t.assignee) && t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD && !t._campaignParent; }) }); }} style={{ borderLeft: "3px solid " + GR, padding: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
-          <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Done azi echipa</div>
+    {(function() {
+      var renderPmBlock = function(id) {
+        if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!pmEditMode && setPage ? function() { setPage("league"); } : null} />;
+        if (id === "tabs") return <div>
+          {/* Tab switcher */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
+            <button onClick={function() { setTab("personal"); }} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: tab === "personal" ? "#fff" : "transparent", color: tab === "personal" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: tab === "personal" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>Personal</button>
+            <button onClick={function() { setTab("team"); }} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: tab === "team" ? "#fff" : "transparent", color: tab === "team" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: tab === "team" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
+              Echipa mea
+              {teamOverdue.length > 0 && <span style={{ background: "#DC2626", color: "#fff", fontSize: 10, padding: "1px 6px", borderRadius: 8, fontWeight: 700 }}>{teamOverdue.length}</span>}
+            </button>
+          </div>
+          {tab === "personal" && <MemberDashboard me={me} user={user} allTasks={allTasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} hideHeader={true} visUsers={visUsers} setPage={setPage} />}
+          {tab === "team" && <div>
+            {pmKpiModal && <TaskDetailModal title={pmKpiModal.title} color={pmKpiModal.color} tasks={pmKpiModal.tasks} team={team} onClose={function() { setPmKpiModal(null); }} setPage={setPage} />}
+            {/* Team hero KPIs */}
+            <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
+              <Card onClick={function() { setPmKpiModal({ title: "Done azi - echipa", color: GR, tasks: allTasks.filter(function(t) { return teamUsers.includes(t.assignee) && t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD && !t._campaignParent; }) }); }} style={{ borderLeft: "3px solid " + GR, padding: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
+                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Done azi echipa</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <div style={{ fontSize: 32, fontWeight: 800, color: GR }}>{teamDoneToday}</div>
             <div style={{ fontSize: 11, color: teamDelta >= 0 ? GR : "#DC2626", fontWeight: 700 }}>{teamDelta >= 0 ? "+" : ""}{teamDelta}%</div>
@@ -1488,6 +1539,29 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
         })}
       </Card>}
     </div>}
+        </div>;
+        return null;
+      };
+
+      return pmLayout.filter(function(b) { return b.visible; }).map(function(b) {
+        var content = renderPmBlock(b.id);
+        if (!content) return null;
+        if (!pmEditMode) return <div key={b.id} style={{ marginBottom: 16 }}>{content}</div>;
+        var isDragTarget = pmDragId && pmDragId !== b.id;
+        return <div key={b.id} draggable={true}
+          onDragStart={function(e) { setPmDragId(b.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", b.id); }}
+          onDragEnd={function() { setPmDragId(null); }}
+          onDragOver={function(e) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+          onDrop={function(e) { e.preventDefault(); var from = e.dataTransfer.getData("text/plain") || pmDragId; pmMoveBlock(from, b.id); setPmDragId(null); }}
+          style={{ marginBottom: 16, border: "2px dashed " + (isDragTarget ? "#2563EB" : "#CBD5E1"), borderRadius: 10, padding: 10, background: isDragTarget ? "#EFF6FF" : "#F8FAFC", cursor: "move", position: "relative", opacity: pmDragId === b.id ? 0.5 : 1, transition: "all 0.15s" }}>
+          <div style={{ position: "absolute", top: 8, right: 12, display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: "#64748B", background: "#fff", padding: "3px 8px", borderRadius: 6, border: "1px solid #CBD5E1", zIndex: 1 }}>
+            <span style={{ cursor: "move" }}>☰</span>
+            <span>{pmBlockLabels[b.id]}</span>
+          </div>
+          {content}
+        </div>;
+      });
+    })()}
   </div>;
 }
 
