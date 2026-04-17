@@ -370,6 +370,26 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("announcements", announcements, 1000); }, [announcements]);
   useEffect(function() { if (!loading) debouncedSave("slas", slas, 1000); }, [slas]);
 
+  // Auto-backup: daily snapshot of all tasks
+  var [taskBackups, setTaskBackups] = useState([]);
+  useEffect(function() {
+    cloudLoad("taskBackups", []).then(function(d) { setTaskBackups(d || []); });
+  }, []);
+  useEffect(function() { if (!loading) debouncedSave("taskBackups", taskBackups, 3000); }, [taskBackups]);
+  // Auto snapshot every 30 min when tasks change, keeping max 50 snapshots
+  var lastBackupRef = useRef(0);
+  useEffect(function() {
+    if (loading || tasks.length === 0) return;
+    var now = Date.now();
+    if (now - lastBackupRef.current < 30 * 60 * 1000) return; // 30 min cooldown
+    lastBackupRef.current = now;
+    setTaskBackups(function(prev) {
+      var snapshot = { id: gid(), at: ts(), count: tasks.length, by: user || "system", tasks: JSON.parse(JSON.stringify(tasks)) };
+      var next = [snapshot].concat(prev).slice(0, 50);
+      return next;
+    });
+  }, [tasks, loading]);
+
   // FEATURE 7: Anomaly detection - runs every 5min
   useEffect(function() {
     if (loading || !user) return;
@@ -810,6 +830,7 @@ export default function App() {
     { id: "announce", label: "Announcements", icon: Icons.announce },
     { id: "challenge", label: "Daily Challenge", icon: Icons.challenge },
     { id: "log", label: "Activity Log", icon: Icons.log },
+    { id: "backups", label: "Backup Taskuri", icon: Icons.history },
     { id: "loginhistory", label: "Login History", icon: Icons.history },
     { id: "departments", label: "Departamente", icon: Icons.dept },
     { id: "shops", label: "Magazine", icon: Icons.shops },
@@ -821,7 +842,7 @@ export default function App() {
   var accessibleNav = navItems.filter(function(n) {
     if (me.role === "admin") return true;
     if (me.access && me.access.length > 0) return me.access.includes(n.id);
-    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies"].includes(n.id);
+    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "backups"].includes(n.id);
     if (me.role === "member") return ["tasks", "kanban", "calendar", "achievements", "challenge", "announce"].includes(n.id);
     return false;
   });
@@ -891,6 +912,7 @@ export default function App() {
           {page === "challenge" && <ChallengePage dailyChallenge={dailyChallenge} setDailyChallenge={setDailyChallenge} isAdmin={isAdmin} team={team} tasks={tasks} user={user} visUsers={visUsers} />}
           {page === "anomalies" && <AnomaliesPage anomalies={anomalies} team={team} tasks={tasks} isMob={isMob} />}
           {page === "log" && <LogPage logs={logs} visUsers={visUsers} isMob={isMob} />}
+          {page === "backups" && <BackupPage taskBackups={taskBackups} setTaskBackups={setTaskBackups} tasks={tasks} setTasks={setTasks} team={team} user={user} isAdmin={isAdmin} addLog={addLog} />}
           {page === "loginhistory" && <LoginHistoryPage loginHistory={loginHistory} team={team} isMob={isMob} />}
           {page === "departments" && <DeptPage departments={departments} setDepartments={setDepartments} tasks={tasks} team={team} visUsers={visUsers} isMob={isMob} canEdit={canCreate} />}
           {page === "shops" && <ShopsBordPage shops={shops} setShops={setShops} tasks={tasks} team={team} isMob={isMob} canEdit={canCreate} slas={slas} />}
@@ -1520,6 +1542,8 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
     var nm = normM(metric);
     return tasks.filter(function(t) {
       if (t.assignee !== userId || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
+      // Exclude pipeline-generated tasks (they shouldn't count twice for the original assignee)
+      if (t._fromPipeline) return false;
       if (nm === "all") return true;
       if (nm.startsWith("type:") && t.taskType === nm.replace("type:", "")) return true;
       if (nm.startsWith("dept:") && t.department === nm.replace("dept:", "")) return true;
@@ -1676,6 +1700,101 @@ function DigestPage({ team, tasks, timers, getPerf, visUsers, isMob }) {
 function LogPage({ logs, visUsers, isMob }) {
   var vis = logs.filter(function(l) { return visUsers.includes(l.user); }); var aC = { LOGIN: { bg: "#ECFDF5", c: "#16A34A" }, LOGOUT: { bg: "#FEF2F2", c: "#DC2626" }, NEW: { bg: "#EFF6FF", c: "#2563EB" }, EDIT: { bg: "#FFFBEB", c: "#D97706" }, DELETE: { bg: "#FEF2F2", c: "#DC2626" }, STATUS: { bg: "#F5F3FF", c: "#7C3AED" }, TIMER: { bg: "#FFF7ED", c: "#EA580C" }, DUPLICATE: { bg: "#EFF6FF", c: "#2563EB" }, USER_ADD: { bg: "#ECFDF5", c: GR }, USER_DEL: { bg: "#FEF2F2", c: "#DC2626" }, EXPORT: { bg: "#ECFDF5", c: GR } };
   return <Card>{vis.length === 0 ? <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nicio activitate.</div> : vis.slice(0, 150).map(function(l) { var cfg = aC[l.action] || { bg: "#F8FAFC", c: "#64748B" }; return <div key={l.id} style={{ display: "flex", alignItems: isMob ? "flex-start" : "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F8FAFC", flexDirection: isMob ? "column" : "row" }}><span style={{ fontSize: 11, color: "#CBD5E1", minWidth: 120 }}>{ff(l.time)}</span><Badge bg={cfg.bg} color={cfg.c}>{l.action}</Badge><span style={{ fontSize: 12, color: "#64748B" }}>{l.detail}</span></div>; })}</Card>;
+}
+
+function BackupPage({ taskBackups, setTaskBackups, tasks, setTasks, team, user, isAdmin, addLog }) {
+  var [selectedBackup, setSelectedBackup] = useState(null);
+
+  var createManualBackup = function() {
+    var snapshot = { id: gid(), at: ts(), count: tasks.length, by: user || "manual", tasks: JSON.parse(JSON.stringify(tasks)), manual: true };
+    setTaskBackups(function(prev) { return [snapshot].concat(prev); });
+    addLog("BACKUP", "Snapshot manual creat (" + tasks.length + " taskuri)");
+    alert("Backup creat: " + tasks.length + " taskuri salvate.");
+  };
+
+  var restoreBackup = function(backup) {
+    var confirm1 = confirm("ATENTIE: Vrei sa restaurezi " + backup.count + " taskuri din " + ff(backup.at) + "?\n\nTaskurile CURENTE (" + tasks.length + ") vor fi INLOCUITE!");
+    if (!confirm1) return;
+    var confirm2 = confirm("Esti 100% sigur? Actiunea NU poate fi anulata!");
+    if (!confirm2) return;
+    // Create safety snapshot before restore
+    var safetySnap = { id: gid(), at: ts(), count: tasks.length, by: user, tasks: JSON.parse(JSON.stringify(tasks)), safety: true, note: "Auto-snapshot inainte de restore" };
+    setTaskBackups(function(prev) { return [safetySnap].concat(prev); });
+    setTasks(backup.tasks);
+    addLog("BACKUP", "RESTORE: " + backup.count + " taskuri din " + ff(backup.at));
+    alert("Restaurat cu succes! " + backup.count + " taskuri.");
+  };
+
+  var deleteBackup = function(id) {
+    if (!confirm("Stergi backup-ul?")) return;
+    setTaskBackups(function(prev) { return prev.filter(function(b) { return b.id !== id; }); });
+  };
+
+  var downloadBackup = function(backup) {
+    var json = JSON.stringify(backup, null, 2);
+    var blob = new Blob([json], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "backup_tasks_" + backup.at.replace(/[:.]/g, "-") + ".json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (!isAdmin) return <Card style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Acces restrictionat. Doar admin poate vedea backup-urile.</Card>;
+
+  return <div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Backup Taskuri</h3>
+        <div style={{ fontSize: 12, color: "#94A3B8" }}>Snapshot automat la fiecare 30 min | Ultimele 50 snapshots pastrate | {taskBackups.length} backups disponibile</div>
+      </div>
+      <button style={S.primBtn} onClick={createManualBackup}><Ic d={Icons.plus} size={14} color="#fff" /> Creeaza backup acum</button>
+    </div>
+
+    <Card style={{ marginBottom: 16, padding: "14px 16px", borderLeft: "3px solid " + GR, background: "#F0FDF4" }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: GR }}>Status actual</div>
+      <div style={{ fontSize: 12, color: "#475569" }}>Taskuri active in aplicatie: <b>{tasks.length}</b></div>
+      {taskBackups.length > 0 && <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>Ultimul backup: {ff(taskBackups[0].at)} cu {taskBackups[0].count} taskuri</div>}
+    </Card>
+
+    {taskBackups.length === 0 && <Card style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Niciun backup inca. Se vor crea automat pe masura ce folosesti aplicatia.</Card>}
+
+    {taskBackups.map(function(b) {
+      var bTeam = team[b.by] || {};
+      var isSelected = selectedBackup === b.id;
+      var sample = b.tasks.slice(0, 5);
+      return <Card key={b.id} style={{ marginBottom: 10, borderLeft: "3px solid " + (b.safety ? "#D97706" : b.manual ? "#2563EB" : GR) }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>{b.count} taskuri</span>
+              {b.manual && <Badge bg="#EFF6FF" color="#2563EB">Manual</Badge>}
+              {b.safety && <Badge bg="#FFFBEB" color="#D97706">Pre-restore</Badge>}
+              {!b.manual && !b.safety && <Badge bg="#ECFDF5" color={GR}>Auto</Badge>}
+            </div>
+            <div style={{ fontSize: 11, color: "#94A3B8" }}>{ff(b.at)} | Creat de {bTeam.name || b.by}</div>
+            {b.note && <div style={{ fontSize: 11, color: "#D97706", marginTop: 2, fontStyle: "italic" }}>{b.note}</div>}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button style={Object.assign({}, S.chip, { fontSize: 11, background: "#F1F5F9", color: "#475569" })} onClick={function() { setSelectedBackup(isSelected ? null : b.id); }}>{isSelected ? "Ascunde" : "Detalii"}</button>
+            <button style={Object.assign({}, S.chip, { fontSize: 11, background: "#EFF6FF", color: "#2563EB" })} onClick={function() { downloadBackup(b); }}>Download</button>
+            <button style={Object.assign({}, S.chip, { fontSize: 11, background: "#ECFDF5", color: GR, fontWeight: 700 })} onClick={function() { restoreBackup(b); }}>Restore</button>
+            <button style={S.iconBtn} onClick={function() { deleteBackup(b.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>
+          </div>
+        </div>
+        {isSelected && <div style={{ marginTop: 12, padding: 10, background: "#F8FAFC", borderRadius: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 6 }}>Primele {sample.length} taskuri din snapshot:</div>
+          {sample.map(function(t, i) {
+            return <div key={i} style={{ fontSize: 11, padding: "3px 0", borderBottom: "1px solid #F1F5F9" }}>
+              <span style={{ color: "#94A3B8" }}>{i + 1}.</span> <b>{t.title}</b> <span style={{ color: "#94A3B8" }}>({t.status})</span> <span style={{ color: "#94A3B8" }}>{(team[t.assignee] || {}).name || t.assignee}</span>
+            </div>;
+          })}
+          {b.tasks.length > 5 && <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 4 }}>...si inca {b.tasks.length - 5} taskuri</div>}
+        </div>}
+      </Card>;
+    })}
+  </div>;
 }
 
 function RecurringPage({ recurringTasks, setRecurringTasks, team, assUsers, shops, departments, canEdit }) {
