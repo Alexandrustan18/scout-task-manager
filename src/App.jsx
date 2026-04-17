@@ -129,6 +129,8 @@ function Card({ children, style }) { return <div style={{ background: "#fff", bo
 
 function Ic({ d, size, color }) { return <svg width={size || 20} height={size || 20} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>; }
 var Icons = {
+  settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></>,
+  upload: <><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>,
   tasks: <><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 12l2 2 4-4"/></>,
   kanban: <><rect x="3" y="3" width="5" height="18" rx="1.5"/><rect x="10" y="3" width="5" height="12" rx="1.5"/><rect x="17" y="3" width="5" height="8" rx="1.5"/></>,
   dash: <><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></>,
@@ -269,10 +271,11 @@ export default function App() {
   // Slas kept for backwards compat but removed from nav
   var [slas, setSlas] = useState({});
   var [leaves, setLeaves] = useState({});
+  var [branding, setBranding] = useState({ title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" });
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -297,6 +300,7 @@ export default function App() {
         cloudLoad("announcements", []),
         cloudLoad("slas", {}),
         cloudLoad("leaves", {}),
+        cloudLoad("branding", { title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" }),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -322,6 +326,7 @@ export default function App() {
       setAnnouncements(ann || []);
       setSlas(sl || {});
       setLeaves(lv || {});
+      if (brd) setBranding(brd);
       var savedUser = localStorage.getItem("s7_user");
       if (savedUser) { try { setUser(JSON.parse(savedUser)); } catch(e) {} }
       setLoading(false);
@@ -398,6 +403,18 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("announcements", announcements, 1000); }, [announcements]);
   useEffect(function() { if (!loading) debouncedSave("slas", slas, 1000); }, [slas]);
   useEffect(function() { if (!loading) debouncedSave("leaves", leaves, 1000); }, [leaves]);
+  useEffect(function() { if (!loading) debouncedSave("branding", branding, 1000); }, [branding]);
+  // Apply favicon dynamically
+  useEffect(function() {
+    if (!branding || !branding.favicon) return;
+    var existing = document.querySelector("link[rel='icon']");
+    if (existing) existing.href = branding.favicon;
+    else {
+      var link = document.createElement("link"); link.rel = "icon"; link.href = branding.favicon;
+      document.head.appendChild(link);
+    }
+    if (branding.title) document.title = branding.title;
+  }, [branding]);
 
   // Auto-backup: daily snapshot of all tasks
   var [taskBackups, setTaskBackups] = useState([]);
@@ -913,15 +930,31 @@ export default function App() {
     { id: "products", label: "Produse", icon: Icons.prod },
     { id: "sheets", label: "Sheets", icon: Icons.sheet },
     { id: "manage_users", label: "Manage Users", icon: Icons.usrs },
+    { id: "branding", label: "Branding", icon: Icons.settings },
+  ];
+
+  var navGroups = [
+    { solo: true, items: ["dashboard", "birdseye", "tasks", "kanban", "calendar"] },
+    { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
+    { label: "Echipa", items: ["workload", "team", "performance", "digest", "achievements"] },
+    { label: "Comunicare", items: ["announce", "challenge", "log"] },
+    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "backups", "loginhistory"] },
   ];
 
   var accessibleNav = navItems.filter(function(n) {
     if (me.role === "admin") return true;
     if (me.access && me.access.length > 0) return me.access.includes(n.id);
-    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "backups"].includes(n.id);
+    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "backups", "branding"].includes(n.id);
     if (me.role === "member") return ["tasks", "kanban", "calendar", "achievements", "challenge", "announce"].includes(n.id);
     return false;
   });
+
+  var accessibleIds = accessibleNav.map(function(n) { return n.id; });
+  var [expandedGroups, setExpandedGroups] = useState(function() {
+    try { var saved = localStorage.getItem("s7_nav_groups"); if (saved) return JSON.parse(saved); } catch(e) {}
+    return { "Operational": true, "Echipa": true, "Comunicare": false, "Configurare": false };
+  });
+  useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
 
   return (
     <div style={S.app}><style>{CSS}</style>
@@ -929,18 +962,36 @@ export default function App() {
       {achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}
       {isMob && mobNav && <div style={S.overlay} onClick={function() { setMobNav(false); }} />}
       <aside style={Object.assign({}, S.sidebar, isMob ? { position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 200, transform: mobNav ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.2s" } : {})}>
-        <div style={S.logoArea}><span style={S.logoH}>HeyAds</span><span style={S.logoSub}>Task Manager</span></div>
+        <div style={S.logoArea}>
+          {branding.logo ? <img src={branding.logo} alt="Logo" style={{ maxWidth: "100%", maxHeight: 48, marginBottom: 4, objectFit: "contain" }} /> : <span style={S.logoH}>{branding.title || "HeyAds"}</span>}
+          {branding.subtitle && <span style={S.logoSub}>{branding.subtitle}</span>}
+        </div>
         {canCreate && <div style={{ padding: "0 16px", marginBottom: 4 }}><button style={S.newBtn} onClick={function() { setEditTask(null); setShowAdd(true); setMobNav(false); }}><Ic d={Icons.plus} size={16} color="#fff" /> New Task</button></div>}
         <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
-          {accessibleNav.map(function(n) {
-            var myActiveCount = n.id === "tasks" ? tasks.filter(function(t) { return t.assignee === user && t.status !== "Done" && !t._campaignParent; }).length : null;
-            return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}>
-              <Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} />
-              <span style={{ flex: 1 }}>{n.label}</span>
-              {n.id === "tasks" && myActiveCount > 0 && <span style={{ fontSize: 11, background: "#16A34A", color: "#fff", padding: "2px 8px", borderRadius: 12, fontWeight: 700, minWidth: 20, textAlign: "center", boxShadow: "0 1px 4px rgba(22,163,74,0.4)", animation: myActiveCount > 0 ? "pulse 2s infinite" : "none" }}>{myActiveCount}</span>}
-              {n.id !== "tasks" && n.count != null && <span style={S.navBadge}>{n.count}</span>}
-              {n.id === "anomalies" && anomalies.length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626" }} />}
-              {n.id === "announce" && announcements.filter(function(a) { return !a.readBy || !a.readBy.includes(user); }).length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB" }} />}
+          {navGroups.map(function(g, gi) {
+            var groupItems = g.items.map(function(id) { return navItems.find(function(x) { return x.id === id; }); }).filter(function(n) { return n && accessibleIds.includes(n.id); });
+            if (groupItems.length === 0) return null;
+            var renderItem = function(n) {
+              var myActiveCount = n.id === "tasks" ? tasks.filter(function(t) { return t.assignee === user && t.status !== "Done" && !t._campaignParent; }).length : null;
+              return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}>
+                <Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} />
+                <span style={{ flex: 1 }}>{n.label}</span>
+                {n.id === "tasks" && myActiveCount > 0 && <span style={{ fontSize: 11, background: "#16A34A", color: "#fff", padding: "2px 8px", borderRadius: 12, fontWeight: 700, minWidth: 20, textAlign: "center", boxShadow: "0 1px 4px rgba(22,163,74,0.4)", animation: myActiveCount > 0 ? "pulse 2s infinite" : "none" }}>{myActiveCount}</span>}
+                {n.id !== "tasks" && n.count != null && <span style={S.navBadge}>{n.count}</span>}
+                {n.id === "anomalies" && anomalies.length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626" }} />}
+                {n.id === "announce" && announcements.filter(function(a) { return !a.readBy || !a.readBy.includes(user); }).length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB" }} />}
+              </div>;
+            };
+            if (g.solo) return <div key={gi}>{groupItems.map(renderItem)}</div>;
+            var expanded = expandedGroups[g.label];
+            var hasActive = groupItems.some(function(n) { return n.id === page; });
+            return <div key={gi} style={{ marginTop: 10 }}>
+              <div onClick={function() { setExpandedGroups(function(p) { var n = Object.assign({}, p); n[g.label] = !n[g.label]; return n; }); }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 16px", cursor: "pointer", fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: hasActive ? "#4ADE80" : "#4A5A70", textTransform: "uppercase", userSelect: "none" }}>
+                <span style={{ fontSize: 7, transition: "transform 0.15s", transform: expanded ? "rotate(90deg)" : "rotate(0deg)", opacity: 0.6 }}>▶</span>
+                <span style={{ flex: 1 }}>{g.label}</span>
+                {!expanded && hasActive && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#4ADE80" }} />}
+              </div>
+              {expanded && <div>{groupItems.map(renderItem)}</div>}
             </div>;
           })}
         </nav>
@@ -990,6 +1041,7 @@ export default function App() {
           {page === "templates" && <TemplatesPage templates={templates} setTemplates={setTemplates} canEdit={canCreate} isAdmin={isAdmin} shops={shops} onCreateFromTpl={function(tpl) { setEditTask({ title: tpl.name, description: tpl.description, shop: tpl.shop || "", subtasks: tpl.subtasks.map(function(s) { return { id: gid(), text: s, done: false }; }) }); setShowAdd(true); }} />}
           {page === "recurring" && <RecurringPage recurringTasks={recurringTasks} setRecurringTasks={setRecurringTasks} team={team} assUsers={assUsers} shops={shops} departments={departments} canEdit={canCreate} />}
           {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} />}
+          {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
           {page === "performance" && <PerfPage users={visUsers} team={team} getPerf={getPerf} isMob={isMob} />}
@@ -2283,6 +2335,100 @@ function BackupPage({ taskBackups, setTaskBackups, tasks, setTasks, team, user, 
         </div>}
       </Card>;
     })}
+  </div>;
+}
+
+function BrandingPage({ branding, setBranding, addLog }) {
+  var [form, setForm] = useState(Object.assign({ title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" }, branding || {}));
+  var [savedMsg, setSavedMsg] = useState("");
+  var fileInputLogo = useRef(null);
+  var fileInputFav = useRef(null);
+
+  var save = function() {
+    setBranding(form);
+    addLog("BRANDING", "Actualizat branding: " + form.title);
+    setSavedMsg("Salvat!");
+    setTimeout(function() { setSavedMsg(""); }, 2000);
+  };
+
+  var uploadFile = function(e, field) {
+    var file = e.target.files[0]; if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert("Fisierul e prea mare. Maxim 2MB."); return; }
+    var reader = new FileReader();
+    reader.onload = function(ev) { setForm(function(p) { var n = Object.assign({}, p); n[field] = ev.target.result; return n; }); };
+    reader.readAsDataURL(file);
+  };
+
+  var removeField = function(field) {
+    setForm(function(p) { var n = Object.assign({}, p); n[field] = ""; return n; });
+  };
+
+  return <div style={{ maxWidth: 800 }}>
+    <div style={{ marginBottom: 20 }}>
+      <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Branding</h3>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Personalizeaza logo-ul, favicon-ul si numele afisat in aplicatie.</div>
+    </div>
+
+    {/* Title */}
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Nume aplicatie</div>
+      <div style={{ fontSize: 11, color: "#64748B", marginBottom: 10 }}>Afisat ca tab browser si in header cand nu exista logo.</div>
+      <input type="text" value={form.title} onChange={function(e) { setForm(function(p) { var n = Object.assign({}, p); n.title = e.target.value; return n; }); }} placeholder="HeyAds" style={Object.assign({}, S.inp, { maxWidth: 400 })} />
+    </Card>
+
+    {/* Subtitle */}
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Subtitlu</div>
+      <div style={{ fontSize: 11, color: "#64748B", marginBottom: 10 }}>Text sub logo in sidebar (ex: "TASK MANAGER", "Internal Platform").</div>
+      <input type="text" value={form.subtitle} onChange={function(e) { setForm(function(p) { var n = Object.assign({}, p); n.subtitle = e.target.value; return n; }); }} placeholder="TASK MANAGER" style={Object.assign({}, S.inp, { maxWidth: 400 })} />
+    </Card>
+
+    {/* Logo */}
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Logo aplicatie</div>
+      <div style={{ fontSize: 11, color: "#64748B", marginBottom: 14 }}>Afisat in sidebar. Recomandat: SVG sau PNG transparent, max 2MB.</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 120, height: 120, border: "2px dashed #CBD5E1", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#F8FAFC", overflow: "hidden" }}>
+          {form.logo ? <img src={form.logo} alt="Logo" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ fontSize: 10, color: "#94A3B8" }}>Fara logo</span>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <input ref={fileInputLogo} type="file" accept="image/*" onChange={function(e) { uploadFile(e, "logo"); }} style={{ display: "none" }} />
+          <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#fff", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }} onClick={function() { fileInputLogo.current && fileInputLogo.current.click(); }}><Ic d={Icons.upload} size={14} color="#475569" /> Incarca logo</button>
+          {form.logo && <button style={Object.assign({}, S.cancelBtn, { color: "#DC2626" })} onClick={function() { removeField("logo"); }}><Ic d={Icons.del} size={13} color="#DC2626" /> Sterge</button>}
+        </div>
+      </div>
+    </Card>
+
+    {/* Favicon */}
+    <Card style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Favicon</div>
+      <div style={{ fontSize: 11, color: "#64748B", marginBottom: 14 }}>Icon pentru tab browser. Recomandat: ICO sau PNG 32x32 / 64x64, max 2MB.</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 64, height: 64, border: "2px dashed #CBD5E1", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#F8FAFC", overflow: "hidden" }}>
+          {form.favicon ? <img src={form.favicon} alt="Favicon" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ fontSize: 9, color: "#94A3B8" }}>Gol</span>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <input ref={fileInputFav} type="file" accept="image/*,.ico" onChange={function(e) { uploadFile(e, "favicon"); }} style={{ display: "none" }} />
+          <button style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#fff", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer" }} onClick={function() { fileInputFav.current && fileInputFav.current.click(); }}><Ic d={Icons.upload} size={14} color="#475569" /> Incarca favicon</button>
+          {form.favicon && <button style={Object.assign({}, S.cancelBtn, { color: "#DC2626" })} onClick={function() { removeField("favicon"); }}><Ic d={Icons.del} size={13} color="#DC2626" /> Sterge</button>}
+        </div>
+      </div>
+    </Card>
+
+    {/* Preview */}
+    <Card style={{ marginBottom: 14, background: "hsl(216,22%,11%)", borderLeft: "3px solid " + GR }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#7A8BA0", marginBottom: 10, letterSpacing: 1, textTransform: "uppercase" }}>Preview sidebar</div>
+      <div style={{ padding: 16, textAlign: "center" }}>
+        {form.logo ? <img src={form.logo} alt="Preview" style={{ maxHeight: 48, maxWidth: 180, objectFit: "contain", marginBottom: 4 }} /> : <div style={{ fontSize: 24, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>{form.title || "HeyAds"}</div>}
+        {form.subtitle && <div style={{ fontSize: 10, color: "#7A8BA0", letterSpacing: 2, marginTop: 6, textTransform: "uppercase" }}>{form.subtitle}</div>}
+      </div>
+    </Card>
+
+    {/* Actions */}
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button style={S.primBtn} onClick={save}>Salveaza modificarile</button>
+      {savedMsg && <span style={{ fontSize: 12, color: GR, fontWeight: 700 }}>✓ {savedMsg}</span>}
+    </div>
   </div>;
 }
 
