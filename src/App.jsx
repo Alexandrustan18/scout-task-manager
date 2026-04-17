@@ -506,13 +506,9 @@ export default function App() {
   var assUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team).filter(function(k) { return k !== "admin"; }); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
   var visTasks = useMemo(function() {
     if (!user) return [];
-    // Build set of parent IDs that have children
-    var parentIds = new Set();
-    tasks.forEach(function(t) { if (t._campaignParentId) parentIds.add(t._campaignParentId); });
     return tasks.filter(function(t) {
-      if (t._campaignParent) return false;
-      // Hide old-style parent tasks (have campaign items + are referenced as parent by children)
-      if (t.campaignItems && t.campaignItems.length > 0 && parentIds.has(t.id)) return false;
+      // Only hide tasks explicitly marked as campaign parents
+      if (t._campaignParent === true) return false;
       return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy);
     });
   }, [tasks, visUsers, user]);
