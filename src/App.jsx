@@ -1050,8 +1050,6 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
             if (normM && normM !== "all" && !normM.startsWith("type:") && !normM.startsWith("dept:") && !normM.startsWith("plat:")) normM = "type:" + normM;
             var tgtDoneToday = allTasks.filter(function(t) {
               if (t.assignee !== d.key || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
-              // Exclude pipeline-generated tasks (would double-count for original assignee)
-              if (t._fromPipeline) return false;
               // Exclude campaign parents - their children count individually
               if (t._campaignParent === true) return false;
               if (t.campaignItems && t.campaignItems.length > 1) return false;
@@ -1551,8 +1549,6 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
     var nm = normM(metric);
     return tasks.filter(function(t) {
       if (t.assignee !== userId || t.status !== "Done" || !t.updatedAt || ds(t.updatedAt) !== TD) return false;
-      // Exclude pipeline-generated tasks (shouldn't count twice for original assignee)
-      if (t._fromPipeline) return false;
       // Exclude campaign parents - their children count individually
       if (t._campaignParent === true) return false;
       if (t.campaignItems && t.campaignItems.length > 1) return false;
@@ -1610,7 +1606,6 @@ function TargetsPage({ targets, setTargets, team, tasks, timers, canEdit, visUse
         var dt = new Date(); dt.setDate(dt.getDate() - d); var dStr = ds(dt);
         var dayDone = tasks.filter(function(t2) {
           if (t2.assignee !== tgt.userId || t2.status !== "Done" || !t2.updatedAt || ds(t2.updatedAt) !== dStr) return false;
-          if (t2._fromPipeline) return false;
           if (t2._campaignParent === true) return false;
           if (t2.campaignItems && t2.campaignItems.length > 1) return false;
           if (nm === "all") return true;
