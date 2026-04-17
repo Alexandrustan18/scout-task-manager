@@ -1068,25 +1068,19 @@ export default function App() {
 
   var navItems = [
     { id: "dashboard", label: "Dashboard", icon: Icons.dash },
-    { id: "birdseye", label: "Bird's Eye", icon: Icons.bird },
     { id: "tasks", label: "Taskuri", icon: Icons.tasks, count: stats.total },
     { id: "kanban", label: "Kanban Board", icon: Icons.kanban },
-    { id: "calendar", label: "Calendar", icon: Icons.cal },
     { id: "targets", label: "Targets", icon: Icons.target },
     { id: "templates", label: "Templates", icon: Icons.tpl },
     { id: "recurring", label: "Recurring", icon: Icons.recur },
     { id: "leaves", label: "Concedii", icon: Icons.cal },
     { id: "workload", label: "Workload", icon: Icons.work },
-    { id: "team", label: "Echipa", icon: Icons.team },
     { id: "performance", label: "Performance", icon: Icons.perf },
     { id: "digest", label: "Weekly Digest", icon: Icons.digest },
     { id: "achievements", label: "Achievements", icon: Icons.trophy },
     { id: "league", label: "Liga Saptamanii", icon: Icons.trophy },
     { id: "announce", label: "Announcements", icon: Icons.announce },
-    { id: "challenge", label: "Daily Challenge", icon: Icons.challenge },
-    { id: "log", label: "Activity Log", icon: Icons.log },
     { id: "backups", label: "Backup Taskuri", icon: Icons.history },
-    { id: "loginhistory", label: "Login History", icon: Icons.history },
     { id: "departments", label: "Departamente", icon: Icons.dept },
     { id: "shops", label: "Magazine", icon: Icons.shops },
     { id: "products", label: "Produse", icon: Icons.prod },
@@ -1096,18 +1090,18 @@ export default function App() {
   ];
 
   var navGroups = [
-    { solo: true, items: ["dashboard", "birdseye", "tasks", "kanban", "calendar"] },
+    { solo: true, items: ["dashboard", "tasks", "kanban"] },
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
-    { label: "Echipa", items: ["workload", "team", "performance", "league", "digest", "achievements"] },
-    { label: "Comunicare", items: ["announce", "challenge", "log"] },
-    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "backups", "loginhistory"] },
+    { label: "Echipa", items: ["workload", "performance", "league", "digest", "achievements"] },
+    { label: "Comunicare", items: ["announce"] },
+    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "backups"] },
   ];
 
   var accessibleNav = navItems.filter(function(n) {
     if (me.role === "admin") return true;
     if (me.access && me.access.length > 0) return me.access.includes(n.id);
     if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "backups", "branding"].includes(n.id);
-    if (me.role === "member") return ["tasks", "kanban", "calendar", "achievements", "challenge", "announce"].includes(n.id);
+    if (me.role === "member") return ["tasks", "kanban", "achievements", "announce"].includes(n.id);
     return false;
   });
 
@@ -1593,8 +1587,8 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
     </div>
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
 
-    {/* Podium */}
-    <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("league"); } : null} />
+    {/* Podium - hidden when rendered as sub-tab of PM dashboard */}
+    {!hideHeader && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("league"); } : null} />}
 
     {/* Target progress */}
     {myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
