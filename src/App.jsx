@@ -508,21 +508,14 @@ export default function App() {
     if (!user) return [];
     // Build set of parent IDs that have children
     var parentIds = new Set();
-    // Build set of task IDs that have pipeline children
-    var hasPipelineChild = new Set();
-    tasks.forEach(function(t) {
-      if (t._campaignParentId) parentIds.add(t._campaignParentId);
-      if (t._fromPipeline) hasPipelineChild.add(t._fromPipeline);
-    });
+    tasks.forEach(function(t) { if (t._campaignParentId) parentIds.add(t._campaignParentId); });
     return tasks.filter(function(t) {
       if (t._campaignParent) return false;
       // Hide old-style parent tasks (have campaign items + are referenced as parent by children)
       if (t.campaignItems && t.campaignItems.length > 0 && parentIds.has(t.id)) return false;
-      // Hide Done tasks where pipeline created a new task for next user (not for admin - they see everything)
-      if (t.status === "Done" && hasPipelineChild.has(t.id) && t.assignee === user && (team[user] || {}).role !== "admin") return false;
       return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy);
     });
-  }, [tasks, visUsers, user, team]);
+  }, [tasks, visUsers, user]);
 
   var filtered = useMemo(function() {
     return visTasks.filter(function(t) {
@@ -818,7 +811,6 @@ export default function App() {
     { id: "achievements", label: "Achievements", icon: Icons.trophy },
     { id: "announce", label: "Announcements", icon: Icons.announce },
     { id: "challenge", label: "Daily Challenge", icon: Icons.challenge },
-    { id: "anomalies", label: "Anomalii", icon: Icons.anomaly },
     { id: "log", label: "Activity Log", icon: Icons.log },
     { id: "loginhistory", label: "Login History", icon: Icons.history },
     { id: "departments", label: "Departamente", icon: Icons.dept },
@@ -1007,7 +999,6 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     {/* Daily challenge banner */}
     {dailyChallenge && dailyChallenge.date === TD && <div style={{ marginBottom: 16, background: dailyChallenge.completedBy ? "#ECFDF5" : "#FFFBEB", border: "1px solid " + (dailyChallenge.completedBy ? GR : "#D97706") + "60", borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}><span style={{ fontSize: 18 }}>⚡</span><div style={{ flex: 1 }}><span style={{ fontWeight: 700, color: dailyChallenge.completedBy ? GR : "#D97706" }}>Daily Challenge:</span> <span style={{ fontSize: 12 }}>{dailyChallenge.title} ({dailyChallenge.target} taskuri Done)</span></div>{dailyChallenge.completedBy && <Badge bg="#ECFDF5" color={GR}>✓ {(team[dailyChallenge.completedBy] || {}).name}</Badge>}</div>}
     {/* Anomalies alert */}
-    {anomalies && anomalies.filter(function(a) { return a.severity === "high"; }).length > 0 && me.role === "admin" && <Card style={{ marginBottom: 16, borderLeft: "3px solid #DC2626", background: "#FEF2F2" }}><h3 style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>Anomalii detectate ({anomalies.length})</h3>{anomalies.slice(0, 3).map(function(a, i) { return <div key={i} style={{ fontSize: 12, padding: "3px 0", color: a.severity === "high" ? "#DC2626" : "#D97706" }}>• {a.msg}</div>; })}</Card>}
     {/* SLA Breaches */}
     {slaBreaches && slaBreaches.length > 0 && me.role === "admin" && <Card style={{ marginBottom: 16, borderLeft: "3px solid #DC2626", background: "#FEF2F2" }}><h3 style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>SLA Breaches ({slaBreaches.length})</h3>{slaBreaches.slice(0, 5).map(function(b) { return <div key={b.task.id} style={{ fontSize: 12, padding: "4px 0", display: "flex", gap: 8 }}><span style={{ fontWeight: 600 }}>{b.task.title}</span><Badge bg="#FEF2F2" color="#DC2626">{b.task.shop}</Badge><span style={{ color: "#DC2626" }}>{b.hours}h / {b.max}h max</span></div>; })}</Card>}
     {/* Date range */}
