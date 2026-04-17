@@ -3908,7 +3908,16 @@ function EditUserInline({ u, m, team, setTeam }) {
   var curPerms = m.permissions || {};
   var upd = function(field, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { [field]: val }); return n; }); };
   var updPerm = function(perm, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { permissions: Object.assign({}, n[u].permissions || {}, { [perm]: val }) }); return n; }); };
-  var pages = ["dashboard", "tasks", "kanban", "calendar", "targets", "templates", "recurring", "leaves", "workload", "team", "performance", "digest", "achievements", "league", "announce", "challenge", "anomalies", "log", "loginhistory", "departments", "shops", "products", "sheets", "manage_users", "branding", "backups", "birdseye"];
+  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "league", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "backups"];
+  var pageLabels = {
+    dashboard: "Dashboard", tasks: "Taskuri", kanban: "Kanban Board",
+    targets: "Targets", templates: "Templates", recurring: "Recurring",
+    leaves: "Concedii", workload: "Workload", performance: "Performance",
+    digest: "Weekly Digest", achievements: "Achievements", league: "Liga Saptamanii",
+    announce: "Announcements", departments: "Departamente", shops: "Magazine",
+    products: "Produse", sheets: "Sheets", manage_users: "Manage Users",
+    branding: "Branding", backups: "Backup Taskuri"
+  };
   var curAccess = m.access || [];
 
   return <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #F1F5F9" }}>
@@ -3957,7 +3966,7 @@ function EditUserInline({ u, m, team, setTeam }) {
             if (curAccess.length === 0 && !e.target.checked) { newA = pages.filter(function(p) { return p !== pg; }); }
             upd("access", newA);
           }} style={{ accentColor: GR }} />
-          {pg}
+          {pageLabels[pg] || pg}
         </label>;
       })}
     </div>
