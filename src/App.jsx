@@ -1531,7 +1531,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
 
     {(function() {
       var renderPmBlock = function(id) {
-        if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!pmEditMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} />;
+        if (id === "podium") return <PodiumCompact leaderboard={calcPMLeaderboard(allTasks, team, Object.keys(team))} onNavigate={!pmEditMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga PM-ilor"} subtitle={"Scor: taskuri create + taskuri echipa done + taskuri proprii done"} />;
         if (id === "tabs") return <div>
           {/* Tab switcher */}
           <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
@@ -1802,7 +1802,7 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
 
     {/* Podium - hidden when rendered as sub-tab of PM dashboard */}
-    {!hideHeader && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} />}
+    {!hideHeader && <PodiumCompact leaderboard={calcMemberLeaderboard(allTasks, team, targets, Object.keys(team))} onNavigate={setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga Membrilor"} subtitle={"Taskuri finalizate luna aceasta"} />}
 
     {/* Target progress */}
     {myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
@@ -2419,7 +2419,10 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
           </Card>;
         })}</div>;
         if (id === "live") return activeTimers.length > 0 ? <Card style={{ borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10} userId={t.assignee}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card> : null;
-        if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} />;
+        if (id === "podium") return <div>
+          <PodiumCompact leaderboard={calcMemberLeaderboard(allTasks, team, targets, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga Membrilor"} subtitle={"Cine implementeaza cel mai mult"} />
+          <PodiumCompact leaderboard={calcPMLeaderboard(allTasks, team, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("leagueMonthly"); } : null} title={"Liga PM-ilor"} subtitle={"Cine coordoneaza cel mai bine"} />
+        </div>;
         if (id === "insights") return <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} setPage={setPage} />;
         if (id === "team") return <div>
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
@@ -3480,12 +3483,12 @@ function BrandingPage({ branding, setBranding, addLog }) {
   </div>;
 }
 
-function calcLeaderboard(allTasks, team, targets, achievements, users) {
+function calcMemberLeaderboard(allTasks, team, targets, users) {
   var now = new Date();
   var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
   var daysPassed = now.getDate();
-  var competitors = users.filter(function(u) { return team[u] && team[u].role !== "admin"; });
+  var competitors = users.filter(function(u) { return team[u] && team[u].role === "member"; });
   return competitors.map(function(u) {
     var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
     var thisMonth = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; });
@@ -3494,32 +3497,58 @@ function calcLeaderboard(allTasks, team, targets, achievements, users) {
     var streakBonus = 0;
     if (userTargets.length > 0) {
       var tgt = userTargets[0];
-      var daysWithTarget = 0;
       for (var d = 0; d < daysPassed; d++) {
         var dt = new Date(monthStart); dt.setDate(dt.getDate() + d);
         if (dt > now) break;
         if (dt.getDay() === 0 || dt.getDay() === 6) continue;
         var doneDay = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length;
-        if (doneDay >= (tgt.target || 0)) daysWithTarget++;
+        if (doneDay >= (tgt.target || 0)) streakBonus += 3;
       }
-      streakBonus = daysWithTarget * 3;
     }
     var score = thisMonth.length * 10 - overdue * 5 + streakBonus;
-    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneThis: thisMonth.length, overdue: overdue, score: Math.max(0, score) };
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneThis: thisMonth.length, overdue: overdue, score: Math.max(0, score), role: "member" };
   }).sort(function(a, b) { return b.score - a.score; });
 }
 
-function PodiumCompact({ leaderboard, onNavigate, monthlyBonus }) {
-  if (leaderboard.length < 3) return null;
+function calcPMLeaderboard(allTasks, team, users) {
+  var now = new Date();
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  var competitors = users.filter(function(u) { return team[u] && team[u].role === "pm"; });
+  return competitors.map(function(u) {
+    var pmTeam = (team[u] || {}).team || [];
+    // Tasks created by PM this month
+    var createdThisMonth = allTasks.filter(function(t) { return t.createdBy === u && !t._campaignParent && t.createdAt && new Date(t.createdAt) >= monthStart && new Date(t.createdAt) <= monthEnd; }).length;
+    // Tasks done by PM's team this month
+    var teamDoneThisMonth = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
+    // PM's own tasks done
+    var ownDone = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
+    // Team overdue
+    var teamOverdue = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && isOv(t); }).length;
+    // Score: created tasks weight + team done weight + own done - team overdue penalty
+    var score = createdThisMonth * 5 + teamDoneThisMonth * 8 + ownDone * 10 - teamOverdue * 3;
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", created: createdThisMonth, teamDone: teamDoneThisMonth, ownDone: ownDone, teamOverdue: teamOverdue, doneThis: createdThisMonth, score: Math.max(0, score), role: "pm", teamSize: pmTeam.length };
+  }).sort(function(a, b) { return b.score - a.score; });
+}
+
+// Backwards compat wrapper
+function calcLeaderboard(allTasks, team, targets, achievements, users) {
+  return calcMemberLeaderboard(allTasks, team, targets, users);
+}
+
+function PodiumCompact({ leaderboard, onNavigate, monthlyBonus, title, subtitle }) {
+  if (leaderboard.length < 2) return null;
   var now = new Date();
   var monthNames = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
   var monthLabel = monthNames[now.getMonth()];
   var hasBonus = monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0;
+  var podiumTitle = title || ("Liga lunara - " + monthLabel);
   return <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FFFBEB, #FFF 50%)", cursor: onNavigate ? "pointer" : "default" }} onClick={onNavigate}>
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: hasBonus ? 6 : 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 6 }}>Liga lunara - {monthLabel}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 6 }}>{podiumTitle}</div>
       {onNavigate && <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Vezi tot ▶</span>}
     </div>
+    {subtitle && <div style={{ fontSize: 11, color: "#64748B", marginBottom: 8 }}>{subtitle}</div>}
     {hasBonus && <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, padding: "6px 12px", background: "#EAB30812", borderRadius: 8, border: "1px solid #EAB30825" }}>
       <span style={{ fontSize: 16 }}>💰</span>
       <span style={{ fontSize: 13, fontWeight: 800, color: "#92400E" }}>Premiu locul 1: {monthlyBonus.amount} {monthlyBonus.currency}</span>
@@ -4585,6 +4614,7 @@ function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievem
 // MONTHLY LEAGUE — Clasament lunar cu bonus, reset la 1 a lunii
 // ═══════════════════════════════════════════════════════════════
 function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, visUsers, isMob, monthlyBonus, setMonthlyBonus, userXP }) {
+  var [leagueTab, setLeagueTab] = useState(me.role === "pm" ? "pm" : "members");
   var now = new Date();
   var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -4594,56 +4624,56 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
   var daysPassed = now.getDate();
   var daysRemaining = daysInMonth - daysPassed;
 
-  var competitors = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; });
+  // Member leaderboard
+  var memberBoard = calcMemberLeaderboard(allTasks, team, targets, Object.keys(team)).map(function(p) {
+    var xp = (userXP || {})[p.user] || 0;
+    p.level = getLevel(xp); p.title = getLevelTitle(p.level); p.xp = xp;
+    return p;
+  });
 
-  var leaderboard = competitors.map(function(u) {
-    var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
-    var thisMonth = userTasks.filter(function(t) {
-      return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd;
+  // PM leaderboard
+  var pmBoard = calcPMLeaderboard(allTasks, team, Object.keys(team)).map(function(p) {
+    var xp = (userXP || {})[p.user] || 0;
+    p.level = getLevel(xp); p.title = getLevelTitle(p.level); p.xp = xp;
+    return p;
+  });
+
+  var currentBoard = leagueTab === "pm" ? pmBoard : memberBoard;
+  var myPos = currentBoard.findIndex(function(p) { return p.user === user; });
+  var myData = myPos >= 0 ? currentBoard[myPos] : null;
+  var maxScore = currentBoard.length > 0 ? currentBoard[0].score : 1;
+
+  var renderLeaderboard = function(board, isPM) {
+    return board.map(function(p, idx) {
+      var isMe = p.user === user;
+      var lvlColor = getLevelColor(p.level);
+      var widthPct = maxScore > 0 ? (p.score / maxScore) * 100 : 0;
+      var medals = ["\u{1F947}", "\u{1F948}", "\u{1F949}"];
+      var isLeader = idx === 0 && monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && !isPM;
+      return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginBottom: 6, borderRadius: 10, background: isLeader ? "linear-gradient(135deg, #FEFCE810, #FEF3C720)" : isMe ? p.color + "08" : idx < 3 ? "#FEFCE880" : "#fff", border: "1px solid " + (isLeader ? "#EAB30840" : isMe ? p.color + "40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #EAB30810, transparent)" : "transparent", zIndex: 0 }} />
+        <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+          <div style={{ fontSize: 20, width: 30, textAlign: "center" }}>{idx < 3 ? medals[idx] : <span style={{ fontSize: 14, color: "#94A3B8", fontWeight: 700 }}>#{idx + 1}</span>}</div>
+          <Av color={p.color} size={36} fs={13} userId={p.user}>{p.name[0]}</Av>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{p.name}</span>
+              <span style={{ fontSize: 10, color: lvlColor, fontWeight: 700, background: lvlColor + "15", padding: "2px 8px", borderRadius: 4 }}>Lv.{p.level} {p.title}</span>
+              {isMe && <Badge bg={p.color + "15"} color={p.color}>TU</Badge>}
+              {isLeader && <Badge bg="#FEF3C7" color="#92400E">+{monthlyBonus.amount} {monthlyBonus.currency}</Badge>}
+            </div>
+            <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>
+              {isPM ? (p.created + " create | " + p.teamDone + " echipa done | " + p.ownDone + " proprii | " + p.teamOverdue + " overdue echipa") : (p.doneThis + " done | " + p.overdue + " overdue")}
+            </div>
+          </div>
+          <div style={{ textAlign: "right", minWidth: 60 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: idx === 0 ? "#EAB308" : "#1E293B" }}>{p.score}</div>
+            <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase" }}>puncte</div>
+          </div>
+        </div>
+      </div>;
     });
-    var overdue = userTasks.filter(function(t) { return t.status !== "Done" && t.deadline && t.deadline < ds(now); }).length;
-
-    // Streak bonus
-    var userTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
-    var streakBonus = 0;
-    if (userTargets.length > 0) {
-      var tgt = userTargets[0];
-      var daysWithTarget = 0;
-      for (var d = 0; d < daysPassed; d++) {
-        var dt = new Date(monthStart); dt.setDate(dt.getDate() + d);
-        if (dt > now) break;
-        if (dt.getDay() === 0 || dt.getDay() === 6) continue;
-        var doneDay = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length;
-        if (doneDay >= (tgt.target || 0)) daysWithTarget++;
-      }
-      streakBonus = daysWithTarget * 3;
-    }
-
-    var score = thisMonth.length * 10 - overdue * 5 + streakBonus;
-    var xp = (userXP || {})[u] || 0;
-    var lvl = getLevel(xp);
-
-    // Weekly breakdown
-    var weeklyDone = [];
-    for (var w = 0; w < 5; w++) {
-      var wStart = new Date(monthStart); wStart.setDate(wStart.getDate() + w * 7);
-      var wEnd = new Date(wStart); wEnd.setDate(wEnd.getDate() + 6);
-      if (wStart > now) break;
-      var wDone = thisMonth.filter(function(t) { var d2 = new Date(t.updatedAt); return d2 >= wStart && d2 <= wEnd; }).length;
-      weeklyDone.push(wDone);
-    }
-
-    return {
-      user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8",
-      doneThis: thisMonth.length, overdue: overdue, score: Math.max(0, score),
-      xp: xp, level: lvl, title: getLevelTitle(lvl), weeklyDone: weeklyDone,
-      achCount: ((achievements || {})[u] || []).length
-    };
-  }).sort(function(a, b) { return b.score - a.score; });
-
-  var maxScore = leaderboard.length > 0 ? leaderboard[0].score : 1;
-  var myPos = leaderboard.findIndex(function(p) { return p.user === user; });
-  var myData = myPos >= 0 ? leaderboard[myPos] : null;
+  };
 
   return <div>
     <div style={{ marginBottom: 20 }}>
@@ -4651,41 +4681,26 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
       <div style={{ fontSize: 12, color: "#64748B" }}>Clasament lunar. Se reseteaza pe 1 a fiecarei luni. {daysRemaining} zile ramase.</div>
     </div>
 
-    {/* Bonus Prize Banner */}
+    {/* Bonus Banner */}
     {monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FEFCE8, #FEF3C7 40%, #FFF 80%)", borderLeft: "4px solid #EAB308", position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: -20, right: -10, fontSize: 100, opacity: 0.06 }}>💰</div>
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <div style={{ fontSize: 48 }}>🏆</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Premiu Locul 1 - {monthLabel}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Premiu Membrul #1 - {monthLabel}</div>
           <div style={{ fontSize: 36, fontWeight: 900, color: "#1E293B" }}>{monthlyBonus.amount} {monthlyBonus.currency}</div>
-          <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>Persoana cu cel mai mare scor la sfarsitul lunii castiga bonusul.</div>
+          <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>Membrul cu cel mai mare scor la sfarsitul lunii castiga bonusul.</div>
         </div>
-        {leaderboard.length > 0 && <div style={{ textAlign: "center", padding: "12px 20px", background: "#EAB30815", borderRadius: 12, border: "1px solid #EAB30830" }}>
+        {memberBoard.length > 0 && <div style={{ textAlign: "center", padding: "12px 20px", background: "#EAB30815", borderRadius: 12, border: "1px solid #EAB30830" }}>
           <div style={{ fontSize: 11, color: "#92400E", fontWeight: 600, marginBottom: 4 }}>Lider curent</div>
-          <Av color={leaderboard[0].color} size={44} fs={16} userId={leaderboard[0].user}>{leaderboard[0].name[0]}</Av>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#1E293B", marginTop: 4 }}>{leaderboard[0].name}</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>{leaderboard[0].score} pts | Lv.{leaderboard[0].level}</div>
+          <Av color={memberBoard[0].color} size={44} fs={16} userId={memberBoard[0].user}>{memberBoard[0].name[0]}</Av>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#1E293B", marginTop: 4 }}>{memberBoard[0].name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{memberBoard[0].score} pts | Lv.{memberBoard[0].level}</div>
         </div>}
       </div>
     </Card>}
 
-    {/* My position */}
-    {myData && <Card style={{ marginBottom: 16, background: myData.color + "08", borderLeft: "4px solid " + myData.color }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <div style={{ fontSize: 48, fontWeight: 900, color: myData.color }}>#{myPos + 1}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>Pozitia ta, {myData.name}</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>{myData.doneThis} taskuri | {myData.score} puncte | Lv.{myData.level} {myData.title}</div>
-        </div>
-        {myPos === 0 && monthlyBonus && monthlyBonus.enabled && <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 28 }}>👑</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308" }}>Lider + {monthlyBonus.amount} {monthlyBonus.currency}</div>
-        </div>}
-      </div>
-    </Card>}
-
-    {/* Progress bar for month */}
+    {/* Month progress */}
     <Card style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
         <span style={{ fontWeight: 700, color: "#475569" }}>Progres luna</span>
@@ -4696,46 +4711,31 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
       </div>
     </Card>
 
-    {/* Full leaderboard */}
+    {/* Tab switcher: Members vs PMs */}
+    <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
+      <button onClick={function() { setLeagueTab("members"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "members" ? "#fff" : "transparent", color: leagueTab === "members" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: leagueTab === "members" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>Liga Membrilor ({memberBoard.length})</button>
+      <button onClick={function() { setLeagueTab("pm"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "pm" ? "#fff" : "transparent", color: leagueTab === "pm" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: leagueTab === "pm" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>Liga PM-ilor ({pmBoard.length})</button>
+    </div>
+
+    {/* My position */}
+    {myData && <Card style={{ marginBottom: 16, background: myData.color + "08", borderLeft: "4px solid " + myData.color }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ fontSize: 48, fontWeight: 900, color: myData.color }}>#{myPos + 1}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Pozitia ta, {myData.name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{myData.score} puncte | Lv.{myData.level} {myData.title}</div>
+        </div>
+      </div>
+    </Card>}
+
+    {/* Leaderboard */}
     <Card>
-      <div style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", marginBottom: 16 }}>Clasament {monthLabel}</div>
-      {leaderboard.map(function(p, idx) {
-        var isMe = p.user === user;
-        var lvlColor = getLevelColor(p.level);
-        var widthPct = maxScore > 0 ? (p.score / maxScore) * 100 : 0;
-        var medals = ["🥇", "🥈", "🥉"];
-        var isLeader = idx === 0 && monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0;
-        return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginBottom: 6, borderRadius: 10, background: isLeader ? "linear-gradient(135deg, #FEFCE810, #FEF3C720)" : isMe ? p.color + "08" : idx < 3 ? "#FEFCE8" + (idx === 0 ? "" : "80") : "#fff", border: "1px solid " + (isLeader ? "#EAB30840" : isMe ? p.color + "40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #EAB30810, transparent)" : "transparent", zIndex: 0 }} />
-          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
-            <div style={{ fontSize: 20, width: 30, textAlign: "center" }}>{idx < 3 ? medals[idx] : <span style={{ fontSize: 14, color: "#94A3B8", fontWeight: 700 }}>#{idx + 1}</span>}</div>
-            <Av color={p.color} size={36} fs={13} userId={p.user}>{p.name[0]}</Av>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{p.name}</span>
-                <span style={{ fontSize: 10, color: lvlColor, fontWeight: 700, background: lvlColor + "15", padding: "2px 8px", borderRadius: 4 }}>Lv.{p.level} {p.title}</span>
-                {isMe && <Badge bg={p.color + "15"} color={p.color}>TU</Badge>}
-                {isLeader && <Badge bg="#FEF3C7" color="#92400E">+{monthlyBonus.amount} {monthlyBonus.currency}</Badge>}
-              </div>
-              <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>{p.doneThis} done | {p.overdue} overdue | {p.achCount} ach</div>
-              {/* Mini weekly bars */}
-              {p.weeklyDone.length > 0 && <div style={{ display: "flex", gap: 2, marginTop: 4 }}>
-                {p.weeklyDone.map(function(w, wi) {
-                  var maxW = Math.max.apply(null, p.weeklyDone.concat([1]));
-                  return <div key={wi} style={{ width: 16, height: 12, borderRadius: 2, background: w > 0 ? lvlColor : "#E2E8F0", opacity: 0.3 + (w / maxW) * 0.7 }} title={"S" + (wi + 1) + ": " + w + " done"} />;
-                })}
-              </div>}
-            </div>
-            <div style={{ textAlign: "right", minWidth: 60 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: idx === 0 ? "#EAB308" : "#1E293B" }}>{p.score}</div>
-              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase" }}>puncte</div>
-            </div>
-          </div>
-        </div>;
-      })}
+      <div style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", marginBottom: 16 }}>{leagueTab === "pm" ? "Clasament PM-ilor" : "Clasament Membrilor"} - {monthLabel}</div>
+      {currentBoard.length === 0 && <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nu sunt participanti.</div>}
+      {renderLeaderboard(currentBoard, leagueTab === "pm")}
     </Card>
 
-    {/* Admin: Set bonus */}
+    {/* Admin bonus config */}
     {me.role === "admin" && <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premiu Lunar (admin)</div>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -4752,18 +4752,33 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
       </div>
     </Card>}
 
-    {/* Scoring */}
+    {/* Scoring explanation */}
     <Card style={{ marginTop: 16, background: "#F8FAFC" }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>Cum se calculeaza scorul lunar:</div>
-      <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.7 }}>
-        <span style={{ display: "block" }}>+10 puncte per task finalizat</span>
-        <span style={{ display: "block" }}>+3 puncte per zi cu target atins</span>
-        <span style={{ display: "block" }}>-5 puncte per task intarziat activ</span>
-        <span style={{ display: "block" }}>Clasamentul se reseteaza automat pe 1 a fiecarei luni.</span>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>Cum se calculeaza scorul:</div>
+      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 4 }}>Membri (implementare)</div>
+          <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.7 }}>
+            <span style={{ display: "block" }}>+10 per task finalizat</span>
+            <span style={{ display: "block" }}>+3 per zi cu target atins</span>
+            <span style={{ display: "block" }}>-5 per task intarziat</span>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", marginBottom: 4 }}>PM (coordonare)</div>
+          <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.7 }}>
+            <span style={{ display: "block" }}>+5 per task creat catre echipa</span>
+            <span style={{ display: "block" }}>+8 per task finalizat de echipa</span>
+            <span style={{ display: "block" }}>+10 per task propriu finalizat</span>
+            <span style={{ display: "block" }}>-3 per task intarziat in echipa</span>
+          </div>
+        </div>
       </div>
+      <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>Clasamentul se reseteaza automat pe 1 a fiecarei luni.</div>
     </Card>
   </div>;
 }
+
 
 function BrandStatsPage({ tasks, team, shops, timers, isMob }) {
   var [selectedShop, setSelectedShop] = useState(shops[0] || "");
