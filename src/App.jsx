@@ -4648,7 +4648,7 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
       var isMe = p.user === user;
       var lvlColor = getLevelColor(p.level);
       var widthPct = maxScore > 0 ? (p.score / maxScore) * 100 : 0;
-      var medals = ["\u{1F947}", "\u{1F948}", "\u{1F949}"];
+      var medals = ["🥇", "🥈", "🥉"];
       var isLeader = idx === 0 && monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && !isPM;
       return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginBottom: 6, borderRadius: 10, background: isLeader ? "linear-gradient(135deg, #FEFCE810, #FEF3C720)" : isMe ? p.color + "08" : idx < 3 ? "#FEFCE880" : "#fff", border: "1px solid " + (isLeader ? "#EAB30840" : isMe ? p.color + "40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #EAB30810, transparent)" : "transparent", zIndex: 0 }} />
