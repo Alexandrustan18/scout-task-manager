@@ -790,16 +790,30 @@ export default function App() {
       }
       // Secondary pipeline: Mara Poze Done -> Carla (Ads task, deadline next day)
       if (prevTask.assignee === "mara_poze" && prevTask._fromPipeline) {
-        // Original title is "X - Foto Produs", strip it to get product name
-        var cleanTitle = (prevTask.title || "").replace(/ - Foto Produs$/, "");
-        var nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1);
-        var adsDeadline = ds(nextDay);
-        var adsLinks = (prevTask.links || []).slice();
-        var adsTask = { id: gid(), title: cleanTitle + " - Ads", description: "Pune ads pentru acest produs. Foto produs gata.\n\n" + (prevTask.description || ""), assignee: "carla", status: "To Do", priority: prevTask.priority, platform: "Meta Ads", taskType: "Ad Creation", department: "AD", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: adsDeadline, links: adsLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id, _adsPipeline: true };
-        setTasks(function(p) { return [adsTask].concat(p); });
-        setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[adsTask.id] = [{ status: "To Do", at: ts() }]; return n; });
-        addNotif("pipeline", "Task Ads pregatit: \"" + adsTask.title + "\"", adsTask.id, "carla");
-        addLog("PIPELINE", "Mara Poze -> Carla: " + adsTask.title);
+        // Check if Ads task already exists for this parent (prevent duplicates)
+        var existingAds = tasks.find(function(x) { return x._adsPipeline === true && x.dependsOn && x.dependsOn.includes(prevTask.id); });
+        if (!existingAds) {
+          // Original title is "X - Foto Produs", strip it to get product name
+          var cleanTitle = (prevTask.title || "").replace(/ - Foto Produs$/, "");
+          var nextDay = new Date(); nextDay.setDate(nextDay.getDate() + 1);
+          var adsDeadline = ds(nextDay);
+          var adsLinks = (prevTask.links || []).slice();
+          var adsTask = { id: gid(), title: cleanTitle + " - Ads", description: "Pune ads pentru acest produs. Foto produs gata.\n\n" + (prevTask.description || ""), assignee: "carla", status: "To Do", priority: prevTask.priority, platform: "Meta Ads", taskType: "Ad Creation", department: "AD", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: adsDeadline, links: adsLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id, _adsPipeline: true };
+          setTasks(function(p) { return [adsTask].concat(p); });
+          setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[adsTask.id] = [{ status: "To Do", at: ts() }]; return n; });
+          addNotif("pipeline", "Task Ads pregatit: \"" + adsTask.title + "\"", adsTask.id, "carla");
+          addLog("PIPELINE", "Mara Poze -> Carla: " + adsTask.title);
+        }
+      }
+    }
+
+    // Rollback: if Mara Poze changes status FROM Done back to something else, remove the Ads task (only if still To Do)
+    if (prevTask && prevTask.assignee === "mara_poze" && prevTask.status === "Done" && st !== "Done") {
+      var adsToRemove = tasks.find(function(x) { return x._adsPipeline === true && x.dependsOn && x.dependsOn.includes(prevTask.id) && x.status === "To Do"; });
+      if (adsToRemove) {
+        setTasks(function(p) { return p.filter(function(x) { return x.id !== adsToRemove.id; }); });
+        addLog("PIPELINE", "Rollback Ads: " + adsToRemove.title + " sters (Mara Poze a schimbat statusul)");
+        addNotif("pipeline_rollback", "Taskul Ads \"" + adsToRemove.title + "\" a fost sters - foto produs nu mai e finalizat", adsToRemove.id, "carla");
       }
     }
   };
