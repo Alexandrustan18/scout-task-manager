@@ -1002,7 +1002,11 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
       <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashFrom} onChange={function(e) { setDashFrom(e.target.value); setDashPreset("custom"); }} />
       <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashTo} onChange={function(e) { setDashTo(e.target.value); setDashPreset("custom"); }} />
     </div>
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[{ l: "Total", v: rangeStats.total, c: "#475569" }, { l: "To Do", v: rangeStats.todo, c: "#94A3B8" }, { l: "In Progress", v: rangeStats.inProg, c: "#2563EB" }, { l: "Review", v: rangeStats.review, c: "#D97706" }, { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626" }, { l: "Done", v: rangeStats.done, c: GR }].map(function(s) { return <Card key={s.l} style={{ borderTop: "3px solid " + s.c }}><div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div></Card>; })}</div>
+    {function() {
+      var allStats = { total: tasks.length, todo: 0, inProg: 0, review: 0, done: 0, overdue: 0 };
+      tasks.forEach(function(t) { if (t.status === "To Do") allStats.todo++; if (t.status === "In Progress") allStats.inProg++; if (t.status === "Review") allStats.review++; if (t.status === "Done") allStats.done++; if (isOv(t)) allStats.overdue++; });
+      return <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[{ l: "Total", v: allStats.total, c: "#475569" }, { l: "To Do", v: allStats.todo, c: "#94A3B8" }, { l: "In Progress", v: allStats.inProg, c: "#2563EB" }, { l: "Review", v: allStats.review, c: "#D97706" }, { l: "Intarziate", v: allStats.overdue, c: "#DC2626" }, { l: "Done", v: allStats.done, c: GR }].map(function(s) { return <Card key={s.l} style={{ borderTop: "3px solid " + s.c }}><div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div></Card>; })}</div>;
+    }()}
     {activeTimers.length > 0 && <Card style={{ marginBottom: 20, borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card>}
     <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(380px,1fr))", gap: 12 }}>{ppl.map(function(d) {
@@ -1233,6 +1237,27 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
 
 function KanbanPage({ fProps, tasks, user, team, onEdit, onDel, onDup, onChgSt, dragId, setDragId, handleDrop, isMob, timers, getTS, togTimer }) {
   var [dropTarget, setDropTarget] = useState(null);
+  var dragIdRef = useRef(null);
+
+  var onDragStartCard = function(e, tid) {
+    dragIdRef.current = tid;
+    setDragId(tid);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", tid);
+  };
+  var onDragEndCard = function() {
+    dragIdRef.current = null;
+    setDragId(null);
+    setDropTarget(null);
+  };
+  var onDropCol = function(e, st) {
+    e.preventDefault();
+    e.stopPropagation();
+    var tid = dragIdRef.current || e.dataTransfer.getData("text/plain");
+    setDropTarget(null);
+    if (tid) { onChgSt(tid, st); dragIdRef.current = null; setDragId(null); }
+  };
+
   return <div>
     <FiltersBar {...fProps} noStatus />
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(4,1fr)", gap: 14, alignItems: "start" }}>
@@ -1240,9 +1265,9 @@ function KanbanPage({ fProps, tasks, user, team, onEdit, onDel, onDup, onChgSt, 
         var col = tasks.filter(function(t) { return t.status === st; });
         var isOver = dropTarget === st;
         return <div key={st}
-          onDragOver={function(e) { e.preventDefault(); e.stopPropagation(); setDropTarget(st); }}
+          onDragOver={function(e) { e.preventDefault(); e.stopPropagation(); if (dropTarget !== st) setDropTarget(st); }}
           onDragLeave={function(e) { if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget(null); }}
-          onDrop={function(e) { e.preventDefault(); e.stopPropagation(); setDropTarget(null); handleDrop(st); }}
+          onDrop={function(e) { onDropCol(e, st); }}
           style={{ background: isOver ? SC[st] + "15" : "#FAFBFC", borderRadius: 12, padding: 12, minHeight: 200, border: "2px solid " + (isOver ? SC[st] : "transparent"), transition: "all 0.15s" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1260,8 +1285,8 @@ function KanbanPage({ fProps, tasks, user, team, onEdit, onDel, onDup, onChgSt, 
             var canEdit2 = me2.role === "admin" || me2.role === "pm" || t.assignee === user;
             return <div key={t.id}
               draggable={true}
-              onDragStart={function(e) { e.stopPropagation(); setDragId(t.id); e.dataTransfer.effectAllowed = "move"; }}
-              onDragEnd={function(e) { e.stopPropagation(); setDragId(null); setDropTarget(null); }}
+              onDragStart={function(e) { onDragStartCard(e, t.id); }}
+              onDragEnd={onDragEndCard}
               style={{ opacity: dragId === t.id ? 0.35 : 1, marginBottom: 8, transform: dragId === t.id ? "rotate(2deg)" : "none", transition: "opacity 0.15s, transform 0.15s" }}>
               <Card style={{ padding: 12, cursor: "grab", borderLeft: "3px solid " + (ov ? "#EF4444" : SC[st]), background: SBG[st] }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t.title}</div>
@@ -2050,7 +2075,7 @@ function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTi
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div><h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>{t.title}</h2><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{t.department && <Badge bg="#FFF7ED" color="#EA580C">{t.department}</Badge>}{(t.tags || []).map(function(tag) { return <Badge key={tag} bg="#ECFDF5" color={GR}>#{tag}</Badge>; })}{isOv(t) && <Badge bg="#FEF2F2" color="#DC2626">OVERDUE</Badge>}</div></div><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
     {t.description && <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>{t.description}</div>}
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginBottom: 16 }}><div><strong>Asignat:</strong> {a.name || "-"}</div><div><strong>Deadline:</strong> {t.deadline ? fd(t.deadline) : "-"}</div><div><strong>Magazin:</strong> {t.shop || "-"}</div><div><strong>Timp:</strong> {ft(secs)}</div>{t.platform && <div><strong>Platforma:</strong> {t.platform}</div>}{t.taskType && <div><strong>Tip:</strong> {t.taskType}</div>}{t.productName && <div><strong>Produs:</strong> {t.productName}</div>}{t.department && <div><strong>Departament:</strong> {t.department}</div>}<div><strong>Creat:</strong> {ff(t.createdAt)}</div>{t._finalizedCount != null && <div><strong>Finalizate:</strong> {t._finalizedCount}/{(t.campaignItems || []).length}</div>}</div>
-    {t.productName && t.links && t.links.length > 0 && !t._replacedLink && <div style={{ marginBottom: 12, padding: "10px 14px", background: "#EFF6FF", borderRadius: 8, borderLeft: "3px solid #2563EB", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+    {t.productName && t.links && t.links.length > 0 && !t._replacedLink && ["dana", "carla", "mara_poze"].includes(t.assignee) && t._campaignParentId && <div style={{ marginBottom: 12, padding: "10px 14px", background: "#EFF6FF", borderRadius: 8, borderLeft: "3px solid #2563EB", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>Link Produs</div>
         <a href={t.links[0]} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#1D4ED8", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{t.links[0]}</a>
