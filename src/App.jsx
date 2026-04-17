@@ -1202,9 +1202,9 @@ export default function App() {
               <div><div style={{ fontSize: 10, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Deadline</div><input type="date" style={Object.assign({}, S.fSel, { width: "100%" })} onChange={function(e) { if (e.target.value) bulkChgDeadline(e.target.value); e.target.value = ""; }} /></div>
             </div>
           </Card>}
-          {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} />}
-          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} />}
-          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} />}
+          {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} />}
+          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} />}
+          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
@@ -1279,8 +1279,9 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
   </div>;
 }
 
-function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers }) {
+function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers, setPage }) {
   var [tab, setTab] = useState("personal"); // personal | team
+  var [pmKpiModal, setPmKpiModal] = useState(null);
 
   // === TEAM DATA ===
   var teamUsers = (me.team || []).filter(function(u) { return team[u]; });
@@ -1342,6 +1343,9 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
       <div style={{ fontSize: 12, color: "#64748B" }}>Dashboard PM - {teamUsers.length} persoane in echipa</div>
     </div>
 
+    {/* Podium */}
+    {visUsers && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, visUsers)} onNavigate={setPage ? function() { setPage("league"); } : null} />}
+
     {/* Tab switcher */}
     <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
       <button onClick={function() { setTab("personal"); }} style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: tab === "personal" ? "#fff" : "transparent", color: tab === "personal" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: tab === "personal" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>Personal</button>
@@ -1351,12 +1355,13 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
       </button>
     </div>
 
-    {tab === "personal" && <MemberDashboard me={me} user={user} allTasks={allTasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} hideHeader={true} />}
+    {tab === "personal" && <MemberDashboard me={me} user={user} allTasks={allTasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} hideHeader={true} visUsers={visUsers} setPage={setPage} />}
 
     {tab === "team" && <div>
+      {pmKpiModal && <TaskDetailModal title={pmKpiModal.title} color={pmKpiModal.color} tasks={pmKpiModal.tasks} team={team} onClose={function() { setPmKpiModal(null); }} setPage={setPage} />}
       {/* Team hero KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
-        <Card style={{ borderLeft: "3px solid " + GR, padding: 14 }}>
+        <Card onClick={function() { setPmKpiModal({ title: "Done azi - echipa", color: GR, tasks: allTasks.filter(function(t) { return teamUsers.includes(t.assignee) && t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD && !t._campaignParent; }) }); }} style={{ borderLeft: "3px solid " + GR, padding: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
           <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Done azi echipa</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <div style={{ fontSize: 32, fontWeight: 800, color: GR }}>{teamDoneToday}</div>
@@ -1364,17 +1369,17 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
           </div>
           <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>vs ieri ({teamYDone})</div>
         </Card>
-        <Card style={{ borderLeft: "3px solid #2563EB", padding: 14 }}>
+        <Card onClick={function() { setPmKpiModal({ title: "Active - echipa", color: "#2563EB", tasks: teamActive }); }} style={{ borderLeft: "3px solid #2563EB", padding: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
           <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Active</div>
           <div style={{ fontSize: 32, fontWeight: 800, color: "#2563EB" }}>{teamActive.length}</div>
           <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{teamInProg.length} in progres</div>
         </Card>
-        <Card style={{ borderLeft: "3px solid " + (teamOverdue.length > 0 ? "#DC2626" : "#94A3B8"), padding: 14 }}>
+        <Card onClick={function() { if (teamOverdue.length > 0) setPmKpiModal({ title: "Intarziate - echipa", color: "#DC2626", tasks: teamOverdue }); }} style={{ borderLeft: "3px solid " + (teamOverdue.length > 0 ? "#DC2626" : "#94A3B8"), padding: 14, cursor: teamOverdue.length > 0 ? "pointer" : "default", transition: "all 0.15s" }} onMouseEnter={function(e) { if (teamOverdue.length > 0) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; } }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
           <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Intarziate</div>
           <div style={{ fontSize: 32, fontWeight: 800, color: teamOverdue.length > 0 ? "#DC2626" : "#94A3B8" }}>{teamOverdue.length}</div>
           <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{teamOverdue.length > 0 ? "Necesita atentie" : "Totul la zi"}</div>
         </Card>
-        <Card style={{ borderLeft: "3px solid #7C3AED", padding: 14 }}>
+        <Card onClick={function() { if (teamBlockers.length > 0) setPmKpiModal({ title: "Blocaje - echipa", color: "#7C3AED", tasks: teamBlockers }); }} style={{ borderLeft: "3px solid #7C3AED", padding: 14, cursor: teamBlockers.length > 0 ? "pointer" : "default", transition: "all 0.15s" }} onMouseEnter={function(e) { if (teamBlockers.length > 0) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; } }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
           <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Blocaje &gt;48h</div>
           <div style={{ fontSize: 32, fontWeight: 800, color: teamBlockers.length > 0 ? "#7C3AED" : "#94A3B8" }}>{teamBlockers.length}</div>
           <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Fara miscare</div>
@@ -1499,7 +1504,8 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
   </div>;
 }
 
-function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, hideHeader }) {
+function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, hideHeader, visUsers, setPage }) {
+  var [kpiModal, setKpiModal] = useState(null);
   var myTasks = allTasks.filter(function(t) { return t.assignee === user && !t._campaignParent; });
   var todayDone = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
   var activeTasks = myTasks.filter(function(t) { return t.status !== "Done"; });
@@ -1565,7 +1571,7 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
 
     {/* Hero KPI row */}
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
-      <Card style={{ borderLeft: "3px solid " + GR, padding: 14 }}>
+      <Card onClick={function() { setKpiModal({ title: "Taskuri finalizate azi", color: GR, tasks: myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }) }); }} style={{ borderLeft: "3px solid " + GR, padding: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
         <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Done azi</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <div style={{ fontSize: 32, fontWeight: 800, color: GR }}>{todayDone}</div>
@@ -1573,12 +1579,12 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
         </div>
         <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>vs ieri ({yDone})</div>
       </Card>
-      <Card style={{ borderLeft: "3px solid #2563EB", padding: 14 }}>
+      <Card onClick={function() { setKpiModal({ title: "Taskuri active", color: "#2563EB", tasks: activeTasks }); }} style={{ borderLeft: "3px solid #2563EB", padding: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
         <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Active</div>
         <div style={{ fontSize: 32, fontWeight: 800, color: "#2563EB" }}>{activeTasks.length}</div>
         <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{inProgCount} in progres | {todoCount} to do{reviewCount > 0 ? " | " + reviewCount + " review" : ""}</div>
       </Card>
-      <Card style={{ borderLeft: "3px solid " + (overdueTasks.length > 0 ? "#DC2626" : "#94A3B8"), padding: 14 }}>
+      <Card onClick={function() { if (overdueTasks.length > 0) setKpiModal({ title: "Taskuri intarziate", color: "#DC2626", tasks: overdueTasks }); }} style={{ borderLeft: "3px solid " + (overdueTasks.length > 0 ? "#DC2626" : "#94A3B8"), padding: 14, cursor: overdueTasks.length > 0 ? "pointer" : "default", transition: "all 0.15s" }} onMouseEnter={function(e) { if (overdueTasks.length > 0) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; } }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
         <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Intarziate</div>
         <div style={{ fontSize: 32, fontWeight: 800, color: overdueTasks.length > 0 ? "#DC2626" : "#94A3B8" }}>{overdueTasks.length}</div>
         <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{overdueTasks.length > 0 ? "Atentie - deadline depasit" : "Totul la zi"}</div>
@@ -1592,6 +1598,10 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
         <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>zile consecutive cu target</div>
       </Card>
     </div>
+    {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
+
+    {/* Podium */}
+    {visUsers && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, visUsers)} onNavigate={setPage ? function() { setPage("league"); } : null} />}
 
     {/* Target progress */}
     {myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
@@ -1748,7 +1758,45 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
   </div>;
 }
 
-function AdminInsights({ allTasks, team, visUsers, timers, isMob }) {
+function TaskDetailModal({ title, color, tasks, team, onClose, setPage }) {
+  return <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,23,42,0.7)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
+    <div onClick={function(e) { e.stopPropagation(); }} style={{ background: "#fff", borderRadius: 12, maxWidth: 720, width: "100%", maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "4px solid " + color, borderRadius: "12px 12px 0 0" }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#1E293B" }}>{title}</div>
+          <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{tasks.length} taskuri</div>
+        </div>
+        <button onClick={onClose} style={{ border: "none", background: "#F1F5F9", width: 32, height: 32, borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Ic d={Icons.x} size={14} color="#64748B" /></button>
+      </div>
+      <div style={{ overflowY: "auto", padding: "12px 20px", flex: 1 }}>
+        {tasks.length === 0 ? <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nu sunt taskuri.</div> : tasks.map(function(t) {
+          var a = team[t.assignee] || {};
+          var days = t.updatedAt ? Math.floor((Date.now() - new Date(t.updatedAt).getTime()) / 86400000) : 0;
+          return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, background: "#F8FAFC", marginBottom: 6, borderLeft: "3px solid " + color }}>
+            {a.color && <Av color={a.color} size={26} fs={11}>{(a.name || "?")[0]}</Av>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+              <div style={{ fontSize: 10, color: "#64748B", marginTop: 2, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span>{a.name || "?"}</span>
+                {t.shop && <span style={{ color: GR, fontWeight: 600 }}>{t.shop}</span>}
+                <Badge bg={SBG[t.status] || "#F1F5F9"} color={SC[t.status] || "#64748B"}>{t.status}</Badge>
+                {t.deadline && <span style={{ color: isOv(t) ? "#DC2626" : "#94A3B8" }}>Deadline: {fd(t.deadline)}</span>}
+                {days > 0 && t.status !== "Done" && <span style={{ color: "#94A3B8" }}>(acum {days}z)</span>}
+              </div>
+            </div>
+          </div>;
+        })}
+      </div>
+      {setPage && <div style={{ padding: "12px 20px", borderTop: "1px solid #F1F5F9", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <button style={S.cancelBtn} onClick={onClose}>Inchide</button>
+        <button style={S.primBtn} onClick={function() { setPage("tasks"); onClose(); }}>Vezi in Taskuri</button>
+      </div>}
+    </div>
+  </div>;
+}
+
+function AdminInsights({ allTasks, team, visUsers, timers, isMob, setPage }) {
+  var [detailModal, setDetailModal] = useState(null);
   // === 7-day productivity trend ===
   var trendData = [];
   for (var i = 6; i >= 0; i--) {
@@ -1819,20 +1867,30 @@ function AdminInsights({ allTasks, team, visUsers, timers, isMob }) {
   var chartColors = { done: GR, created: "#2563EB", pending: "#94A3B8", urgent: "#DC2626", review: "#D97706" };
 
   return <div style={{ marginBottom: 24 }}>
+    {detailModal && <TaskDetailModal title={detailModal.title} color={detailModal.color} tasks={detailModal.tasks} team={team} onClose={function() { setDetailModal(null); }} setPage={setPage} />}
     {/* Alert strip */}
     {(overdueAll.length > 0 || urgentAll.length > 0 || blockers.length > 0) && <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
-      {overdueAll.length > 0 && <Card style={{ borderLeft: "3px solid #DC2626", background: "#FEF2F2", padding: 12 }}>
-        <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 2 }}>INTARZIATE</div>
+      {overdueAll.length > 0 && <Card onClick={function() { setDetailModal({ title: "Taskuri intarziate", color: "#DC2626", tasks: overdueAll }); }} style={{ borderLeft: "3px solid #DC2626", background: "#FEF2F2", padding: 12, cursor: "pointer", transition: "transform 0.1s" }} onMouseDown={function(e) { e.currentTarget.style.transform = "scale(0.98)"; }} onMouseUp={function(e) { e.currentTarget.style.transform = "scale(1)"; }} onMouseLeave={function(e) { e.currentTarget.style.transform = "scale(1)"; }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+          <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>INTARZIATE</div>
+          <span style={{ fontSize: 10, color: "#DC2626", fontWeight: 600 }}>Click pentru detalii ▶</span>
+        </div>
         <div style={{ fontSize: 20, fontWeight: 800, color: "#DC2626" }}>{overdueAll.length}</div>
         <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>Taskuri cu deadline depasit</div>
       </Card>}
-      {urgentAll.length > 0 && <Card style={{ borderLeft: "3px solid #EA580C", background: "#FFF7ED", padding: 12 }}>
-        <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 2 }}>URGENTE</div>
+      {urgentAll.length > 0 && <Card onClick={function() { setDetailModal({ title: "Taskuri urgente", color: "#EA580C", tasks: urgentAll }); }} style={{ borderLeft: "3px solid #EA580C", background: "#FFF7ED", padding: 12, cursor: "pointer", transition: "transform 0.1s" }} onMouseDown={function(e) { e.currentTarget.style.transform = "scale(0.98)"; }} onMouseUp={function(e) { e.currentTarget.style.transform = "scale(1)"; }} onMouseLeave={function(e) { e.currentTarget.style.transform = "scale(1)"; }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+          <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>URGENTE</div>
+          <span style={{ fontSize: 10, color: "#EA580C", fontWeight: 600 }}>Click pentru detalii ▶</span>
+        </div>
         <div style={{ fontSize: 20, fontWeight: 800, color: "#EA580C" }}>{urgentAll.length}</div>
         <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>Prioritate urgenta, nefinalizate</div>
       </Card>}
-      {blockers.length > 0 && <Card style={{ borderLeft: "3px solid #7C3AED", background: "#F5F3FF", padding: 12 }}>
-        <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 2 }}>BLOCAJE</div>
+      {blockers.length > 0 && <Card onClick={function() { setDetailModal({ title: "Blocaje (> 48h)", color: "#7C3AED", tasks: blockers }); }} style={{ borderLeft: "3px solid #7C3AED", background: "#F5F3FF", padding: 12, cursor: "pointer", transition: "transform 0.1s" }} onMouseDown={function(e) { e.currentTarget.style.transform = "scale(0.98)"; }} onMouseUp={function(e) { e.currentTarget.style.transform = "scale(1)"; }} onMouseLeave={function(e) { e.currentTarget.style.transform = "scale(1)"; }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+          <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>BLOCAJE</div>
+          <span style={{ fontSize: 10, color: "#7C3AED", fontWeight: 600 }}>Click pentru detalii ▶</span>
+        </div>
         <div style={{ fontSize: 20, fontWeight: 800, color: "#7C3AED" }}>{blockers.length}</div>
         <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>Fara miscare &gt; 48h</div>
       </Card>}
@@ -2008,8 +2066,9 @@ function AdminInsights({ allTasks, team, visUsers, timers, isMob }) {
   </div>;
 }
 
-function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves }) {
+function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves, setPage, achievements }) {
   var [dashFrom, setDashFrom] = useState(TD);
+  var [kpiModal, setKpiModal] = useState(null);
   var [dashTo, setDashTo] = useState(TD);
   var [dashPreset, setDashPreset] = useState("today");
 
@@ -2070,9 +2129,23 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
       <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashFrom} onChange={function(e) { setDashFrom(e.target.value); setDashPreset("custom"); }} />
       <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashTo} onChange={function(e) { setDashTo(e.target.value); setDashPreset("custom"); }} />
     </div>
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[{ l: "Total", v: rangeStats.total, c: "#475569" }, { l: "To Do", v: rangeStats.todo, c: "#94A3B8" }, { l: "In Progress", v: rangeStats.inProg, c: "#2563EB" }, { l: "Review", v: rangeStats.review, c: "#D97706" }, { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626" }, { l: "Done", v: rangeStats.done, c: GR }].map(function(s) { return <Card key={s.l} style={{ borderTop: "3px solid " + s.c }}><div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div></Card>; })}</div>
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[
+      { l: "Total", v: rangeStats.total, c: "#475569", filter: function(t) { return true; } },
+      { l: "To Do", v: rangeStats.todo, c: "#94A3B8", filter: function(t) { return t.status === "To Do"; } },
+      { l: "In Progress", v: rangeStats.inProg, c: "#2563EB", filter: function(t) { return t.status === "In Progress"; } },
+      { l: "Review", v: rangeStats.review, c: "#D97706", filter: function(t) { return t.status === "Review"; } },
+      { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626", filter: function(t) { return isOv(t); } },
+      { l: "Done", v: rangeStats.done, c: GR, filter: function(t) { return t.status === "Done"; } }
+    ].map(function(s) {
+      return <Card key={s.l} onClick={function() { setKpiModal({ title: s.l + " (" + dashPreset + ")", color: s.c, tasks: rangeTasks.filter(s.filter) }); }} style={{ borderTop: "3px solid " + s.c, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
+        <div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div>
+        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div>
+      </Card>;
+    })}</div>
+    {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
     {activeTimers.length > 0 && <Card style={{ marginBottom: 20, borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card>}
-    {me && me.role === "admin" && <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} />}
+    {me && me.role === "admin" && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, visUsers)} onNavigate={setPage ? function() { setPage("league"); } : null} />}
+    {me && me.role === "admin" && <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} setPage={setPage} />}
     <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(380px,1fr))", gap: 12 }}>{ppl.map(function(d) {
       return <Card key={d.key} style={{ cursor: "pointer" }}>
@@ -3072,6 +3145,68 @@ function BrandingPage({ branding, setBranding, addLog }) {
       {savedMsg && <span style={{ fontSize: 12, color: GR, fontWeight: 700 }}>✓ {savedMsg}</span>}
     </div>
   </div>;
+}
+
+function calcLeaderboard(allTasks, team, targets, achievements, users) {
+  var now = new Date();
+  var dow = now.getDay();
+  var daysFromMon = dow === 0 ? 6 : dow - 1;
+  var weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - daysFromMon); weekStart.setHours(0, 0, 0, 0);
+  var weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
+  var competitors = users.filter(function(u) { return team[u] && team[u].role !== "admin"; });
+  return competitors.map(function(u) {
+    var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
+    var thisWeek = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; });
+    var overdue = userTasks.filter(function(t) { return isOv(t); }).length;
+    var userTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
+    var streakBonus = 0;
+    if (userTargets.length > 0) {
+      var tgt = userTargets[0];
+      var daysWithTarget = 0;
+      for (var d = 0; d < 7; d++) {
+        var dt = new Date(weekStart); dt.setDate(dt.getDate() + d);
+        if (dt > now) break;
+        var doneDay = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length;
+        if (doneDay >= (tgt.target || 0)) daysWithTarget++;
+      }
+      streakBonus = daysWithTarget * 5;
+    }
+    var score = thisWeek.length * 10 - overdue * 5 + streakBonus;
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneThis: thisWeek.length, overdue: overdue, score: Math.max(0, score) };
+  }).sort(function(a, b) { return b.score - a.score; });
+}
+
+function PodiumCompact({ leaderboard, onNavigate }) {
+  if (leaderboard.length < 3) return null;
+  return <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FFFBEB, #FFF 50%)", cursor: onNavigate ? "pointer" : "default" }} onClick={onNavigate}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 6 }}>🏆 Liga saptamanii - podium</div>
+      {onNavigate && <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Vezi tot ▶</span>}
+    </div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, alignItems: "end" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 24, marginBottom: 2 }}>🥈</div>
+        <Av color={leaderboard[1].color} size={38} fs={14}>{leaderboard[1].name[0]}</Av>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B", marginTop: 4 }}>{leaderboard[1].name}</div>
+        <div style={{ fontSize: 10, color: "#64748B" }}>{leaderboard[1].doneThis} taskuri</div>
+        <div style={{ height: 40, background: "#E5E7EB", borderRadius: "6px 6px 0 0", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B", fontWeight: 800, fontSize: 14 }}>2</div>
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 30, marginBottom: 2 }}>👑</div>
+        <Av color={leaderboard[0].color} size={48} fs={18}>{leaderboard[0].name[0]}</Av>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#1E293B", marginTop: 4 }}>{leaderboard[0].name}</div>
+        <div style={{ fontSize: 11, color: "#D97706", fontWeight: 700 }}>{leaderboard[0].doneThis} taskuri</div>
+        <div style={{ height: 60, background: "linear-gradient(180deg, #FDE047, #EAB308)", borderRadius: "6px 6px 0 0", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: 18, boxShadow: "0 3px 8px rgba(234,179,8,0.3)" }}>1</div>
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 24, marginBottom: 2 }}>🥉</div>
+        <Av color={leaderboard[2].color} size={34} fs={13}>{leaderboard[2].name[0]}</Av>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B", marginTop: 4 }}>{leaderboard[2].name}</div>
+        <div style={{ fontSize: 10, color: "#64748B" }}>{leaderboard[2].doneThis} taskuri</div>
+        <div style={{ height: 28, background: "#F97316", borderRadius: "6px 6px 0 0", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13 }}>3</div>
+      </div>
+    </div>
+  </Card>;
 }
 
 function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, visUsers, isMob }) {
