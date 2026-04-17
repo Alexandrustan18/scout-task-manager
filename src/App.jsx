@@ -1751,6 +1751,51 @@ function LogPage({ logs, visUsers, isMob }) {
 
 function BackupPage({ taskBackups, setTaskBackups, tasks, setTasks, team, user, isAdmin, addLog }) {
   var [selectedBackup, setSelectedBackup] = useState(null);
+  var [dupePreview, setDupePreview] = useState(null);
+
+  var findDuplicates = function() {
+    // Group by title + assignee + shop
+    var seen = {};
+    var duplicates = [];
+    tasks.forEach(function(t) {
+      var key = (t.title || "") + "||" + (t.assignee || "") + "||" + (t.shop || "");
+      if (!seen[key]) seen[key] = [];
+      seen[key].push(t);
+    });
+    Object.keys(seen).forEach(function(k) {
+      if (seen[k].length > 1) {
+        // Keep the oldest, mark newer ones for deletion
+        var sorted = seen[k].slice().sort(function(a, b) { return (a.createdAt || "") < (b.createdAt || "") ? -1 : 1; });
+        duplicates.push({ key: k, keep: sorted[0], remove: sorted.slice(1) });
+      }
+    });
+    return duplicates;
+  };
+
+  var scanDuplicates = function() {
+    var dupes = findDuplicates();
+    if (dupes.length === 0) { alert("Nu sunt duplicate!"); return; }
+    setDupePreview(dupes);
+  };
+
+  var removeDuplicates = function() {
+    if (!dupePreview || dupePreview.length === 0) return;
+    // Create safety backup first
+    var safetySnap = { id: gid(), at: ts(), count: tasks.length, by: user, tasks: JSON.parse(JSON.stringify(tasks)), safety: true, note: "Pre-dedup: " + tasks.length + " taskuri" };
+    setTaskBackups(function(prev) { return [safetySnap].concat(prev); });
+
+    // Collect all IDs to remove
+    var idsToRemove = new Set();
+    var totalRemoved = 0;
+    dupePreview.forEach(function(d) {
+      d.remove.forEach(function(t) { idsToRemove.add(t.id); totalRemoved++; });
+    });
+
+    setTasks(function(prev) { return prev.filter(function(t) { return !idsToRemove.has(t.id); }); });
+    addLog("DEDUP", "Sterse " + totalRemoved + " duplicate");
+    alert("Sterse " + totalRemoved + " duplicate! Backup salvat in caz ca vrei sa refaci.");
+    setDupePreview(null);
+  };
 
   var createManualBackup = function() {
     var snapshot = { id: gid(), at: ts(), count: tasks.length, by: user || "manual", tasks: JSON.parse(JSON.stringify(tasks)), manual: true };
@@ -1796,8 +1841,34 @@ function BackupPage({ taskBackups, setTaskBackups, tasks, setTasks, team, user, 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Backup Taskuri</h3>
         <div style={{ fontSize: 12, color: "#94A3B8" }}>Snapshot automat la fiecare 30 min | Ultimele 50 snapshots pastrate | {taskBackups.length} backups disponibile</div>
       </div>
-      <button style={S.primBtn} onClick={createManualBackup}><Ic d={Icons.plus} size={14} color="#fff" /> Creeaza backup acum</button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={Object.assign({}, S.primBtn, { background: "#D97706", borderColor: "#D97706" })} onClick={scanDuplicates}><Ic d={Icons.work} size={14} color="#fff" /> Scaneaza duplicate</button>
+        <button style={S.primBtn} onClick={createManualBackup}><Ic d={Icons.plus} size={14} color="#fff" /> Creeaza backup acum</button>
+      </div>
     </div>
+
+    {dupePreview && <Card style={{ marginBottom: 16, borderLeft: "3px solid #D97706", background: "#FFFBEB" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#D97706", marginBottom: 4 }}>Duplicate gasite: {dupePreview.length} grupuri</div>
+          <div style={{ fontSize: 12, color: "#64748B" }}>Se vor sterge {dupePreview.reduce(function(acc, d) { return acc + d.remove.length; }, 0)} taskuri. Cel mai vechi din fiecare grup este pastrat.</div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.cancelBtn} onClick={function() { setDupePreview(null); }}>Anuleaza</button>
+          <button style={Object.assign({}, S.primBtn, { background: "#DC2626", borderColor: "#DC2626" })} onClick={removeDuplicates}>Sterge duplicatele</button>
+        </div>
+      </div>
+      <div style={{ maxHeight: 300, overflowY: "auto", background: "#fff", borderRadius: 6, padding: 8 }}>
+        {dupePreview.slice(0, 20).map(function(d, i) {
+          var assignee = team[d.keep.assignee] || {};
+          return <div key={i} style={{ padding: "6px 8px", borderBottom: "1px solid #F1F5F9", fontSize: 12 }}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>{d.keep.title} <span style={{ color: "#94A3B8", fontWeight: 400 }}>({assignee.name || d.keep.assignee})</span></div>
+            <div style={{ color: "#64748B", fontSize: 11 }}>Pastrat: 1 | Sters: <b style={{ color: "#DC2626" }}>{d.remove.length}</b></div>
+          </div>;
+        })}
+        {dupePreview.length > 20 && <div style={{ fontSize: 11, color: "#94A3B8", padding: 6, textAlign: "center" }}>...si inca {dupePreview.length - 20} grupuri</div>}
+      </div>
+    </Card>}
 
     <Card style={{ marginBottom: 16, padding: "14px 16px", borderLeft: "3px solid " + GR, background: "#F0FDF4" }}>
       <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: GR }}>Status actual</div>
