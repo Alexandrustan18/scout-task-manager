@@ -3581,209 +3581,155 @@ function PodiumCompact({ leaderboard, onNavigate, monthlyBonus, title, subtitle 
 }
 
 function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, visUsers, isMob, monthlyBonus, setMonthlyBonus, userXP }) {
-  // Calculate start of current week (Monday)
+  var [leagueTab, setLeagueTab] = useState(me.role === "pm" ? "pm" : "members");
   var now = new Date();
   var dow = now.getDay();
   var daysFromMon = dow === 0 ? 6 : dow - 1;
   var weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - daysFromMon); weekStart.setHours(0, 0, 0, 0);
   var weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
-
   var lastWeekStart = new Date(weekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7);
   var lastWeekEnd = new Date(weekStart); lastWeekEnd.setDate(lastWeekEnd.getDate() - 1); lastWeekEnd.setHours(23, 59, 59, 999);
-
-  // Stats per user
-  var competitors = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; });
-  var leaderboard = competitors.map(function(u) {
-    var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
-    var thisWeek = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; });
-    var lastWeek = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= lastWeekStart && new Date(t.updatedAt) <= lastWeekEnd; });
-    var overdue = userTasks.filter(function(t) { return isOv(t); }).length;
-
-    // Score formula: done * 10 - overdue * 5 + streak_bonus
-    var userTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
-    var streakBonus = 0;
-    if (userTargets.length > 0) {
-      var tgt = userTargets[0];
-      var daysWithTarget = 0;
-      for (var d = 0; d < 7; d++) {
-        var dt = new Date(weekStart); dt.setDate(dt.getDate() + d);
-        if (dt > now) break;
-        var doneDay = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length;
-        if (doneDay >= (tgt.target || 0)) daysWithTarget++;
-      }
-      streakBonus = daysWithTarget * 5;
-    }
-
-    var score = thisWeek.length * 10 - overdue * 5 + streakBonus;
-    var achCount = (achievements[u] || []).length;
-
-    return {
-      user: u,
-      name: (team[u] || {}).name || u,
-      color: (team[u] || {}).color || "#94A3B8",
-      role: (team[u] || {}).role,
-      doneThis: thisWeek.length,
-      doneLast: lastWeek.length,
-      delta: thisWeek.length - lastWeek.length,
-      overdue: overdue,
-      score: Math.max(0, score),
-      achCount: achCount
-    };
-  }).sort(function(a, b) { return b.score - a.score; });
-
-  // Tier assignment
-  var total = leaderboard.length;
-  var promoted = Math.min(3, Math.ceil(total / 3));
-  var relegated = Math.min(3, Math.ceil(total / 3));
-
-  var getTier = function(idx) {
-    if (idx < promoted) return { name: "Promovabil", color: GR, bg: "#ECFDF5", icon: "⬆" };
-    if (idx >= total - relegated && total > promoted) return { name: "Risc retrogradare", color: "#DC2626", bg: "#FEF2F2", icon: "⬇" };
-    return { name: "Zona stabila", color: "#94A3B8", bg: "#F8FAFC", icon: "▪" };
-  };
-
-  var myPos = leaderboard.findIndex(function(p) { return p.user === user; });
-  var myData = myPos >= 0 ? leaderboard[myPos] : null;
-
   var weekLabel = weekStart.getDate() + " " + MN[weekStart.getMonth()].substring(0, 3) + " - " + weekEnd.getDate() + " " + MN[weekEnd.getMonth()].substring(0, 3);
 
-  var maxScore = leaderboard.length > 0 ? leaderboard[0].score : 1;
+  // MEMBER leaderboard (weekly)
+  var members = visUsers.filter(function(u) { return team[u] && team[u].role === "member"; });
+  var memberBoard = members.map(function(u) {
+    var ut = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
+    var tw = ut.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; });
+    var lw = ut.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= lastWeekStart && new Date(t.updatedAt) <= lastWeekEnd; });
+    var ov = ut.filter(function(t) { return isOv(t); }).length;
+    var uTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
+    var sb = 0;
+    if (uTargets.length > 0) { var tgt = uTargets[0]; for (var d = 0; d < 7; d++) { var dt = new Date(weekStart); dt.setDate(dt.getDate() + d); if (dt > now) break; var dd = ut.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length; if (dd >= (tgt.target || 0)) sb += 5; } }
+    var score = tw.length * 10 - ov * 5 + sb;
+    var xp = (userXP || {})[u] || 0;
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneThis: tw.length, doneLast: lw.length, delta: tw.length - lw.length, overdue: ov, score: Math.max(0, score), achCount: ((achievements || {})[u] || []).length, level: getLevel(xp), title: getLevelTitle(getLevel(xp)) };
+  }).sort(function(a, b) { return b.score - a.score; });
+
+  // PM leaderboard (weekly)
+  var pms = visUsers.filter(function(u) { return team[u] && team[u].role === "pm"; });
+  var pmBoard = pms.map(function(u) {
+    var pmTeam = (team[u] || {}).team || [];
+    var created = allTasks.filter(function(t) { return t.createdBy === u && !t._campaignParent && t.createdAt && new Date(t.createdAt) >= weekStart && new Date(t.createdAt) <= weekEnd; }).length;
+    var teamDone = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; }).length;
+    var ownDone = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; }).length;
+    var teamOv = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && isOv(t); }).length;
+    var score = created * 5 + teamDone * 8 + ownDone * 10 - teamOv * 3;
+    var xp = (userXP || {})[u] || 0;
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", created: created, teamDone: teamDone, ownDone: ownDone, teamOverdue: teamOv, doneThis: created, score: Math.max(0, score), level: getLevel(xp), title: getLevelTitle(getLevel(xp)), teamSize: pmTeam.length };
+  }).sort(function(a, b) { return b.score - a.score; });
+
+  var currentBoard = leagueTab === "pm" ? pmBoard : memberBoard;
+  var myPos = currentBoard.findIndex(function(p) { return p.user === user; });
+  var myData = myPos >= 0 ? currentBoard[myPos] : null;
+  var maxScore = currentBoard.length > 0 ? currentBoard[0].score : 1;
 
   return <div>
     <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>🏆 Liga Saptamanii</h2>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>Liga Saptamanii</h2>
       <div style={{ fontSize: 12, color: "#64748B" }}>{weekLabel}. Competitia se reseteaza lunea dimineata.</div>
     </div>
 
-    {/* My rank card */}
-    {myData && <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, " + myData.color + "15, " + myData.color + "05)", borderLeft: "4px solid " + myData.color }}>
+    {/* Tab switcher */}
+    <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
+      <button onClick={function() { setLeagueTab("members"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "members" ? "#fff" : "transparent", color: leagueTab === "members" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: leagueTab === "members" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>Liga Membrilor ({memberBoard.length})</button>
+      <button onClick={function() { setLeagueTab("pm"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "pm" ? "#fff" : "transparent", color: leagueTab === "pm" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: leagueTab === "pm" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>Liga PM-ilor ({pmBoard.length})</button>
+    </div>
+
+    {/* My rank */}
+    {myData && <Card style={{ marginBottom: 16, background: myData.color + "08", borderLeft: "4px solid " + myData.color }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <div style={{ fontSize: 48, fontWeight: 900, color: myData.color, fontVariantNumeric: "tabular-nums", minWidth: 80 }}>#{myPos + 1}</div>
+        <div style={{ fontSize: 48, fontWeight: 900, color: myData.color }}>#{myPos + 1}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Pozitia ta, {myData.name}</div>
-          <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{myData.doneThis} taskuri done | {myData.overdue} intarziate | Scor: {myData.score}</div>
-          {myData.delta !== 0 && <div style={{ fontSize: 11, fontWeight: 600, color: myData.delta > 0 ? GR : "#DC2626", marginTop: 4 }}>{myData.delta > 0 ? "▲ +" : "▼ "}{myData.delta} vs sapt. trecuta</div>}
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Pozitia ta, {myData.name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{myData.score} puncte | Lv.{myData.level} {myData.title}</div>
         </div>
-        <div style={{ textAlign: "right" }}>
-          {myPos === 0 && <div style={{ fontSize: 28 }}>👑</div>}
-          {myPos < promoted && myPos > 0 && <div style={{ fontSize: 13, fontWeight: 700, color: GR }}>⬆ Zona premiu</div>}
-          {myPos >= total - relegated && total > promoted && <div style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>⬇ Zona retrogradare</div>}
-        </div>
+        {myPos === 0 && <div style={{ fontSize: 28 }}>👑</div>}
       </div>
     </Card>}
 
-    {/* Top 3 podium */}
-    {leaderboard.length >= 3 && <Card style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>🏆 Podium saptamana</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, alignItems: "end" }}>
-        {/* 2nd */}
+    {/* Podium */}
+    {currentBoard.length >= 2 && <Card style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Podium {leagueTab === "pm" ? "PM-ilor" : "Membrilor"}</div>
+      <div style={{ display: "grid", gridTemplateColumns: currentBoard.length >= 3 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 12, alignItems: "end" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 36, marginBottom: 4 }}>🥈</div>
-          <Av color={leaderboard[1].color} size={50} fs={18}>{leaderboard[1].name[0]}</Av>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginTop: 6 }}>{leaderboard[1].name}</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>{leaderboard[1].doneThis} taskuri</div>
+          <Av color={currentBoard[1].color} size={50} fs={18} userId={currentBoard[1].user}>{currentBoard[1].name[0]}</Av>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginTop: 6 }}>{currentBoard[1].name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{currentBoard[1].score} pts</div>
           <div style={{ height: 60, background: "#E5E7EB", borderRadius: "8px 8px 0 0", marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B", fontWeight: 800, fontSize: 18 }}>2</div>
         </div>
-        {/* 1st */}
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 44, marginBottom: 4 }}>👑</div>
-          <Av color={leaderboard[0].color} size={64} fs={24}>{leaderboard[0].name[0]}</Av>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "#1E293B", marginTop: 6 }}>{leaderboard[0].name}</div>
-          <div style={{ fontSize: 12, color: "#D97706", fontWeight: 700 }}>{leaderboard[0].doneThis} taskuri</div>
+          <Av color={currentBoard[0].color} size={64} fs={24} userId={currentBoard[0].user}>{currentBoard[0].name[0]}</Av>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#1E293B", marginTop: 6 }}>{currentBoard[0].name}</div>
+          <div style={{ fontSize: 12, color: "#D97706", fontWeight: 700 }}>{currentBoard[0].score} pts</div>
           <div style={{ height: 90, background: "linear-gradient(180deg, #FDE047, #EAB308)", borderRadius: "8px 8px 0 0", marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: 24, boxShadow: "0 4px 12px rgba(234,179,8,0.3)" }}>1</div>
         </div>
-        {/* 3rd */}
-        <div style={{ textAlign: "center" }}>
+        {currentBoard.length >= 3 && <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 36, marginBottom: 4 }}>🥉</div>
-          <Av color={leaderboard[2].color} size={44} fs={16}>{leaderboard[2].name[0]}</Av>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginTop: 6 }}>{leaderboard[2].name}</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>{leaderboard[2].doneThis} taskuri</div>
+          <Av color={currentBoard[2].color} size={44} fs={16} userId={currentBoard[2].user}>{currentBoard[2].name[0]}</Av>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginTop: 6 }}>{currentBoard[2].name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{currentBoard[2].score} pts</div>
           <div style={{ height: 40, background: "#F97316", borderRadius: "8px 8px 0 0", marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16 }}>3</div>
-        </div>
+        </div>}
       </div>
     </Card>}
 
     {/* Full leaderboard */}
     <Card>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Clasament complet</div>
-      {leaderboard.map(function(p, idx) {
-        var tier = getTier(idx);
+      {currentBoard.map(function(p, idx) {
         var isMe = p.user === user;
+        var lvlColor = getLevelColor(p.level);
         var widthPct = maxScore > 0 ? (p.score / maxScore) * 100 : 0;
-        return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", marginBottom: 6, borderRadius: 8, background: isMe ? p.color + "10" : idx < 3 ? "#FEFCE8" : "#fff", border: "1px solid " + (isMe ? p.color + "40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
-          {/* Progress bar background */}
-          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #FDE04720, transparent)" : idx < 3 ? "linear-gradient(90deg, " + p.color + "10, transparent)" : "linear-gradient(90deg, #F1F5F910, transparent)", zIndex: 0 }} />
-
+        return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", marginBottom: 6, borderRadius: 8, background: isMe ? p.color + "10" : idx < 3 ? "#FEFCE880" : "#fff", border: "1px solid " + (isMe ? p.color + "40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #FDE04720, transparent)" : "transparent", zIndex: 0 }} />
           <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
-            <div style={{ width: 32, textAlign: "center", fontSize: 16, fontWeight: 800, color: idx === 0 ? "#EAB308" : idx === 1 ? "#94A3B8" : idx === 2 ? "#F97316" : "#CBD5E1" }}>{idx < 3 ? ["🥇", "🥈", "🥉"][idx] : "#" + (idx + 1)}</div>
+            <div style={{ width: 32, textAlign: "center", fontSize: 16, fontWeight: 800 }}>{idx < 3 ? ["🥇", "🥈", "🥉"][idx] : "#" + (idx + 1)}</div>
             <Av color={p.color} size={32} fs={12} userId={p.user}>{p.name[0]}</Av>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{p.name}</span>
+                <span style={{ fontSize: 10, color: lvlColor, fontWeight: 700, background: lvlColor + "15", padding: "2px 8px", borderRadius: 4 }}>Lv.{p.level}</span>
                 {isMe && <Badge bg={p.color + "15"} color={p.color}>TU</Badge>}
-                {p.role === "pm" && <Badge bg="#F3E8FF" color="#7C3AED">PM</Badge>}
               </div>
-              <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>{p.doneThis} done | {p.overdue} intarziate | {p.achCount} achievements</div>
+              <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>
+                {leagueTab === "pm" ? (p.created + " create | " + p.teamDone + " echipa done | " + p.ownDone + " proprii | " + p.teamOverdue + " ov echipa") : (p.doneThis + " done | " + p.overdue + " overdue | " + p.achCount + " ach")}
+              </div>
             </div>
-            <div style={{ textAlign: "right", minWidth: 70 }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: idx === 0 ? "#EAB308" : "#1E293B", fontVariantNumeric: "tabular-nums" }}>{p.score}</div>
-              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>scor</div>
+            <div style={{ textAlign: "right", minWidth: 60 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: idx === 0 ? "#EAB308" : "#1E293B" }}>{p.score}</div>
+              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase" }}>scor</div>
             </div>
-            {p.delta !== 0 && <div style={{ fontSize: 11, fontWeight: 700, color: p.delta > 0 ? GR : "#DC2626", minWidth: 40, textAlign: "right" }}>{p.delta > 0 ? "▲+" : "▼"}{p.delta}</div>}
-            <Badge bg={tier.bg} color={tier.color}>{tier.icon}</Badge>
+            {p.delta !== undefined && p.delta !== 0 && <div style={{ fontSize: 11, fontWeight: 700, color: p.delta > 0 ? GR : "#DC2626", minWidth: 40, textAlign: "right" }}>{p.delta > 0 ? "▲+" : "▼"}{p.delta}</div>}
           </div>
         </div>;
       })}
-      {leaderboard.length === 0 && <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nu sunt useri in liga.</div>}
+      {currentBoard.length === 0 && <div style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Nu sunt participanti.</div>}
     </Card>
 
-    {/* Monthly Bonus Prize */}
-    {monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && <Card style={{ marginTop: 16, background: "linear-gradient(135deg, #FEFCE8, #FFF 60%)", borderLeft: "4px solid #EAB308", position: "relative", overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: 8, right: 12, fontSize: 40, opacity: 0.15 }}>💰</div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Premiu lunar - Locul 1</div>
-      <div style={{ fontSize: 32, fontWeight: 900, color: "#1E293B", marginBottom: 4 }}>{monthlyBonus.amount} {monthlyBonus.currency}</div>
-      <div style={{ fontSize: 12, color: "#64748B" }}>Persoana cu cel mai mare scor la sfarsitul lunii primeste bonusul. Scorul se reseteaza lunar.</div>
-      {leaderboard.length > 0 && <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#EAB30812", borderRadius: 8 }}>
-        <span style={{ fontSize: 20 }}>👑</span>
-        <Av color={leaderboard[0].color} size={28} fs={11}>{leaderboard[0].name[0]}</Av>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{leaderboard[0].name}</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>Lider curent cu {leaderboard[0].score} puncte{userXP ? " | Lv." + getLevel((userXP || {})[leaderboard[0].user] || 0) : ""}</div>
-        </div>
-      </div>}
-    </Card>}
-
-    {/* Admin: Set bonus */}
-    {me.role === "admin" && <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premiu Lunar (doar admin)</div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-          <input type="checkbox" checked={monthlyBonus.enabled} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { enabled: e.target.checked })); }} style={{ accentColor: "#7C3AED" }} />
-          Activ
-        </label>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <label style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Suma:</label>
-          <input type="number" min="0" step="10" value={monthlyBonus.amount} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { amount: parseInt(e.target.value) || 0 })); }} style={Object.assign({}, S.input, { width: 100, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <label style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Moneda:</label>
-          <select value={monthlyBonus.currency} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { currency: e.target.value })); }} style={Object.assign({}, S.fSel, { padding: "6px 10px" })}>
-            <option value="RON">RON</option>
-            <option value="EUR">EUR</option>
-            <option value="USD">USD</option>
-          </select>
-        </div>
-      </div>
-      <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>Bonusul se afiseaza pe pagina Liga Saptamanii. Toti membrii echipei il vad. Plateste-l manual la sfarsitul lunii celui cu scorul cel mai mare.</div>
-    </Card>}
-
-    {/* Scoring explanation */}
+    {/* Scoring */}
     <Card style={{ marginTop: 16, background: "#F8FAFC" }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>Cum se calculeaza scorul:</div>
-      <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.7 }}>
-        <span style={{ display: "block" }}>+10 puncte pentru fiecare task finalizat</span>
-        <span style={{ display: "block" }}>+5 puncte bonus pentru fiecare zi cu target atins</span>
-        <span style={{ display: "block" }}>-5 puncte pentru fiecare task intarziat</span>
+      <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 4 }}>Membri (implementare)</div>
+          <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.7 }}>
+            <span style={{ display: "block" }}>+10 per task finalizat in saptamana</span>
+            <span style={{ display: "block" }}>+5 per zi cu target atins</span>
+            <span style={{ display: "block" }}>-5 per task intarziat</span>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", marginBottom: 4 }}>PM (coordonare)</div>
+          <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.7 }}>
+            <span style={{ display: "block" }}>+5 per task creat catre echipa</span>
+            <span style={{ display: "block" }}>+8 per task finalizat de echipa</span>
+            <span style={{ display: "block" }}>+10 per task propriu finalizat</span>
+            <span style={{ display: "block" }}>-3 per task intarziat in echipa</span>
+          </div>
+        </div>
       </div>
     </Card>
   </div>;
