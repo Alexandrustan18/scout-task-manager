@@ -156,7 +156,7 @@ var CSS = "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{ma
 
 function Badge({ bg, color, children }) { return <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 9px", borderRadius: 6, fontSize: 10, fontWeight: 600, background: bg, color: color, whiteSpace: "nowrap" }}>{children}</span>; }
 function Av({ color, size, fs, children }) { return <div style={{ width: size || 32, height: size || 32, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{children}</div>; }
-function Card({ children, style }) { return <div style={{ background: "#fff", border: "1px solid hsl(214,18%,90%)", borderRadius: 10, padding: 16, animation: "fadeUp 0.2s", ...style }}>{children}</div>; }
+function Card({ children, style, onClick, onMouseEnter, onMouseLeave, onMouseDown, onMouseUp }) { return <div onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ background: "#fff", border: "1px solid hsl(214,18%,90%)", borderRadius: 10, padding: 16, animation: "fadeUp 0.2s", ...style }}>{children}</div>; }
 
 function Ic({ d, size, color }) { return <svg width={size || 20} height={size || 20} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>; }
 var Icons = {
@@ -1344,7 +1344,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
     </div>
 
     {/* Podium */}
-    {visUsers && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, visUsers)} onNavigate={setPage ? function() { setPage("league"); } : null} />}
+    <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("league"); } : null} />
 
     {/* Tab switcher */}
     <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
@@ -1594,7 +1594,7 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
 
     {/* Podium */}
-    {visUsers && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, visUsers)} onNavigate={setPage ? function() { setPage("league"); } : null} />}
+    <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("league"); } : null} />
 
     {/* Target progress */}
     {myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
@@ -2137,7 +2137,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     })}</div>
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
     {activeTimers.length > 0 && <Card style={{ marginBottom: 20, borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card>}
-    {me && me.role === "admin" && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, visUsers)} onNavigate={setPage ? function() { setPage("league"); } : null} />}
+    {me && me.role === "admin" && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("league"); } : null} />}
     {me && me.role === "admin" && <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} setPage={setPage} />}
     <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(380px,1fr))", gap: 12 }}>{ppl.map(function(d) {
