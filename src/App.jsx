@@ -152,7 +152,7 @@ function hasPerm(user, team, perm) {
   return (defaults[m.role] || {})[perm] || false;
 }
 
-var CSS = "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{margin:0;background:#FAFAFA;font-family:system-ui,-apple-system,sans-serif}::selection{background:#0C7E3E22}input:focus,select:focus,textarea:focus{border-color:#0C7E3E !important;outline:none;box-shadow:0 0 0 3px #0C7E3E18}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}button{cursor:pointer;font-family:inherit}button:hover{opacity:0.9}a{text-decoration:none}@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes toastIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-20px)}}@keyframes badgePop{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}";
+var CSS = "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{margin:0;background:#FAFAFA;font-family:system-ui,-apple-system,sans-serif}::selection{background:#0C7E3E22}input:focus,select:focus,textarea:focus{border-color:#0C7E3E !important;outline:none;box-shadow:0 0 0 3px #0C7E3E18}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}button{cursor:pointer;font-family:inherit}button:hover{opacity:0.9}a{text-decoration:none}@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes toastIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-20px)}}@keyframes badgePop{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}@keyframes confettiFall{0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}@keyframes celebratePulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(16,185,129,0.4)}50%{transform:scale(1.05);box-shadow:0 0 20px 10px rgba(16,185,129,0.1)}100%{transform:scale(1);box-shadow:0 0 0 0 rgba(16,185,129,0)}}@keyframes targetBurst{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}thead.sticky-header th{position:sticky;top:0;z-index:10;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.05)}";
 
 function Badge({ bg, color, children }) { return <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 9px", borderRadius: 6, fontSize: 10, fontWeight: 600, background: bg, color: color, whiteSpace: "nowrap" }}>{children}</span>; }
 function Av({ color, size, fs, children }) { return <div style={{ width: size || 32, height: size || 32, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{children}</div>; }
@@ -304,6 +304,11 @@ export default function App() {
   var [slas, setSlas] = useState({});
   var [leaves, setLeaves] = useState({});
   var [branding, setBranding] = useState({ title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" });
+  // Pipeline Builder rules
+  var [pipelineRules, setPipelineRules] = useState([]);
+  // Sound & celebration settings
+  var [soundEnabled, setSoundEnabled] = useState(function() { try { return localStorage.getItem("s7_sound") !== "off"; } catch(e) { return true; } });
+  var [celebration, setCelebration] = useState(null);
   var [expandedGroups, setExpandedGroups] = useState(function() {
     try { var saved = localStorage.getItem("s7_nav_groups"); if (saved) return JSON.parse(saved); } catch(e) {}
     return { "Operational": true, "Echipa": true, "Comunicare": false, "Configurare": false };
@@ -311,7 +316,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd, plf] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd, plf, plr] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -338,6 +343,7 @@ export default function App() {
         cloudLoad("leaves", {}),
         cloudLoad("branding", { title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" }),
         cloudLoad("platforms", DEF_PLATFORMS),
+        cloudLoad("pipelineRules", []),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -353,6 +359,7 @@ export default function App() {
       if (tt && tt.length > 0) setTaskTypes(tt); else { setTaskTypes(DEF_TASK_TYPES); cloudSave("taskTypes", DEF_TASK_TYPES); }
       if (dp && dp.length > 0) setDepartments(dp); else { setDepartments(DEF_DEPARTMENTS); cloudSave("departments", DEF_DEPARTMENTS); }
       if (plf && plf.length > 0) setPlatforms(plf); else { setPlatforms(DEF_PLATFORMS); cloudSave("platforms", DEF_PLATFORMS); }
+      setPipelineRules(plr || []);
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -431,6 +438,8 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("taskTypes", taskTypes, 1000); }, [taskTypes]);
   useEffect(function() { if (!loading) debouncedSave("departments", departments, 1000); }, [departments]);
   useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
+  useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
+  useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
   useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
   useEffect(function() { if (!loading) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
   useEffect(function() { if (!loading) debouncedSave("statusHistory", statusHistory, 1000); }, [statusHistory]);
@@ -695,6 +704,56 @@ export default function App() {
   };
   var dismissToast = function(id) { setToasts(function(p) { return p.filter(function(x) { return x.id !== id; }); }); };
 
+  // Sound effects
+  var playSound = function(type) {
+    if (!soundEnabled) return;
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.value = 0.08;
+      if (type === "done") { osc.frequency.value = 880; osc.type = "sine"; gain.gain.setValueAtTime(0.08, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3); }
+      else if (type === "notify") { osc.frequency.value = 660; osc.type = "sine"; gain.gain.setValueAtTime(0.05, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15); }
+      else if (type === "target") { osc.frequency.value = 523; osc.type = "sine"; gain.gain.setValueAtTime(0.08, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5); var osc2 = ctx.createOscillator(); var g2 = ctx.createGain(); osc2.connect(g2); g2.connect(ctx.destination); osc2.frequency.value = 784; osc2.type = "sine"; g2.gain.setValueAtTime(0.08, ctx.currentTime + 0.15); g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5); osc2.start(ctx.currentTime + 0.15); osc2.stop(ctx.currentTime + 0.5); }
+      else if (type === "levelup") { var notes = [523, 659, 784, 1047]; notes.forEach(function(freq, i) { var o = ctx.createOscillator(); var g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value = freq; o.type = "sine"; g.gain.setValueAtTime(0.06, ctx.currentTime + i * 0.12); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.12 + 0.3); o.start(ctx.currentTime + i * 0.12); o.stop(ctx.currentTime + i * 0.12 + 0.3); }); }
+    } catch(e) {}
+  };
+
+  // Celebration confetti
+  var triggerCelebration = function(type) {
+    setCelebration({ type: type, id: gid() });
+    if (type === "done") playSound("done");
+    if (type === "target") playSound("target");
+    setTimeout(function() { setCelebration(null); }, 2000);
+  };
+
+  // Pipeline rules executor
+  var executePipelineRules = function(task, newStatus) {
+    if (newStatus !== "Done" || !pipelineRules || pipelineRules.length === 0) return;
+    pipelineRules.forEach(function(rule) {
+      if (!rule.active) return;
+      var match = true;
+      if (rule.triggerStatus && rule.triggerStatus !== newStatus) match = false;
+      if (rule.triggerAssignee && rule.triggerAssignee !== task.assignee) match = false;
+      if (rule.triggerTaskType && rule.triggerTaskType !== task.taskType) match = false;
+      if (rule.triggerShop && rule.triggerShop !== task.shop) match = false;
+      if (rule.triggerDepartment && rule.triggerDepartment !== task.department) match = false;
+      if (!match) return;
+      // Check if pipeline task already exists for this source
+      var exists = tasks.find(function(t) { return t._pipelineRuleId === rule.id && t.dependsOn && t.dependsOn.includes(task.id); });
+      if (exists) return;
+      var newDeadline = TD;
+      if (rule.deadlineOffset) { var d = new Date(); d.setDate(d.getDate() + (parseInt(rule.deadlineOffset) || 1)); newDeadline = ds(d); }
+      var pipeTask = { id: gid(), title: (rule.newTitlePrefix || "") + task.title + (rule.newTitleSuffix || ""), description: rule.newDescription || task.description || "", assignee: rule.targetAssignee || task.assignee, status: "To Do", priority: rule.newPriority || task.priority, platform: rule.newPlatform || task.platform || "", taskType: rule.newTaskType || task.taskType || "", department: rule.newDepartment || task.department || "", shop: task.shop, product: task.product || "", productName: task.productName || "", deadline: newDeadline, links: (task.links || []).slice(), subtasks: [], comments: [], tags: [], dependsOn: [task.id], campaignItems: [], createdBy: "system", createdAt: ts(), updatedAt: ts(), _campaignParentId: task._campaignParentId || "", _fromPipeline: task.id, _pipelineRuleId: rule.id };
+      setTasks(function(p) { return [pipeTask].concat(p); });
+      setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTask.id] = [{ status: "To Do", at: ts() }]; return n; });
+      addNotif("pipeline", "Pipeline: \"" + pipeTask.title + "\"", pipeTask.id, rule.targetAssignee);
+      addLog("PIPELINE", "Rule \"" + rule.name + "\": " + task.title + " -> " + pipeTask.title);
+    });
+  };
+
   var handleLogin = function(u, pw) {
     var t = team[u];
     if (!t || t.password !== pw) return false;
@@ -944,7 +1003,16 @@ export default function App() {
       }
     }
     if (st === "Done" && prevTask) {
+      triggerCelebration("done");
       setTimeout(function() { checkAchievements(prevTask.assignee); }, 500);
+      // Execute custom pipeline rules
+      executePipelineRules(prevTask, st);
+      // Check if target was just hit
+      var myTargetCheck = (targets || []).find(function(tg) { return tg.userId === prevTask.assignee && tg.active !== false; });
+      if (myTargetCheck) {
+        var doneCountCheck = tasks.filter(function(tx) { return tx.assignee === prevTask.assignee && tx.status === "Done" && tx.updatedAt && ds(tx.updatedAt) === TD && !tx._campaignParent; }).length + 1;
+        if (doneCountCheck === myTargetCheck.target) { setTimeout(function() { triggerCelebration("target"); }, 800); }
+      }
       // FEATURE 11: check daily challenge
       if (dailyChallenge && dailyChallenge.date === TD && !dailyChallenge.completedBy) {
         var userDoneToday = tasks.filter(function(t) { return t.assignee === (prevTask.assignee) && t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length + 1;
@@ -1092,6 +1160,7 @@ export default function App() {
     { id: "manage_users", label: "Manage Users", icon: Icons.usrs },
     { id: "branding", label: "Branding", icon: Icons.settings },
     { id: "config", label: "Configurare Rapida", icon: Icons.filter },
+    { id: "pipeline", label: "Pipeline Builder", icon: Icons.dep },
   ];
 
   var navGroups = [
@@ -1099,7 +1168,7 @@ export default function App() {
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
     { label: "Echipa", items: ["workload", "performance", "league", "digest", "achievements"] },
     { label: "Comunicare", items: ["announce"] },
-    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "backups"] },
+    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "backups"] },
   ];
 
   var accessibleNav = navItems.filter(function(n) {
@@ -1115,6 +1184,7 @@ export default function App() {
   return (
     <div style={S.app}><style>{CSS}</style>
       <ToastBanner toasts={toasts} onDismiss={dismissToast} />
+      {celebration && <ConfettiOverlay type={celebration.type} key={celebration.id} />}
       {achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}
       {isMob && mobNav && <div style={S.overlay} onClick={function() { setMobNav(false); }} />}
       <aside style={Object.assign({}, S.sidebar, isMob ? { position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 200, transform: mobNav ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.2s" } : {})}>
@@ -1162,6 +1232,7 @@ export default function App() {
           <h1 style={S.pageTitle}>{(accessibleNav.find(function(n) { return n.id === page; }) || {}).label || ""}</h1>
           <div style={{ flex: 1 }} />
           {page === "tasks" && canCreate && <button style={Object.assign({}, S.chip, { background: bulkMode ? "#DC2626" : "#F1F5F9", color: bulkMode ? "#fff" : "#475569", marginRight: 8 })} onClick={function() { setBulkMode(!bulkMode); setSelectedTasks([]); }}><Ic d={Icons.check} size={14} color={bulkMode ? "#fff" : "#475569"} /> {bulkMode ? "Exit Bulk" : "Bulk"}</button>}
+          <button style={Object.assign({}, S.iconBtn, { opacity: soundEnabled ? 1 : 0.4 })} onClick={function() { setSoundEnabled(!soundEnabled); if (!soundEnabled) playSound("done"); }} title={soundEnabled ? "Sunet ON" : "Sunet OFF"}><span style={{ fontSize: 16 }}>{soundEnabled ? "🔊" : "🔇"}</span></button>
           <div style={{ position: "relative" }}>
             <button style={S.iconBtn} onClick={function() { setShowNotifs(!showNotifs); }}><Ic d={Icons.bell} size={20} color="#475569" /></button>
             {unreadNotifs.length > 0 && <span style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, borderRadius: "50%", background: "#DC2626", color: "#fff", fontSize: 9, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{unreadNotifs.length}</span>}
@@ -1214,6 +1285,7 @@ export default function App() {
           {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
+          {page === "pipeline" && <PipelinePage pipelineRules={pipelineRules} setPipelineRules={setPipelineRules} team={team} assUsers={assUsers} shops={shops} taskTypes={taskTypes} departments={departments} platforms={platforms} addLog={addLog} />}
           {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
@@ -2270,18 +2342,36 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
 
     {(function() {
+      // Sparkline data: last 7 days for each KPI
+      var sparkData = {};
+      ["total", "todo", "inProg", "review", "overdue", "done"].forEach(function(key) {
+        sparkData[key] = [];
+        for (var sd = 6; sd >= 0; sd--) {
+          var sdt = new Date(); sdt.setDate(sdt.getDate() - sd); var sdStr = ds(sdt);
+          var dayTasks = allTasks.filter(function(t) { return !t._campaignParent; });
+          if (key === "done") { sparkData[key].push(dayTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === sdStr; }).length); }
+          else if (key === "total") { sparkData[key].push(dayTasks.filter(function(t) { var cd = t.createdAt ? ds(t.createdAt) : ""; return cd === sdStr; }).length); }
+          else if (key === "todo") { sparkData[key].push(dayTasks.filter(function(t) { return t.status === "To Do" && t.createdAt && ds(t.createdAt) === sdStr; }).length); }
+          else if (key === "inProg") { sparkData[key].push(dayTasks.filter(function(t) { return t.status === "In Progress" && t.updatedAt && ds(t.updatedAt) === sdStr; }).length); }
+          else if (key === "review") { sparkData[key].push(dayTasks.filter(function(t) { return t.status === "Review" && t.updatedAt && ds(t.updatedAt) === sdStr; }).length); }
+          else if (key === "overdue") { sparkData[key].push(dayTasks.filter(function(t) { return t.deadline === sdStr && t.status !== "Done"; }).length); }
+        }
+      });
+      var sparkKeys = ["total", "todo", "inProg", "review", "overdue", "done"];
+
       var renderBlock = function(id) {
         if (id === "kpiRow") return <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12 }}>{[
-          { l: "Total", v: rangeStats.total, c: "#475569", filter: function(t) { return true; } },
-          { l: "To Do", v: rangeStats.todo, c: "#94A3B8", filter: function(t) { return t.status === "To Do"; } },
-          { l: "In Progress", v: rangeStats.inProg, c: "#2563EB", filter: function(t) { return t.status === "In Progress"; } },
-          { l: "Review", v: rangeStats.review, c: "#D97706", filter: function(t) { return t.status === "Review"; } },
-          { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626", filter: function(t) { return isOv(t); } },
-          { l: "Done", v: rangeStats.done, c: GR, filter: function(t) { return t.status === "Done"; } }
+          { l: "Total", v: rangeStats.total, c: "#475569", filter: function(t) { return true; }, sk: "total" },
+          { l: "To Do", v: rangeStats.todo, c: "#94A3B8", filter: function(t) { return t.status === "To Do"; }, sk: "todo" },
+          { l: "In Progress", v: rangeStats.inProg, c: "#2563EB", filter: function(t) { return t.status === "In Progress"; }, sk: "inProg" },
+          { l: "Review", v: rangeStats.review, c: "#D97706", filter: function(t) { return t.status === "Review"; }, sk: "review" },
+          { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626", filter: function(t) { return isOv(t); }, sk: "overdue" },
+          { l: "Done", v: rangeStats.done, c: GR, filter: function(t) { return t.status === "Done"; }, sk: "done" }
         ].map(function(s) {
-          return <Card key={s.l} onClick={editMode ? undefined : function() { setKpiModal({ title: s.l + " (" + dashPreset + ")", color: s.c, tasks: rangeTasks.filter(s.filter) }); }} style={{ borderTop: "3px solid " + s.c, cursor: editMode ? "default" : "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { if (!editMode) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; } }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div>
-            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div>
+          return <Card key={s.l} onClick={editMode ? undefined : function() { setKpiModal({ title: s.l + " (" + dashPreset + ")", color: s.c, tasks: rangeTasks.filter(s.filter) }); }} style={{ borderTop: "3px solid " + s.c, cursor: editMode ? "default" : "pointer", transition: "all 0.15s", position: "relative", overflow: "hidden" }} onMouseEnter={function(e) { if (!editMode) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; } }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
+            <div style={{ position: "absolute", bottom: 4, right: 8 }}><Sparkline data={sparkData[s.sk]} color={s.c} height={28} /></div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: s.c, position: "relative", zIndex: 1 }}>{s.v}</div>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2, position: "relative", zIndex: 1 }}>{s.l}</div>
           </Card>;
         })}</div>;
         if (id === "live") return activeTimers.length > 0 ? <Card style={{ borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card> : null;
@@ -4104,6 +4194,223 @@ function CampaignFinalizeModal({ task, onFinalize, onClose }) {
     <div style={{ fontSize: 12, color: "#64748B", marginTop: 8, marginBottom: 16 }}>{count} produse se adauga la targetul zilnic. {total - count > 0 ? (total - count) + " ramase." : "Toate finalizate!"}</div>
     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button style={S.cancelBtn} onClick={onClose}>Anuleaza</button><button style={S.primBtn} onClick={function() { onFinalize(count); }}>Finalizeaza ({count})</button></div>
   </div></div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONFETTI OVERLAY — Visual celebration on task Done / target hit
+// ═══════════════════════════════════════════════════════════════
+function ConfettiOverlay({ type }) {
+  var colors = type === "target" ? ["#FFD700", "#FFA500", "#FF6347", "#4ADE80", "#3B82F6", "#A855F7"] : ["#4ADE80", "#10B981", "#0C7E3E", "#6EE7B7", "#34D399"];
+  var particles = [];
+  var count = type === "target" ? 40 : 20;
+  for (var i = 0; i < count; i++) {
+    particles.push({ id: i, left: Math.random() * 100, delay: Math.random() * 0.8, size: 4 + Math.random() * 8, color: colors[Math.floor(Math.random() * colors.length)], duration: 1.2 + Math.random() * 1.2, shape: Math.random() > 0.5 ? "circle" : "rect" });
+  }
+  return <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999, overflow: "hidden" }}>
+    {particles.map(function(p) {
+      return <div key={p.id} style={{ position: "absolute", left: p.left + "%", top: -20, width: p.size, height: p.shape === "circle" ? p.size : p.size * 1.5, borderRadius: p.shape === "circle" ? "50%" : 2, background: p.color, animation: "confettiFall " + p.duration + "s ease-in " + p.delay + "s forwards", opacity: 0.9, transform: "rotate(" + (Math.random() * 360) + "deg)" }} />;
+    })}
+    {type === "target" && <div style={{ position: "fixed", top: "40%", left: "50%", transform: "translate(-50%,-50%)", animation: "targetBurst 0.6s ease-out", textAlign: "center", pointerEvents: "none" }}>
+      <div style={{ fontSize: 48, marginBottom: 8 }}>🎯</div>
+      <div style={{ fontSize: 22, fontWeight: 900, color: "#0C7E3E", textShadow: "0 2px 10px rgba(12,126,62,0.3)", background: "#fff", padding: "8px 24px", borderRadius: 12, boxShadow: "0 8px 30px rgba(0,0,0,0.15)" }}>TARGET ATINS!</div>
+    </div>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SPARKLINE — Mini 7-day trend chart for KPI cards
+// ═══════════════════════════════════════════════════════════════
+function Sparkline({ data, color, height }) {
+  if (!data || data.length < 2) return null;
+  var h = height || 30;
+  var w = 80;
+  var max = Math.max.apply(null, data);
+  var min = Math.min.apply(null, data);
+  var range = max - min || 1;
+  var points = data.map(function(v, i) {
+    var x = (i / (data.length - 1)) * w;
+    var y = h - ((v - min) / range) * (h - 4) - 2;
+    return x + "," + y;
+  });
+  var linePath = "M" + points.join(" L");
+  var areaPath = linePath + " L" + w + "," + h + " L0," + h + " Z";
+  return <svg width={w} height={h} viewBox={"0 0 " + w + " " + h} style={{ display: "block", opacity: 0.6 }}>
+    <defs><linearGradient id={"spk_" + color.replace("#", "")} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.3" /><stop offset="100%" stopColor={color} stopOpacity="0.02" /></linearGradient></defs>
+    <path d={areaPath} fill={"url(#spk_" + color.replace("#", "") + ")"} />
+    <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx={data.length > 1 ? w : 0} cy={h - ((data[data.length - 1] - min) / range) * (h - 4) - 2} r="2.5" fill={color} />
+  </svg>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PIPELINE BUILDER — Visual automation rule creator
+// ═══════════════════════════════════════════════════════════════
+function PipelinePage({ pipelineRules, setPipelineRules, team, assUsers, shops, taskTypes, departments, platforms, addLog }) {
+  var [showForm, setShowForm] = useState(false);
+  var [editId, setEditId] = useState(null);
+  var [form, setForm] = useState({
+    name: "", triggerAssignee: "", triggerTaskType: "", triggerDepartment: "", triggerShop: "", triggerStatus: "Done",
+    targetAssignee: "", newTaskType: "", newDepartment: "", newPlatform: "", newPriority: "Normal",
+    newTitlePrefix: "", newTitleSuffix: " - Next", newDescription: "", deadlineOffset: "1", active: true
+  });
+
+  var resetForm = function() {
+    setForm({ name: "", triggerAssignee: "", triggerTaskType: "", triggerDepartment: "", triggerShop: "", triggerStatus: "Done", targetAssignee: "", newTaskType: "", newDepartment: "", newPlatform: "", newPriority: "Normal", newTitlePrefix: "", newTitleSuffix: " - Next", newDescription: "", deadlineOffset: "1", active: true });
+    setEditId(null);
+  };
+
+  var save = function() {
+    if (!form.name.trim() || !form.targetAssignee) return;
+    if (editId) {
+      setPipelineRules(function(p) { return p.map(function(r) { return r.id === editId ? Object.assign({}, form, { id: editId }) : r; }); });
+      addLog("PIPELINE", "Regula editata: " + form.name);
+    } else {
+      setPipelineRules(function(p) { return p.concat([Object.assign({}, form, { id: gid() })]); });
+      addLog("PIPELINE", "Regula noua: " + form.name);
+    }
+    setShowForm(false);
+    resetForm();
+  };
+
+  var editRule = function(rule) {
+    setForm(Object.assign({}, rule));
+    setEditId(rule.id);
+    setShowForm(true);
+  };
+
+  var deleteRule = function(id) {
+    if (!window.confirm("Stergi regula?")) return;
+    setPipelineRules(function(p) { return p.filter(function(r) { return r.id !== id; }); });
+    addLog("PIPELINE", "Regula stearsa");
+  };
+
+  var toggleRule = function(id) {
+    setPipelineRules(function(p) { return p.map(function(r) { return r.id === id ? Object.assign({}, r, { active: !r.active }) : r; }); });
+  };
+
+  var dupRule = function(rule) {
+    setPipelineRules(function(p) { return p.concat([Object.assign({}, rule, { id: gid(), name: rule.name + " (copie)" })]); });
+  };
+
+  var set = function(k, v) { setForm(function(p) { var n = Object.assign({}, p); n[k] = v; return n; }); };
+
+  return <div style={{ maxWidth: 900 }}>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Pipeline Builder</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Creeaza reguli de automatizare: cand un task e finalizat, se creeaza automat alt task pentru urmatoarea persoana din pipeline. Fara cod, doar dropdown-uri.</div>
+    </div>
+
+    <button style={S.primBtn} onClick={function() { resetForm(); setShowForm(!showForm); }}><Ic d={Icons.plus} size={14} color="#fff" /> {showForm ? "Anuleaza" : "Regula noua"}</button>
+
+    {showForm && <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED", marginBottom: 14 }}>{editId ? "Editeaza regula" : "Regula noua"}</div>
+
+      <label style={S.label}>Nume regula *</label>
+      <input style={S.input} value={form.name} onChange={function(e) { set("name", e.target.value); }} placeholder="Ex: Dana Done -> Mara Poze Foto Produs" />
+
+      {/* TRIGGER section */}
+      <div style={{ marginTop: 16, padding: "14px 16px", background: "#FEF2F2", borderRadius: 8, border: "1px solid #FCA5A530" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Cand se intampla (Trigger)</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div><label style={S.label}>Status devine</label><select style={S.fSelF} value={form.triggerStatus} onChange={function(e) { set("triggerStatus", e.target.value); }}><option value="Done">Done</option><option value="Review">Review</option></select></div>
+          <div><label style={S.label}>De la persoana (optional)</label><select style={S.fSelF} value={form.triggerAssignee} onChange={function(e) { set("triggerAssignee", e.target.value); }}><option value="">Oricine</option>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select></div>
+          <div><label style={S.label}>Tip task (optional)</label><select style={S.fSelF} value={form.triggerTaskType} onChange={function(e) { set("triggerTaskType", e.target.value); }}><option value="">Orice tip</option>{(taskTypes || []).map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select></div>
+          <div><label style={S.label}>Magazin (optional)</label><select style={S.fSelF} value={form.triggerShop} onChange={function(e) { set("triggerShop", e.target.value); }}><option value="">Orice magazin</option>{(shops || []).map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select></div>
+          <div><label style={S.label}>Departament (optional)</label><select style={S.fSelF} value={form.triggerDepartment} onChange={function(e) { set("triggerDepartment", e.target.value); }}><option value="">Orice dept</option>{(departments || []).map(function(d) { return <option key={d} value={d}>{d}</option>; })}</select></div>
+        </div>
+      </div>
+
+      {/* Arrow */}
+      <div style={{ textAlign: "center", padding: "10px 0", fontSize: 24, color: "#7C3AED" }}>⬇</div>
+
+      {/* ACTION section */}
+      <div style={{ padding: "14px 16px", background: "#F0FDF4", borderRadius: 8, border: "1px solid #0C7E3E30" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#0C7E3E", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Atunci creeaza task (Actiune)</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div><label style={S.label}>Assignee nou *</label><select style={S.fSelF} value={form.targetAssignee} onChange={function(e) { set("targetAssignee", e.target.value); }}><option value="">-- Alege --</option>{assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}</select></div>
+          <div><label style={S.label}>Deadline (+zile)</label><input style={S.input} type="number" min="0" max="30" value={form.deadlineOffset} onChange={function(e) { set("deadlineOffset", e.target.value); }} /></div>
+          <div><label style={S.label}>Tip task nou</label><select style={S.fSelF} value={form.newTaskType} onChange={function(e) { set("newTaskType", e.target.value); }}><option value="">Pastureaza original</option>{(taskTypes || []).map(function(t) { return <option key={t} value={t}>{t}</option>; })}</select></div>
+          <div><label style={S.label}>Departament nou</label><select style={S.fSelF} value={form.newDepartment} onChange={function(e) { set("newDepartment", e.target.value); }}><option value="">Pastureaza original</option>{(departments || []).map(function(d) { return <option key={d} value={d}>{d}</option>; })}</select></div>
+          <div><label style={S.label}>Prioritate</label><select style={S.fSelF} value={form.newPriority} onChange={function(e) { set("newPriority", e.target.value); }}><option value="Low">Low</option><option value="Normal">Normal</option><option value="High">High</option><option value="Urgent">Urgent</option></select></div>
+          <div><label style={S.label}>Platforma</label><select style={S.fSelF} value={form.newPlatform} onChange={function(e) { set("newPlatform", e.target.value); }}><option value="">Pastureaza original</option>{(platforms || []).map(function(p) { return <option key={p} value={p}>{p}</option>; })}</select></div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+          <div><label style={S.label}>Prefix titlu</label><input style={S.input} value={form.newTitlePrefix} onChange={function(e) { set("newTitlePrefix", e.target.value); }} placeholder="Ex: [REVIEW] " /></div>
+          <div><label style={S.label}>Sufix titlu</label><input style={S.input} value={form.newTitleSuffix} onChange={function(e) { set("newTitleSuffix", e.target.value); }} placeholder="Ex:  - Foto Produs" /></div>
+        </div>
+        <label style={S.label}>Descriere task nou (optional)</label>
+        <textarea style={S.ta} value={form.newDescription} onChange={function(e) { set("newDescription", e.target.value); }} placeholder="Se adauga la taskul nou creat..." />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button style={S.primBtn} onClick={save}>{editId ? "Salveaza modificarile" : "Creeaza regula"}</button>
+        <button style={S.cancelBtn} onClick={function() { setShowForm(false); resetForm(); }}>Anuleaza</button>
+      </div>
+    </Card>}
+
+    {/* Existing rules */}
+    <div style={{ marginTop: 20 }}>
+      {pipelineRules.length === 0 && !showForm && <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>🔧</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Nicio regula de pipeline</div>
+        <div style={{ fontSize: 12 }}>Creeaza prima regula pentru a automatiza flow-ul echipei.</div>
+        <div style={{ fontSize: 12, marginTop: 12, color: "#64748B" }}>Exemplu: "Cand Dana termina un Ad Creation, creeaza automat un task Foto Produs pentru Mara Poze"</div>
+      </Card>}
+
+      {pipelineRules.map(function(rule) {
+        var triggerUser = rule.triggerAssignee ? (team[rule.triggerAssignee] || {}).name : "Oricine";
+        var targetUser = (team[rule.targetAssignee] || {}).name || "?";
+        var triggerColor = rule.triggerAssignee ? (team[rule.triggerAssignee] || {}).color : "#94A3B8";
+        var targetColor = (team[rule.targetAssignee] || {}).color || "#94A3B8";
+
+        return <Card key={rule.id} style={{ marginBottom: 10, borderLeft: "3px solid " + (rule.active ? "#7C3AED" : "#CBD5E1"), opacity: rule.active ? 1 : 0.6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#1E293B" }}>{rule.name}</span>
+                {rule.active ? <Badge bg="#F0FDF4" color="#0C7E3E">Activa</Badge> : <Badge bg="#F1F5F9" color="#94A3B8">Inactiva</Badge>}
+              </div>
+
+              {/* Visual flow */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: "#FEF2F2", borderRadius: 6, border: "1px solid #FCA5A530" }}>
+                  <Av color={triggerColor} size={22} fs={9}>{triggerUser[0]}</Av>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626" }}>{triggerUser}</div>
+                    <div style={{ fontSize: 9, color: "#64748B" }}>{rule.triggerTaskType || "Orice tip"} {rule.triggerShop ? "| " + rule.triggerShop : ""}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>Done</span>
+                  <span style={{ fontSize: 16, color: "#7C3AED" }}>→</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: "#F0FDF4", borderRadius: 6, border: "1px solid #0C7E3E30" }}>
+                  <Av color={targetColor} size={22} fs={9}>{targetUser[0]}</Av>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0C7E3E" }}>{targetUser}</div>
+                    <div style={{ fontSize: 9, color: "#64748B" }}>{rule.newTaskType || "Tip original"} | +{rule.deadlineOffset || 1}z</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 4 }}>
+              <button style={S.iconBtn} onClick={function() { toggleRule(rule.id); }} title={rule.active ? "Dezactiveaza" : "Activeaza"}><span style={{ fontSize: 16 }}>{rule.active ? "⏸" : "▶"}</span></button>
+              <button style={S.iconBtn} onClick={function() { editRule(rule); }}><Ic d={Icons.edit} size={14} color="#64748B" /></button>
+              <button style={S.iconBtn} onClick={function() { dupRule(rule); }}><Ic d={Icons.copy} size={14} color="#64748B" /></button>
+              <button style={S.iconBtn} onClick={function() { deleteRule(rule.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>
+            </div>
+          </div>
+        </Card>;
+      })}
+    </div>
+
+    {pipelineRules.length > 0 && <div style={{ marginTop: 16, padding: "12px 16px", background: "#F8FAFC", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 12, color: "#64748B" }}>
+      <span style={{ fontWeight: 700, color: "#475569" }}>Cum functioneaza:</span> Cand un task cu conditiile din Trigger trece in statusul specificat, platforma creeaza automat un task nou cu setarile din Actiune. Taskul nou mosteneste linkurile si magazinul taskului original.
+    </div>}
+  </div>;
 }
 
 // ═══════════════════════════════════════════════════════════════
