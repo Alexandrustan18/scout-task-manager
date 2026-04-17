@@ -2064,6 +2064,55 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
   var [kpiModal, setKpiModal] = useState(null);
   var [dashTo, setDashTo] = useState(TD);
   var [dashPreset, setDashPreset] = useState("today");
+  var [editMode, setEditMode] = useState(false);
+  var [dragBlockId, setDragBlockId] = useState(null);
+  var [dashLayout, setDashLayout] = useState(function() {
+    try { var saved = localStorage.getItem("s7_dash_layout"); if (saved) return JSON.parse(saved); } catch(e) {}
+    return [
+      { id: "kpiRow", visible: true },
+      { id: "live", visible: true },
+      { id: "podium", visible: true },
+      { id: "insights", visible: true },
+      { id: "team", visible: true }
+    ];
+  });
+  useEffect(function() { try { localStorage.setItem("s7_dash_layout", JSON.stringify(dashLayout)); } catch(e) {} }, [dashLayout]);
+
+  var moveBlock = function(fromId, toId) {
+    if (!fromId || !toId || fromId === toId) return;
+    setDashLayout(function(prev) {
+      var arr = prev.slice();
+      var fromIdx = arr.findIndex(function(b) { return b.id === fromId; });
+      var toIdx = arr.findIndex(function(b) { return b.id === toId; });
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      var item = arr.splice(fromIdx, 1)[0];
+      arr.splice(toIdx, 0, item);
+      return arr;
+    });
+  };
+
+  var toggleBlockVisibility = function(id) {
+    setDashLayout(function(prev) { return prev.map(function(b) { return b.id === id ? Object.assign({}, b, { visible: !b.visible }) : b; }); });
+  };
+
+  var resetLayout = function() {
+    if (!window.confirm("Resetezi dashboard-ul la ordinea default?")) return;
+    setDashLayout([
+      { id: "kpiRow", visible: true },
+      { id: "live", visible: true },
+      { id: "podium", visible: true },
+      { id: "insights", visible: true },
+      { id: "team", visible: true }
+    ]);
+  };
+
+  var blockLabels = {
+    kpiRow: "KPI Row (Total/To Do/...)",
+    live: "Live Timers",
+    podium: "Liga Saptamanii - Podium",
+    insights: "Admin Insights (grafice, alerts)",
+    team: "Cardurile Echipei"
+  };
 
   var setPreset = function(p) {
     setDashPreset(p);
@@ -2114,40 +2163,66 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     {/* Anomalies alert */}
     {/* SLA Breaches */}
     {slaBreaches && slaBreaches.length > 0 && me.role === "admin" && <Card style={{ marginBottom: 16, borderLeft: "3px solid #DC2626", background: "#FEF2F2" }}><h3 style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>SLA Breaches ({slaBreaches.length})</h3>{slaBreaches.slice(0, 5).map(function(b) { return <div key={b.task.id} style={{ fontSize: 12, padding: "4px 0", display: "flex", gap: 8 }}><span style={{ fontWeight: 600 }}>{b.task.title}</span><Badge bg="#FEF2F2" color="#DC2626">{b.task.shop}</Badge><span style={{ color: "#DC2626" }}>{b.hours}h / {b.max}h max</span></div>; })}</Card>}
-    {/* Date range */}
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
-      {[{ id: "today", l: "Azi" }, { id: "yesterday", l: "Ieri" }, { id: "week", l: "7 zile" }, { id: "month", l: "30 zile" }, { id: "custom", l: "Custom" }].map(function(p) {
-        return <button key={p.id} onClick={function() { setPreset(p.id); }} style={Object.assign({}, S.chip, { background: dashPreset === p.id ? GR : "#F1F5F9", color: dashPreset === p.id ? "#fff" : "#475569", fontWeight: dashPreset === p.id ? 600 : 400 })}>{p.l}</button>;
-      })}
-      <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashFrom} onChange={function(e) { setDashFrom(e.target.value); setDashPreset("custom"); }} />
-      <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashTo} onChange={function(e) { setDashTo(e.target.value); setDashPreset("custom"); }} />
+    {/* Date range + Edit mode toggle */}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {[{ id: "today", l: "Azi" }, { id: "yesterday", l: "Ieri" }, { id: "week", l: "7 zile" }, { id: "month", l: "30 zile" }, { id: "custom", l: "Custom" }].map(function(p) {
+          return <button key={p.id} onClick={function() { setPreset(p.id); }} style={Object.assign({}, S.chip, { background: dashPreset === p.id ? GR : "#F1F5F9", color: dashPreset === p.id ? "#fff" : "#475569", fontWeight: dashPreset === p.id ? 600 : 400 })}>{p.l}</button>;
+        })}
+        <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashFrom} onChange={function(e) { setDashFrom(e.target.value); setDashPreset("custom"); }} />
+        <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashTo} onChange={function(e) { setDashTo(e.target.value); setDashPreset("custom"); }} />
+      </div>
+      {me && me.role === "admin" && <div style={{ display: "flex", gap: 6 }}>
+        {editMode && <button onClick={resetLayout} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#fff", color: "#64748B", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↻ Reset</button>}
+        <button onClick={function() { setEditMode(!editMode); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid " + (editMode ? GR : "#CBD5E1"), background: editMode ? GR : "#fff", color: editMode ? "#fff" : "#475569", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+          {editMode ? "✓ Gata" : "✎ Customizeaza"}
+        </button>
+      </div>}
     </div>
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[
-      { l: "Total", v: rangeStats.total, c: "#475569", filter: function(t) { return true; } },
-      { l: "To Do", v: rangeStats.todo, c: "#94A3B8", filter: function(t) { return t.status === "To Do"; } },
-      { l: "In Progress", v: rangeStats.inProg, c: "#2563EB", filter: function(t) { return t.status === "In Progress"; } },
-      { l: "Review", v: rangeStats.review, c: "#D97706", filter: function(t) { return t.status === "Review"; } },
-      { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626", filter: function(t) { return isOv(t); } },
-      { l: "Done", v: rangeStats.done, c: GR, filter: function(t) { return t.status === "Done"; } }
-    ].map(function(s) {
-      return <Card key={s.l} onClick={function() { setKpiModal({ title: s.l + " (" + dashPreset + ")", color: s.c, tasks: rangeTasks.filter(s.filter) }); }} style={{ borderTop: "3px solid " + s.c, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
-        <div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div>
-        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div>
-      </Card>;
-    })}</div>
+
+    {editMode && <Card style={{ marginBottom: 14, background: "#EFF6FF", borderLeft: "3px solid #2563EB" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#1E40AF", marginBottom: 6 }}>Mod customizare activat</div>
+      <div style={{ fontSize: 11, color: "#475569", marginBottom: 10 }}>Trage blocurile de manerul (☰) ca sa le reordonezi. Foloseste checkbox-urile pentru a ascunde/afisa.</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {dashLayout.map(function(b) {
+          return <label key={b.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 6, background: b.visible ? "#fff" : "#F1F5F9", border: "1px solid " + (b.visible ? "#2563EB40" : "#CBD5E1"), fontSize: 11, cursor: "pointer" }}>
+            <input type="checkbox" checked={b.visible} onChange={function() { toggleBlockVisibility(b.id); }} />
+            <span style={{ color: b.visible ? "#1E293B" : "#94A3B8", fontWeight: 600 }}>{blockLabels[b.id] || b.id}</span>
+          </label>;
+        })}
+      </div>
+    </Card>}
+
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
-    {activeTimers.length > 0 && <Card style={{ marginBottom: 20, borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card>}
-    {me && me.role === "admin" && <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={setPage ? function() { setPage("league"); } : null} />}
-    {me && me.role === "admin" && <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} setPage={setPage} />}
-    <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(380px,1fr))", gap: 12 }}>{ppl.map(function(d) {
-      return <Card key={d.key} style={{ cursor: "pointer" }}>
-        <div onClick={function() { onClickUser(d.key); }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <div style={{ position: "relative" }}><Av color={d.color} size={38}>{d.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: d.online ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div>
-            <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"}</div></div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div>
-          </div>
+
+    {(function() {
+      var renderBlock = function(id) {
+        if (id === "kpiRow") return <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12 }}>{[
+          { l: "Total", v: rangeStats.total, c: "#475569", filter: function(t) { return true; } },
+          { l: "To Do", v: rangeStats.todo, c: "#94A3B8", filter: function(t) { return t.status === "To Do"; } },
+          { l: "In Progress", v: rangeStats.inProg, c: "#2563EB", filter: function(t) { return t.status === "In Progress"; } },
+          { l: "Review", v: rangeStats.review, c: "#D97706", filter: function(t) { return t.status === "Review"; } },
+          { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626", filter: function(t) { return isOv(t); } },
+          { l: "Done", v: rangeStats.done, c: GR, filter: function(t) { return t.status === "Done"; } }
+        ].map(function(s) {
+          return <Card key={s.l} onClick={editMode ? undefined : function() { setKpiModal({ title: s.l + " (" + dashPreset + ")", color: s.c, tasks: rangeTasks.filter(s.filter) }); }} style={{ borderTop: "3px solid " + s.c, cursor: editMode ? "default" : "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { if (!editMode) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; } }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div>
+          </Card>;
+        })}</div>;
+        if (id === "live") return activeTimers.length > 0 ? <Card style={{ borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card> : null;
+        if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("league"); } : null} />;
+        if (id === "insights") return <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} setPage={setPage} />;
+        if (id === "team") return <div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
+          <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(380px,1fr))", gap: 12 }}>{ppl.map(function(d) {
+            return <Card key={d.key} style={{ cursor: "pointer" }}>
+              <div onClick={function() { onClickUser(d.key); }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ position: "relative" }}><Av color={d.color} size={38}>{d.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: d.online ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"}</div></div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div>
+                </div>
           {me && me.role === "admin" && <div style={{ display: "flex", gap: 8, fontSize: 10, color: "#94A3B8", marginBottom: 8, flexWrap: "wrap" }}>
             {isOnLeave(leaves, d.key, TD) ? <Badge bg="#FFFBEB" color="#D97706">🏖 Concediu azi</Badge> : <Badge bg={d.hasLoggedToday ? "#ECFDF5" : "#FEF2F2"} color={d.hasLoggedToday ? GR : "#DC2626"}>{d.hasLoggedToday ? "Activ azi" : "Nu a intrat azi"}</Badge>}
             {d.firstLogin && <span>Prima: {new Date(d.firstLogin).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}</span>}
@@ -2197,6 +2272,33 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
         </div>
       </Card>;
     })}</div>
+        </div>;
+        return null;
+      };
+
+      // Render all blocks in saved order with drag & drop
+      return dashLayout.filter(function(b) { return b.visible; }).map(function(b) {
+        var content = renderBlock(b.id);
+        if (!content) return null;
+        if (!editMode) {
+          return <div key={b.id} style={{ marginBottom: 20 }}>{content}</div>;
+        }
+        // Edit mode with drag handle
+        var isDragTarget = dragBlockId && dragBlockId !== b.id;
+        return <div key={b.id} draggable={true}
+          onDragStart={function(e) { setDragBlockId(b.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", b.id); }}
+          onDragEnd={function() { setDragBlockId(null); }}
+          onDragOver={function(e) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+          onDrop={function(e) { e.preventDefault(); var fromId = e.dataTransfer.getData("text/plain") || dragBlockId; moveBlock(fromId, b.id); setDragBlockId(null); }}
+          style={{ marginBottom: 20, border: "2px dashed " + (isDragTarget ? "#2563EB" : "#CBD5E1"), borderRadius: 10, padding: 10, background: isDragTarget ? "#EFF6FF" : "#F8FAFC", cursor: "move", position: "relative", opacity: dragBlockId === b.id ? 0.5 : 1, transition: "all 0.15s" }}>
+          <div style={{ position: "absolute", top: 8, right: 12, display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: "#64748B", background: "#fff", padding: "3px 8px", borderRadius: 6, border: "1px solid #CBD5E1", zIndex: 1 }}>
+            <span style={{ cursor: "move" }}>☰</span>
+            <span>{blockLabels[b.id]}</span>
+          </div>
+          {content}
+        </div>;
+      });
+    })()}
   </div>;
 }
 
