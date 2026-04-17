@@ -504,18 +504,7 @@ export default function App() {
 
   var visUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
   var assUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team).filter(function(k) { return k !== "admin"; }); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
-  var visTasks = useMemo(function() {
-    if (!user) return [];
-    // Build set of parent IDs that have children
-    var parentIds = new Set();
-    tasks.forEach(function(t) { if (t._campaignParentId) parentIds.add(t._campaignParentId); });
-    return tasks.filter(function(t) {
-      if (t._campaignParent) return false;
-      // Hide old-style parent tasks (have campaign items + are referenced as parent by children)
-      if (t.campaignItems && t.campaignItems.length > 0 && parentIds.has(t.id)) return false;
-      return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy);
-    });
-  }, [tasks, visUsers, user]);
+  var visTasks = useMemo(function() { if (!user) return []; return tasks.filter(function(t) { if (t._campaignParent) return false; return visUsers.includes(t.assignee) || visUsers.includes(t.createdBy); }); }, [tasks, visUsers, user]);
 
   var filtered = useMemo(function() {
     return visTasks.filter(function(t) {
@@ -655,25 +644,6 @@ export default function App() {
     // clear draft
     localStorage.removeItem("scout_task_draft");
   };
-  var explodeCampaign = function(t) {
-    // Create individual child tasks from a campaign parent that has no children yet
-    if (!t.campaignItems || t.campaignItems.length === 0) return;
-    var parentId = t.id;
-    var childTasks = [];
-    t.campaignItems.forEach(function(ci) {
-      var childLinks = t.links ? t.links.slice() : [];
-      if (ci.link) childLinks = [ci.link];
-      var child = { id: gid(), title: ci.name || t.title, description: t.description || "", assignee: t.assignee || "", status: "To Do", priority: t.priority, platform: t.platform, taskType: t.taskType, department: t.department, shop: t.shop, product: "", productName: ci.name, deadline: t.deadline, links: childLinks, subtasks: [], comments: [], tags: t.tags || [], dependsOn: [], campaignItems: [], createdBy: t.createdBy, createdAt: ts(), updatedAt: ts(), _campaignParentId: parentId, _pipelineNext: t._pipelineNext || "" };
-      childTasks.push(child);
-      setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[child.id] = [{ status: "To Do", at: ts() }]; return n; });
-    });
-    // Mark parent as _campaignParent so it gets hidden
-    setTasks(function(p) {
-      return p.map(function(x) { return x.id === parentId ? Object.assign({}, x, { _campaignParent: true }) : x; }).concat(childTasks);
-    });
-    addLog("EXPLODE", "Split: " + t.title + " -> " + childTasks.length + " taskuri");
-  };
-
   var delTask = function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) addLog("DELETE", "Sters \"" + t.title + "\""); setTasks(function(p) { return p.filter(function(x) { return x.id !== tid; }); }); };
   var dupTask = function(t) { var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) }); setTasks(function(p) { return [nt].concat(p); }); addLog("DUPLICATE", "Duplicat \"" + t.title + "\""); };
 
@@ -872,8 +842,8 @@ export default function App() {
           </Card>}
           {page === "dashboard" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
-          {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
-          {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
+          {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} />}
+          {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
           {page === "calendar" && <CalendarPage tasks={visTasks} user={user} team={team} calDate={calDate} setCalDate={setCalDate} onView={setViewTask} isMob={isMob} me={me} />}
           {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} taskTypes={taskTypes} departments={departments} />}
           {page === "templates" && <TemplatesPage templates={templates} setTemplates={setTemplates} canEdit={canCreate} isAdmin={isAdmin} shops={shops} onCreateFromTpl={function(tpl) { setEditTask({ title: tpl.name, description: tpl.description, shop: tpl.shop || "", subtasks: tpl.subtasks.map(function(s) { return { id: gid(), text: s, done: false }; }) }); setShowAdd(true); }} />}
@@ -1002,11 +972,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
       <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashFrom} onChange={function(e) { setDashFrom(e.target.value); setDashPreset("custom"); }} />
       <input type="date" style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 8px" })} value={dashTo} onChange={function(e) { setDashTo(e.target.value); setDashPreset("custom"); }} />
     </div>
-    {function() {
-      var allStats = { total: tasks.length, todo: 0, inProg: 0, review: 0, done: 0, overdue: 0 };
-      tasks.forEach(function(t) { if (t.status === "To Do") allStats.todo++; if (t.status === "In Progress") allStats.inProg++; if (t.status === "Review") allStats.review++; if (t.status === "Done") allStats.done++; if (isOv(t)) allStats.overdue++; });
-      return <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[{ l: "Total", v: allStats.total, c: "#475569" }, { l: "To Do", v: allStats.todo, c: "#94A3B8" }, { l: "In Progress", v: allStats.inProg, c: "#2563EB" }, { l: "Review", v: allStats.review, c: "#D97706" }, { l: "Intarziate", v: allStats.overdue, c: "#DC2626" }, { l: "Done", v: allStats.done, c: GR }].map(function(s) { return <Card key={s.l} style={{ borderTop: "3px solid " + s.c }}><div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div></Card>; })}</div>;
-    }()}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(6,1fr)", gap: 12, marginBottom: 24 }}>{[{ l: "Total", v: rangeStats.total, c: "#475569" }, { l: "To Do", v: rangeStats.todo, c: "#94A3B8" }, { l: "In Progress", v: rangeStats.inProg, c: "#2563EB" }, { l: "Review", v: rangeStats.review, c: "#D97706" }, { l: "Intarziate", v: rangeStats.overdue, c: "#DC2626" }, { l: "Done", v: rangeStats.done, c: GR }].map(function(s) { return <Card key={s.l} style={{ borderTop: "3px solid " + s.c }}><div style={{ fontSize: 28, fontWeight: 700, color: s.c }}>{s.v}</div><div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div></Card>; })}</div>
     {activeTimers.length > 0 && <Card style={{ marginBottom: 20, borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card>}
     <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Echipa</h3>
     <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(380px,1fr))", gap: 12 }}>{ppl.map(function(d) {
@@ -1148,12 +1114,10 @@ function ProfileView({ pu, team, tasks, timers, getTS, logs, sessions, getPerf, 
   </div>;
 }
 
-function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, secs, running, togTimer, bulkMode, isSelected, toggleSel, canEdit, canDelete, onExplode, allTasks }) {
+function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, secs, running, togTimer, bulkMode, isSelected, toggleSel, canEdit, canDelete }) {
   var me = team[user] || {}; var a = team[t.assignee] || {}; var ov = isOv(t); var can = me.role === "admin" || me.role === "pm" || t.assignee === user;
   var doneS = (t.subtasks || []).filter(function(s) { return s.done; }).length; var totalS = (t.subtasks || []).length;
   var isAdminTask = t.createdBy === "admin";
-  var hasChildren = allTasks && allTasks.some(function(x) { return x._campaignParentId === t.id; });
-  var needsExplode = t.campaignItems && t.campaignItems.length > 0 && !hasChildren && !t._campaignParent;
   // FEATURE 9: block edit badge
   var isDone = t.status === "Done";
   var canEditThis = (canEdit || me.role === "admin") && !(isDone && me.role !== "admin");
@@ -1166,11 +1130,12 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
     {t.description && <div style={{ fontSize: 12, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: isMob ? "100%" : 400, marginBottom: 3 }}>{t.description}</div>}
   </div>
   <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-    {can && <select style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 6px" })} value={t.status} onChange={function(e) { e.stopPropagation(); onChgSt(t.id, e.target.value); }} onClick={function(e) { e.stopPropagation(); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>}
-    {secs > 0 && <span style={{ fontSize: 10, color: running ? "#DC2626" : "#94A3B8", fontVariantNumeric: "tabular-nums", fontWeight: running ? 700 : 400 }}>{ft(secs)}</span>}
-    {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onMouseDown={function(e) { e.stopPropagation(); }} onClick={function(e) { e.stopPropagation(); onDup(t); }}><Ic d={Icons.copy} size={14} color="#94A3B8" /></button>}
-    {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onMouseDown={function(e) { e.stopPropagation(); }} onClick={function(e) { e.stopPropagation(); onEdit(t); }}><Ic d={Icons.edit} size={14} color="#94A3B8" /></button>}
-    {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onMouseDown={function(e) { e.stopPropagation(); }} onClick={function(e) { e.stopPropagation(); if (confirm("Stergi?")) onDel(t.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
+    {can && t.status !== "Done" && <button onClick={togTimer} style={Object.assign({}, S.timerBtn, { background: running ? "#FEF2F2" : "#F8FAFC", color: running ? "#DC2626" : GR, borderColor: running ? "#FECACA" : "#E2E8F0" })}><Ic d={running ? Icons.stop : Icons.play} size={12} color={running ? "#DC2626" : GR} />{secs > 0 && <span style={{ fontVariantNumeric: "tabular-nums" }}>{ft(secs)}</span>}</button>}
+    {t.status === "Done" && secs > 0 && <span style={{ fontSize: 11, color: "#94A3B8" }}>{ft(secs)}</span>}
+    <select style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 6px" })} value={t.status} onChange={function(e) { onChgSt(t.id, e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
+    {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onClick={function() { onDup(t); }}><Ic d={Icons.copy} size={14} color="#94A3B8" /></button>}
+    {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onClick={function() { onEdit(t); }}><Ic d={Icons.edit} size={14} color="#94A3B8" /></button>}
+    {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) onDel(t.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
   </div>
 </Card></div>;
   return <Card style={{ display: "flex", flexDirection: isMob ? "column" : "row", alignItems: isMob ? "stretch" : "center", gap: 10, marginBottom: 6, borderLeft: "3px solid " + (ov ? "#EF4444" : SC[t.status] || "#E2E8F0"), background: ov ? "#FFFBFB" : SBG[t.status] || "#fff", boxShadow: "none" }}>
@@ -1192,17 +1157,17 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={16} fs={8}>{a.name[0]}</Av>{a.name}</span>}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.productName && <Badge bg="#EFF6FF" color="#2563EB">{t.productName}</Badge>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{t.links && t.links.length > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2 }}><Ic d={Icons.link} size={10} color="#94A3B8" /> {t.links.length}</span>}{totalS > 0 && <span><Ic d={Icons.check} size={10} color="#94A3B8" /> {doneS}/{totalS}</span>}</div>
     </div>
     <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-      {needsExplode && onExplode && <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1.5px solid " + GR, background: "#ECFDF5", color: GR, fontSize: 11, fontWeight: 700, cursor: "pointer" }} onClick={function(e) { e.stopPropagation(); if (confirm("Creezi " + t.campaignItems.length + " taskuri individuale din acest campaign?")) onExplode(t); }}>⚡ Split {t.campaignItems.length}</button>}
-      {can && <select style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 6px" })} value={t.status} onChange={function(e) { e.stopPropagation(); onChgSt(t.id, e.target.value); }} onClick={function(e) { e.stopPropagation(); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>}
-      {secs > 0 && <span style={{ fontSize: 10, color: running ? "#DC2626" : "#94A3B8", fontVariantNumeric: "tabular-nums", fontWeight: running ? 700 : 400 }}>{ft(secs)}</span>}
-      {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onMouseDown={function(e) { e.stopPropagation(); }} onClick={function(e) { e.stopPropagation(); onDup(t); }}><Ic d={Icons.copy} size={14} color="#94A3B8" /></button>}
-      {canEditThis && <button style={S.iconBtn} onMouseDown={function(e) { e.stopPropagation(); }} onClick={function(e) { e.stopPropagation(); onEdit(t); }}><Ic d={Icons.edit} size={14} color="#94A3B8" /></button>}
-      {(me.role === "admin" || canDelete) && <button style={S.iconBtn} onMouseDown={function(e) { e.stopPropagation(); }} onClick={function(e) { e.stopPropagation(); if (confirm("Stergi?")) onDel(t.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
+      {can && t.status !== "Done" && <button onClick={togTimer} style={Object.assign({}, S.timerBtn, { background: running ? "#FEF2F2" : "#F8FAFC", color: running ? "#DC2626" : GR, borderColor: running ? "#FECACA" : "#E2E8F0" })}><Ic d={running ? Icons.stop : Icons.play} size={12} color={running ? "#DC2626" : GR} />{secs > 0 && <span style={{ fontVariantNumeric: "tabular-nums" }}>{ft(secs)}</span>}</button>}
+      {t.status === "Done" && secs > 0 && <span style={{ fontSize: 11, color: "#94A3B8" }}>{ft(secs)}</span>}
+      <select style={Object.assign({}, S.fSel, { fontSize: 11, padding: "4px 6px" })} value={t.status} onChange={function(e) { onChgSt(t.id, e.target.value); }}>{STATUSES.map(function(s) { return <option key={s} value={s}>{s}</option>; })}</select>
+      {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onClick={function() { onDup(t); }}><Ic d={Icons.copy} size={14} color="#94A3B8" /></button>}
+      {canEditThis && <button style={S.iconBtn} onClick={function() { onEdit(t); }}><Ic d={Icons.edit} size={14} color="#94A3B8" /></button>}
+      {(me.role === "admin" || canDelete) && <button style={S.iconBtn} onClick={function() { if (confirm("Stergi?")) onDel(t.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
     </div>
   </Card>;
 }
 
-function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer, bulkMode, selectedTasks, toggleSel, canEdit, canDelete, onExplode, tasks }) {
+function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer, bulkMode, selectedTasks, toggleSel, canEdit, canDelete }) {
   var st = fProps.stats;
   var statusGroups = useMemo(function() {
     var groups = {};
@@ -1219,95 +1184,22 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
     <FiltersBar {...fProps} />
     {statusGroups["Urgent"].length > 0 && <div style={{ marginBottom: 20 }}>
       <div style={Object.assign({}, S.groupHdr, { color: "#DC2626" })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />URGENT</span><span style={S.countBadge}>{statusGroups["Urgent"].length}</span></div>
-      {statusGroups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
+      {statusGroups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} />; })}
     </div>}
     {["In Progress", "Review", "To Do", "Done"].map(function(status) {
       var sectionTasks = statusGroups[status];
       if (!sectionTasks || sectionTasks.length === 0) return null;
       return <div key={status} style={{ marginBottom: 20 }}>
         <div style={Object.assign({}, S.groupHdr, { borderLeft: "3px solid " + SC[status], paddingLeft: 10 })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[status] }} />{status}</span><span style={S.countBadge}>{sectionTasks.length}</span></div>
-        {sectionTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
+        {sectionTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} />; })}
       </div>;
     })}
     {filtered.length === 0 && <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>Niciun task.</Card>}
   </div>;
 }
 
-function KanbanPage({ fProps, tasks, user, team, onView, onEdit, onDel, onDup, onChgSt, dragId, setDragId, handleDrop, isMob, timers, getTS, togTimer }) {
-  var [dropTarget, setDropTarget] = useState(null);
-  var dragIdRef = useRef(null);
-
-  var onDragStartCard = function(e, tid) {
-    dragIdRef.current = tid;
-    setDragId(tid);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", tid);
-  };
-  var onDragEndCard = function() {
-    dragIdRef.current = null;
-    setDragId(null);
-    setDropTarget(null);
-  };
-  var onDropCol = function(e, st) {
-    e.preventDefault();
-    e.stopPropagation();
-    var tid = dragIdRef.current || e.dataTransfer.getData("text/plain");
-    setDropTarget(null);
-    if (tid) { onChgSt(tid, st); dragIdRef.current = null; setDragId(null); }
-  };
-
-  return <div>
-    <FiltersBar {...fProps} noStatus />
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(4,1fr)", gap: 14, alignItems: "start" }}>
-      {STATUSES.map(function(st) {
-        var col = tasks.filter(function(t) { return t.status === st; });
-        var isOver = dropTarget === st;
-        return <div key={st}
-          onDragOver={function(e) { e.preventDefault(); e.stopPropagation(); if (dropTarget !== st) setDropTarget(st); }}
-          onDragLeave={function(e) { if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget(null); }}
-          onDrop={function(e) { onDropCol(e, st); }}
-          style={{ background: isOver ? SC[st] + "15" : "#FAFBFC", borderRadius: 12, padding: 12, minHeight: "calc(100vh - 280px)", border: "2px solid " + (isOver ? SC[st] : "transparent"), transition: "all 0.15s" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[st] }} />
-              <span style={{ fontSize: 13, fontWeight: 700 }}>{st}</span>
-            </div>
-            <span style={S.countBadge}>{col.length}</span>
-          </div>
-          {col.map(function(t) {
-            var a = team[t.assignee] || {};
-            var ov = isOv(t);
-            var secs = getTS(t.id);
-            var run = timers[t.id] && timers[t.id].running;
-            var me2 = team[user] || {};
-            var canEdit2 = me2.role === "admin" || me2.role === "pm" || t.assignee === user;
-            return <div key={t.id}
-              draggable={true}
-              onDragStart={function(e) { onDragStartCard(e, t.id); }}
-              onDragEnd={onDragEndCard}
-              onDragOver={function(e) { e.preventDefault(); if (dropTarget !== st) setDropTarget(st); }}
-              onDrop={function(e) { onDropCol(e, st); }}
-              style={{ opacity: dragId === t.id ? 0.35 : 1, marginBottom: 8, transform: dragId === t.id ? "rotate(2deg)" : "none", transition: "opacity 0.15s, transform 0.15s" }}>
-              <Card onClick={function(e) { e.stopPropagation(); onView && onView(t); }} style={{ padding: 12, cursor: "pointer", borderLeft: "3px solid " + (ov ? "#EF4444" : SC[st]), background: SBG[st] }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t.title}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
-                  <Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>
-                  {(t.tags || []).map(function(tag) { return <Badge key={tag} bg="#F0FDF4" color={GR}>#{tag}</Badge>; })}
-                  {t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}
-                  {ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "#94A3B8" }}>
-                  {a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={18} fs={9}>{a.name[0]}</Av>{a.name}</span>}
-                  {t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}
-                </div>
-                {secs > 0 && <div style={{ marginTop: 6, fontSize: 10, color: run ? "#DC2626" : "#94A3B8", fontVariantNumeric: "tabular-nums", fontWeight: run ? 700 : 400 }}>{ft(secs)}</div>}
-              </Card>
-            </div>;
-          })}
-        </div>;
-      })}
-    </div>
-  </div>;
+function KanbanPage({ fProps, tasks, user, team, onEdit, onDel, onDup, onChgSt, dragId, setDragId, handleDrop, isMob, timers, getTS, togTimer }) {
+  return <div><FiltersBar {...fProps} noStatus /><div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(4,1fr)", gap: 14, alignItems: "start" }}>{STATUSES.map(function(st) { var col = tasks.filter(function(t) { return t.status === st; }); return <div key={st} onDragOver={function(e) { e.preventDefault(); }} onDrop={function(e) { e.preventDefault(); handleDrop(st); }} style={{ background: "#FAFBFC", borderRadius: 12, padding: 12, minHeight: 200 }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: SC[st] }} /><span style={{ fontSize: 13, fontWeight: 700 }}>{st}</span></div><span style={S.countBadge}>{col.length}</span></div>{col.map(function(t) { var a = team[t.assignee] || {}; var ov = isOv(t); var me = team[user] || {}; var can = me.role === "admin" || me.role === "pm" || t.assignee === user; var secs = getTS(t.id); var run = timers[t.id] && timers[t.id].running; return <Card key={t.id} style={{ padding: 12, cursor: can ? "grab" : "default", opacity: dragId === t.id ? 0.4 : 1, borderLeft: "3px solid " + (ov ? "#EF4444" : SC[st]), marginBottom: 8, background: SBG[st] }}><div draggable={can} onDragStart={function() { setDragId(t.id); }} onDragEnd={function() { setDragId(null); }}><div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t.title}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{(t.tags || []).map(function(tag) { return <Badge key={tag} bg="#F0FDF4" color={GR}>#{tag}</Badge>; })}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}</div><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "#94A3B8" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={18} fs={9}>{a.name[0]}</Av>{a.name}</span>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}</div><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>{can && st !== "Done" ? <button onClick={function() { togTimer(t.id); }} style={Object.assign({}, S.timerBtn, { fontSize: 10, padding: "2px 8px", background: run ? "#FEF2F2" : "#F8FAFC", color: run ? "#DC2626" : GR, borderColor: run ? "#FECACA" : "#E2E8F0" })}><Ic d={run ? Icons.stop : Icons.play} size={10} color={run ? "#DC2626" : GR} />{secs > 0 && <span>{ft(secs)}</span>}</button> : <span style={{ fontSize: 10 }}>{secs > 0 ? ft(secs) : ""}</span>}<div style={{ display: "flex", gap: 2 }}><button style={S.iconBtn} onClick={function() { onDup(t); }}><Ic d={Icons.copy} size={12} color="#94A3B8" /></button><button style={S.iconBtn} onClick={function() { onEdit(t); }}><Ic d={Icons.edit} size={12} color="#94A3B8" /></button></div></div></div></Card>; })}</div>; })}</div></div>;
 }
 
 function CalendarPage({ tasks, user, team, calDate, setCalDate, onView, isMob, me }) {
@@ -2063,17 +1955,10 @@ function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTi
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div><h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>{t.title}</h2><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{t.department && <Badge bg="#FFF7ED" color="#EA580C">{t.department}</Badge>}{(t.tags || []).map(function(tag) { return <Badge key={tag} bg="#ECFDF5" color={GR}>#{tag}</Badge>; })}{isOv(t) && <Badge bg="#FEF2F2" color="#DC2626">OVERDUE</Badge>}</div></div><button style={S.iconBtn} onClick={onClose}><Ic d={Icons.x} size={18} color="#94A3B8" /></button></div>
     {t.description && <div style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>{t.description}</div>}
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginBottom: 16 }}><div><strong>Asignat:</strong> {a.name || "-"}</div><div><strong>Deadline:</strong> {t.deadline ? fd(t.deadline) : "-"}</div><div><strong>Magazin:</strong> {t.shop || "-"}</div><div><strong>Timp:</strong> {ft(secs)}</div>{t.platform && <div><strong>Platforma:</strong> {t.platform}</div>}{t.taskType && <div><strong>Tip:</strong> {t.taskType}</div>}{t.productName && <div><strong>Produs:</strong> {t.productName}</div>}{t.department && <div><strong>Departament:</strong> {t.department}</div>}<div><strong>Creat:</strong> {ff(t.createdAt)}</div>{t._finalizedCount != null && <div><strong>Finalizate:</strong> {t._finalizedCount}/{(t.campaignItems || []).length}</div>}</div>
-    {t.productName && t.links && t.links.length > 0 && !t._replacedLink && ["dana", "carla", "mara_poze"].includes(t.assignee) && t._campaignParentId && <div style={{ marginBottom: 12, padding: "10px 14px", background: "#EFF6FF", borderRadius: 8, borderLeft: "3px solid #2563EB", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>Link Produs</div>
-        <a href={t.links[0]} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: "#1D4ED8", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{t.links[0]}</a>
-      </div>
-      <a href={t.links[0]} target="_blank" rel="noopener noreferrer" style={Object.assign({}, S.primBtn, { background: "#2563EB", fontSize: 11, padding: "6px 12px", flexShrink: 0 })}><Ic d={Icons.ext} size={12} color="#fff" /> Deschide</a>
-    </div>}
     {t._replacedLink && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}><div style={{ fontWeight: 600, fontSize: 12, color: GR, marginBottom: 4 }}>Link actualizat{t._replacedBy && team[t._replacedBy] ? " de " + team[t._replacedBy].name : ""}:</div><a href={t._replacedLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: GR, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Ic d={Icons.ext} size={12} color={GR} />{t._replacedLink}</a>{t._replacedNote && <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>{t._replacedNote}</div>}</div>}
-    {t.links && t.links.length > 0 && <div style={{ marginBottom: 14 }}><div style={{ fontWeight: 700, fontSize: 11, marginBottom: 8, color: "#475569", textTransform: "uppercase", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 5 }}><Ic d={Icons.link} size={11} color="#475569" />{t._replacedLink ? "Linkuri (" + t.links.length + ")" : "Linkuri (" + t.links.length + ")"}</div><div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{t.links.map(function(l, i) { var isReplaced = t._originalLinks && t._originalLinks.includes(l) && t._replacedLink && l !== t._replacedLink; var domain = ""; try { domain = new URL(l).hostname.replace("www.", ""); } catch(e) { domain = l.slice(0, 30); } return <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: isReplaced ? "#F8FAFC" : "#F0F9FF", border: "1px solid " + (isReplaced ? "#E2E8F0" : "#BFDBFE"), opacity: isReplaced ? 0.5 : 1 }}><Ic d={Icons.link} size={12} color={isReplaced ? "#94A3B8" : "#2563EB"} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, marginBottom: 1 }}>{domain}{isReplaced ? " (inlocuit)" : ""}</div><div style={{ fontSize: 11, color: isReplaced ? "#94A3B8" : "#1D4ED8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: isReplaced ? "line-through" : "none" }}>{l}</div></div><a href={l} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 6, background: isReplaced ? "#F1F5F9" : "#2563EB", color: isReplaced ? "#94A3B8" : "#fff", fontSize: 11, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}><Ic d={Icons.ext} size={11} color={isReplaced ? "#94A3B8" : "#fff"} /> Deschide</a></div>; })}</div></div>}
+    {t.links && t.links.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>{t._replacedLink ? "Linkuri (inclusiv original):" : "Linkuri:"}</div>{t.links.map(function(l, i) { var isReplaced = t._originalLinks && t._originalLinks.includes(l) && t._replacedLink && l !== t._replacedLink; return <a key={i} href={l} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: isReplaced ? "#94A3B8" : "#2563EB", marginBottom: 2, textDecoration: isReplaced ? "line-through" : "none" }}><Ic d={Icons.ext} size={10} color={isReplaced ? "#94A3B8" : "#2563EB"} />{l}{isReplaced && <span style={{ fontSize: 9, color: "#DC2626", marginLeft: 4 }}>(inlocuit)</span>}</a>; })}</div>}
     {user === "dana" && t.assignee === user && t.status !== "Done" && <div style={{ marginBottom: 12 }}>{!showReplace && <button style={Object.assign({}, S.primBtn, { background: "#D97706", fontSize: 12 })} onClick={function() { setShowReplace(true); }}>Am schimbat produsul / Link nou</button>}{showReplace && <Card style={{ background: "#FFFBEB", borderLeft: "3px solid #D97706" }}><label style={S.label}>Link produs nou</label><input style={S.input} value={replaceLink} onChange={function(e) { setReplaceLink(e.target.value); }} placeholder="https://..." /><label style={S.label}>Observatie (optional)</label><input style={S.input} value={replaceNote} onChange={function(e) { setReplaceNote(e.target.value); }} placeholder="Ex: Nu am gasit, am schimbat cu..." /><div style={{ display: "flex", gap: 8, marginTop: 8 }}><button style={S.primBtn} onClick={doReplace}>Salveaza link nou</button><button style={S.cancelBtn} onClick={function() { setShowReplace(false); }}>Anuleaza</button></div></Card>}</div>}
-    {t.campaignItems && t.campaignItems.length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8 }}>Campaign ({t.campaignItems.length} produse){t._finalizedCount != null && <span style={{ marginLeft: 8, color: GR }}>- {t._finalizedCount} finalizate</span>}</div>{t.campaignItems.map(function(ci, i) { return <div key={ci.id || i} style={{ fontSize: 12, padding: "5px 4px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #ECFDF5" }}><span style={{ color: "#94A3B8", width: 20, flexShrink: 0 }}>{i + 1}.</span><span style={{ flex: 1, fontWeight: 500 }}>{ci.name}</span>{ci.link && <a href={ci.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#2563EB", display: "flex", alignItems: "center", gap: 3, flexShrink: 0, padding: "2px 8px", background: "#EFF6FF", borderRadius: 4, fontWeight: 600 }}><Ic d={Icons.ext} size={9} color="#2563EB" /> Link</a>}</div>; })}</div>}
+    {t.campaignItems && t.campaignItems.length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F0FDF4", borderRadius: 8, borderLeft: "3px solid " + GR }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6 }}>Campaign ({t.campaignItems.length} produse){t._finalizedCount != null && <span style={{ marginLeft: 8, color: GR }}>- {t._finalizedCount} finalizate</span>}</div>{t.campaignItems.map(function(ci, i) { return <div key={ci.id || i} style={{ fontSize: 12, padding: "3px 0", display: "flex", alignItems: "center", gap: 6 }}><span style={{ color: "#94A3B8", width: 20 }}>{i + 1}.</span><span>{ci.name}</span></div>; })}</div>}
     {Object.keys(tis).length > 0 && <div style={{ marginBottom: 12, padding: 10, background: "#F8FAFC", borderRadius: 8 }}><div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Timp per status:</div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{Object.entries(tis).map(function(e) { return <Badge key={e[0]} bg={(SC[e[0]] || "#94A3B8") + "18"} color={SC[e[0]] || "#94A3B8"}>{e[0]}: {e[1]}h</Badge>; })}</div></div>}
     {deps.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Depinde de:</div>{deps.map(function(d) { return <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 0" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: SC[d.status] }} /><span>{d.title}</span><Badge bg={(SC[d.status] || "#94A3B8") + "18"} color={SC[d.status] || "#94A3B8"}>{d.status}</Badge></div>; })}</div>}
     {subtasks.length > 0 && <div style={{ marginBottom: 12, borderTop: "1px solid #F1F5F9", paddingTop: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8 }}>Subtaskuri ({doneS}/{subtasks.length})</div><div style={Object.assign({}, S.progBg, { marginBottom: 8 })}><div style={S.progBar(doneS === subtasks.length ? GR : "#D97706", subtasks.length > 0 ? (doneS / subtasks.length) * 100 : 0)} /></div>{subtasks.map(function(st) { return <div key={st.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0", fontSize: 13, cursor: "pointer" }} onClick={function() { toggleSub(st.id); }}><span style={{ width: 18, height: 18, borderRadius: 4, border: "1.5px solid " + (st.done ? GR : "#CBD5E1"), background: st.done ? GR : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, flexShrink: 0 }}>{st.done ? "*" : ""}</span><span style={{ textDecoration: st.done ? "line-through" : "none", color: st.done ? "#94A3B8" : "#1E293B" }}>{st.text}</span></div>; })}</div>}
