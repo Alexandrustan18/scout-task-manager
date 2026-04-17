@@ -272,6 +272,10 @@ export default function App() {
   var [slas, setSlas] = useState({});
   var [leaves, setLeaves] = useState({});
   var [branding, setBranding] = useState({ title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" });
+  var [expandedGroups, setExpandedGroups] = useState(function() {
+    try { var saved = localStorage.getItem("s7_nav_groups"); if (saved) return JSON.parse(saved); } catch(e) {}
+    return { "Operational": true, "Echipa": true, "Comunicare": false, "Configurare": false };
+  });
 
   useEffect(function() {
     async function loadAll() {
@@ -404,6 +408,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("slas", slas, 1000); }, [slas]);
   useEffect(function() { if (!loading) debouncedSave("leaves", leaves, 1000); }, [leaves]);
   useEffect(function() { if (!loading) debouncedSave("branding", branding, 1000); }, [branding]);
+  useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
   // Apply favicon dynamically
   useEffect(function() {
     if (!branding || !branding.favicon) return;
@@ -950,11 +955,6 @@ export default function App() {
   });
 
   var accessibleIds = accessibleNav.map(function(n) { return n.id; });
-  var [expandedGroups, setExpandedGroups] = useState(function() {
-    try { var saved = localStorage.getItem("s7_nav_groups"); if (saved) return JSON.parse(saved); } catch(e) {}
-    return { "Operational": true, "Echipa": true, "Comunicare": false, "Configurare": false };
-  });
-  useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
 
   return (
     <div style={S.app}><style>{CSS}</style>
