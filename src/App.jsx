@@ -1333,7 +1333,7 @@ export default function App() {
           </Card>}
           {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
           {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
-          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} />}
+          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} monthlyBonus={monthlyBonus} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
@@ -2267,7 +2267,7 @@ function AdminInsights({ allTasks, team, visUsers, timers, isMob, setPage }) {
   </div>;
 }
 
-function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves, setPage, achievements }) {
+function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves, setPage, achievements, monthlyBonus }) {
   var [dashFrom, setDashFrom] = useState(TD);
   var [kpiModal, setKpiModal] = useState(null);
   var [dashTo, setDashTo] = useState(TD);
@@ -3554,7 +3554,7 @@ function PodiumCompact({ leaderboard, onNavigate, monthlyBonus, title, subtitle 
       <span style={{ fontSize: 13, fontWeight: 800, color: "#92400E" }}>Premiu locul 1: {monthlyBonus.amount} {monthlyBonus.currency}</span>
       <span style={{ fontSize: 11, color: "#92400E", opacity: 0.7 }}>| Se cumuleaza toata luna</span>
     </div>}
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, alignItems: "end" }}>
+    <div style={{ display: "grid", gridTemplateColumns: leaderboard.length >= 3 ? "1fr 1fr 1fr" : "1fr 1fr", gap: 10, alignItems: "end" }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 24, marginBottom: 2 }}>🥈</div>
         <Av color={leaderboard[1].color} size={38} fs={14} userId={leaderboard[1].user}>{leaderboard[1].name[0]}</Av>
@@ -3569,13 +3569,13 @@ function PodiumCompact({ leaderboard, onNavigate, monthlyBonus, title, subtitle 
         <div style={{ fontSize: 11, color: "#D97706", fontWeight: 700 }}>{leaderboard[0].doneThis} taskuri</div>
         <div style={{ height: 60, background: "linear-gradient(180deg, #FDE047, #EAB308)", borderRadius: "6px 6px 0 0", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: 18, boxShadow: "0 3px 8px rgba(234,179,8,0.3)" }}>1</div>
       </div>
-      <div style={{ textAlign: "center" }}>
+      {leaderboard.length >= 3 && <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 24, marginBottom: 2 }}>🥉</div>
         <Av color={leaderboard[2].color} size={34} fs={13} userId={leaderboard[2].user}>{leaderboard[2].name[0]}</Av>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B", marginTop: 4 }}>{leaderboard[2].name}</div>
         <div style={{ fontSize: 10, color: "#64748B" }}>{leaderboard[2].doneThis} taskuri</div>
         <div style={{ height: 28, background: "#F97316", borderRadius: "6px 6px 0 0", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13 }}>3</div>
-      </div>
+      </div>}
     </div>
   </Card>;
 }
