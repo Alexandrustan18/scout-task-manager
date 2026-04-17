@@ -52,6 +52,7 @@ var SC = { "To Do": "#94A3B8", "In Progress": "#2563EB", Review: "#D97706", Done
 var SBG = { "To Do": "#F8FAFC", "In Progress": "#EFF6FF", Review: "#FFFBEB", Done: "#ECFDF5" };
 var SI = { "To Do": "o", "In Progress": "~", Review: "?", Done: "*" };
 var GR = "#0C7E3E";
+var _globalUserXP = {}; // shared ref for Av component to read levels
 
 // ═══ LEVEL SYSTEM GLOBALS ═══
 var LEVEL_THRESHOLDS = [0, 50, 120, 210, 320, 450, 600, 780, 980, 1200, 1450, 1730, 2040, 2380, 2750, 3150, 3600, 4100, 4650, 5250, 5900, 6600, 7350, 8150, 9000, 9900, 10850, 11850, 12900, 14000, 15200, 16500, 17900, 19400, 21000, 22700, 24500, 26400, 28400, 30500, 32700, 35000, 37400, 39900, 42500, 45200, 48000, 50900, 53900, 57000];
@@ -163,7 +164,7 @@ function hasPerm(user, team, perm) {
 var CSS = "*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}body{margin:0;background:#FAFAFA;font-family:system-ui,-apple-system,sans-serif}::selection{background:#0C7E3E22}input:focus,select:focus,textarea:focus{border-color:#0C7E3E !important;outline:none;box-shadow:0 0 0 3px #0C7E3E18}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}button{cursor:pointer;font-family:inherit}button:hover{opacity:0.9}a{text-decoration:none}@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes toastIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-20px)}}@keyframes badgePop{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}@keyframes confettiFall{0%{transform:translateY(-10px) rotate(0deg);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}@keyframes celebratePulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(16,185,129,0.4)}50%{transform:scale(1.05);box-shadow:0 0 20px 10px rgba(16,185,129,0.1)}100%{transform:scale(1);box-shadow:0 0 0 0 rgba(16,185,129,0)}}@keyframes targetBurst{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}thead.sticky-header th{position:sticky;top:0;z-index:10;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.05)}";
 
 function Badge({ bg, color, children }) { return <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 9px", borderRadius: 6, fontSize: 10, fontWeight: 600, background: bg, color: color, whiteSpace: "nowrap" }}>{children}</span>; }
-function Av({ color, size, fs, children }) { return <div style={{ width: size || 32, height: size || 32, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{children}</div>; }
+function Av({ color, size, fs, children, level, userId }) { var s = size || 32; var lvl = level || (userId && _globalUserXP[userId] ? getLevel(_globalUserXP[userId]) : 0); var showBadge = lvl > 0 && s >= 16; return <div style={{ width: s, height: s, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0, position: "relative" }}>{children}{showBadge && <div style={{ position: "absolute", bottom: s > 28 ? -4 : -3, right: s > 28 ? -4 : -3, background: getLevelColor(lvl), color: "#fff", fontSize: s > 28 ? 8 : 7, fontWeight: 800, padding: s > 28 ? "1px 4px" : "0px 3px", borderRadius: 4, border: s > 28 ? "1.5px solid #fff" : "1px solid #fff", lineHeight: 1.3, minWidth: s > 28 ? 14 : 10, textAlign: "center" }}>{lvl}</div>}</div>; }
 function Card({ children, style, onClick, onMouseEnter, onMouseLeave, onMouseDown, onMouseUp }) { return <div onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onMouseDown={onMouseDown} onMouseUp={onMouseUp} style={{ background: "#fff", border: "1px solid hsl(214,18%,90%)", borderRadius: 10, padding: 16, animation: "fadeUp 0.2s", ...style }}>{children}</div>; }
 
 function Ic({ d, size, color }) { return <svg width={size || 20} height={size || 20} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>; }
@@ -309,6 +310,7 @@ export default function App() {
   // Slas kept for backwards compat but removed from nav
   var [slas, setSlas] = useState({});
   var [leaves, setLeaves] = useState({});
+  var [leaveRequests, setLeaveRequests] = useState([]);
   var [branding, setBranding] = useState({ title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" });
   // Pipeline Builder rules
   var [pipelineRules, setPipelineRules] = useState([]);
@@ -328,7 +330,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd, plf, plr, uxp, mb] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, brd, plf, plr, uxp, mb, lr] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -353,6 +355,7 @@ export default function App() {
         cloudLoad("announcements", []),
         cloudLoad("slas", {}),
         cloudLoad("leaves", {}),
+        cloudLoad("leaveRequests", []),
         cloudLoad("branding", { title: "HeyAds", subtitle: "TASK MANAGER", logo: "", favicon: "" }),
         cloudLoad("platforms", DEF_PLATFORMS),
         cloudLoad("pipelineRules", []),
@@ -387,6 +390,7 @@ export default function App() {
       setAnnouncements(ann || []);
       setSlas(sl || {});
       setLeaves(lv || {});
+      setLeaveRequests(lr || []);
       if (brd) setBranding(brd);
       var savedUser = localStorage.getItem("s7_user");
       if (savedUser) { try { setUser(JSON.parse(savedUser)); } catch(e) {} }
@@ -455,7 +459,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("departments", departments, 1000); }, [departments]);
   useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
   useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
-  useEffect(function() { if (!loading) debouncedSave("userXP", userXP, 1000); }, [userXP]);
+  useEffect(function() { if (!loading) debouncedSave("userXP", userXP, 1000); _globalUserXP = userXP || {}; }, [userXP]);
   useEffect(function() { if (!loading) debouncedSave("monthlyBonus", monthlyBonus, 1000); }, [monthlyBonus]);
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
   useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
@@ -469,6 +473,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("announcements", announcements, 1000); }, [announcements]);
   useEffect(function() { if (!loading) debouncedSave("slas", slas, 1000); }, [slas]);
   useEffect(function() { if (!loading) debouncedSave("leaves", leaves, 1000); }, [leaves]);
+  useEffect(function() { if (!loading) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
   useEffect(function() { if (!loading) debouncedSave("branding", branding, 1000); }, [branding]);
   useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
   // Apply favicon dynamically
@@ -1205,6 +1210,7 @@ export default function App() {
     { id: "wallfame", label: "Wall of Fame", icon: Icons.challenge },
     { id: "brandstats", label: "Brand Analytics", icon: Icons.shops },
     { id: "league", label: "Liga Saptamanii", icon: Icons.trophy },
+    { id: "leagueMonthly", label: "Liga Lunara", icon: Icons.challenge },
     { id: "announce", label: "Announcements", icon: Icons.announce },
     { id: "backups", label: "Backup Taskuri", icon: Icons.history },
     { id: "departments", label: "Departamente", icon: Icons.dept },
@@ -1220,7 +1226,7 @@ export default function App() {
   var navGroups = [
     { solo: true, items: ["dashboard", "tasks", "kanban"] },
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
-    { label: "Echipa", items: ["workload", "performance", "league", "digest", "achievements", "wallfame", "brandstats"] },
+    { label: "Echipa", items: ["workload", "performance", "league", "leagueMonthly", "digest", "achievements", "wallfame", "brandstats"] },
     { label: "Comunicare", items: ["announce"] },
     { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "backups"] },
   ];
@@ -1275,7 +1281,7 @@ export default function App() {
             </div>;
           })}
         </nav>
-        <div style={S.sidebarUser}><div style={{ position: "relative" }}><Av color={me.color} size={32}>{me.name[0]}</Av>{user !== "admin" && <div style={{ position: "absolute", bottom: -3, right: -3, background: getLevelColor(getLevel((userXP || {})[user] || 0)), color: "#fff", fontSize: 7, fontWeight: 800, padding: "1px 3px", borderRadius: 3, border: "1.5px solid hsl(216,22%,11%)" }}>{getLevel((userXP || {})[user] || 0)}</div>}</div><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#D1D9E6" }}>{me.name}</div><div style={{ fontSize: 10, color: "#7A8BA0" }}>{me.role === "pm" ? "PM" : me.role}{user !== "admin" ? " | Lv." + getLevel((userXP || {})[user] || 0) + " " + getLevelTitle(getLevel((userXP || {})[user] || 0)) : ""}</div></div></div>
+        <div style={S.sidebarUser}><Av color={me.color} size={32} userId={user}>{me.name[0]}</Av><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#D1D9E6" }}>{me.name}</div><div style={{ fontSize: 10, color: "#7A8BA0" }}>{me.role === "pm" ? "PM" : me.role}{user !== "admin" ? " | Lv." + getLevel((_globalUserXP[user]) || 0) + " " + getLevelTitle(getLevel((_globalUserXP[user]) || 0)) : ""}</div></div></div>
         <div style={{ padding: "0 16px 16px" }}><button style={S.logoutBtn} onClick={handleLogout}><Ic d={Icons.out} size={15} color="#7A8BA0" /> Sign out</button></div>
       </aside>
       <main style={S.main}>
@@ -1335,11 +1341,12 @@ export default function App() {
           {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} taskTypes={taskTypes} departments={departments} leaves={leaves} />}
           {page === "templates" && <TemplatesPage templates={templates} setTemplates={setTemplates} canEdit={canCreate} isAdmin={isAdmin} shops={shops} onCreateFromTpl={function(tpl) { setEditTask({ title: tpl.name, description: tpl.description, shop: tpl.shop || "", subtasks: tpl.subtasks.map(function(s) { return { id: gid(), text: s, done: false }; }) }); setShowAdd(true); }} />}
           {page === "recurring" && <RecurringPage recurringTasks={recurringTasks} setRecurringTasks={setRecurringTasks} team={team} assUsers={assUsers} shops={shops} departments={departments} canEdit={canCreate} />}
-          {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} />}
+          {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} addNotif={addNotif} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
           {page === "pipeline" && <PipelinePage pipelineRules={pipelineRules} setPipelineRules={setPipelineRules} team={team} assUsers={assUsers} shops={shops} taskTypes={taskTypes} departments={departments} platforms={platforms} addLog={addLog} />}
           {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
+          {page === "leagueMonthly" && <MonthlyLeaguePage allTasks={tasks} team={team} user={user} me={me} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
           {page === "performance" && <PerfPage users={visUsers} team={team} getPerf={getPerf} isMob={isMob} />}
@@ -1613,7 +1620,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
             var perfColor = up.perf.score >= 70 ? GR : up.perf.score >= 40 ? "#D97706" : "#DC2626";
             return <Card key={up.user} style={{ padding: 14, borderLeft: "3px solid " + (up.onLeave ? "#D97706" : perfColor) }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <Av color={up.color} size={36} fs={14}>{up.name[0]}</Av>
+                <Av color={up.color} size={36} fs={14} userId={up.user}>{up.name[0]}</Av>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{up.name}</div>
                   <div style={{ fontSize: 10, color: "#94A3B8" }}>{up.onLeave ? "🏖 Concediu azi" : "#" + (i + 1) + " saptamana"}</div>
@@ -2411,7 +2418,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
             <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{s.l}</div>
           </Card>;
         })}</div>;
-        if (id === "live") return activeTimers.length > 0 ? <Card style={{ borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card> : null;
+        if (id === "live") return activeTimers.length > 0 ? <Card style={{ borderLeft: "3px solid #DC2626" }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} /> Live ({activeTimers.length})</h3>{activeTimers.map(function(t) { var a = team[t.assignee]; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F5F9" }}>{a && <Av color={a.color} size={24} fs={10} userId={t.assignee}>{a.name[0]}</Av>}<span style={{ fontSize: 12, color: "#64748B" }}>{a ? a.name : ""}</span><span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{t.title}</span>{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}<span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft(getTS(t.id))}</span></div>; })}</Card> : null;
         if (id === "podium") return <PodiumCompact leaderboard={calcLeaderboard(allTasks, team, targets, achievements || {}, Object.keys(team))} onNavigate={!editMode && setPage ? function() { setPage("league"); } : null} />;
         if (id === "insights") return <AdminInsights allTasks={allTasks} team={team} visUsers={visUsers} timers={timers} isMob={isMob} setPage={setPage} />;
         if (id === "team") return <div>
@@ -2420,7 +2427,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
             return <Card key={d.key} style={{ cursor: "pointer" }}>
               <div onClick={function() { onClickUser(d.key); }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <div style={{ position: "relative" }}><Av color={d.color} size={38}>{d.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: d.online ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div>
+                  <div style={{ position: "relative" }}><Av color={d.color} size={38} userId={d.key}>{d.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: d.online ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div>
                   <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"}</div></div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div>
                 </div>
@@ -2535,7 +2542,7 @@ function BirdsEyePage({ tasks, team, timers, getTS, isMob, sessions, anomalies }
         var inProg = ut.filter(function(t) { return t.status === "In Progress"; });
         var done = ut.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; });
         return <div key={u} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid " + (on ? GR + "40" : "#E2E8F0"), background: on ? "#F0FDF4" : "#F8FAFC", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ position: "relative" }}><Av color={m.color} size={36}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div>
+          <div style={{ position: "relative" }}><Av color={m.color} size={36} userId={u}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 10, height: 10, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>{m.name}</div>
             <div style={{ display: "flex", gap: 6, fontSize: 10, marginTop: 3 }}>
@@ -2551,7 +2558,7 @@ function BirdsEyePage({ tasks, team, timers, getTS, isMob, sessions, anomalies }
     </div>
 
     {/* Overdue table */}
-    {overdueTasks.length > 0 && <Card style={{ marginBottom: 16 }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "#DC2626" }}>Intarziate ({overdueTasks.length})</h3>{overdueTasks.slice(0, 10).map(function(t) { var a = team[t.assignee] || {}; var daysLate = Math.floor((Date.now() - new Date(t.deadline).getTime()) / 86400000); return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #FEF2F2", fontSize: 12 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", flexShrink: 0 }} /><span style={{ flex: 1, fontWeight: 500 }}>{t.title}</span>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color} size={16} fs={8}>{a.name[0]}</Av>{a.name}</span>}<Badge bg="#FEF2F2" color="#DC2626">{daysLate}z intarziere</Badge>{t.shop && <Badge bg="#F1F5F9" color="#475569">{t.shop}</Badge>}</div>; })}</Card>}
+    {overdueTasks.length > 0 && <Card style={{ marginBottom: 16 }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "#DC2626" }}>Intarziate ({overdueTasks.length})</h3>{overdueTasks.slice(0, 10).map(function(t) { var a = team[t.assignee] || {}; var daysLate = Math.floor((Date.now() - new Date(t.deadline).getTime()) / 86400000); return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #FEF2F2", fontSize: 12 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", flexShrink: 0 }} /><span style={{ flex: 1, fontWeight: 500 }}>{t.title}</span>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color} size={16} fs={8} userId={t.assignee}>{a.name[0]}</Av>{a.name}</span>}<Badge bg="#FEF2F2" color="#DC2626">{daysLate}z intarziere</Badge>{t.shop && <Badge bg="#F1F5F9" color="#475569">{t.shop}</Badge>}</div>; })}</Card>}
 
     {/* Urgent tasks */}
     {urgentTasks.length > 0 && <Card style={{ marginBottom: 16 }}><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "#EA580C" }}>Urgent ({urgentTasks.length})</h3>{urgentTasks.slice(0, 8).map(function(t) { var a = team[t.assignee] || {}; return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #FFF7ED", fontSize: 12 }}><span style={{ flex: 1, fontWeight: 500 }}>{t.title}</span>{a.name && <span>{a.name}</span>}<Badge bg="#FFF7ED" color="#EA580C">{t.status}</Badge>{t.shop && <span style={{ fontSize: 10, color: GR }}>{t.shop}</span>}</div>; })}</Card>}
@@ -2573,7 +2580,7 @@ function ProfileView({ pu, team, tasks, timers, getTS, logs, sessions, getPerf, 
   var filt = ut.filter(function(t) { if (range === "all") return true; if (range === "today") return isTd(t.deadline) || isTd(t.createdAt); if (range === "week") return new Date(t.createdAt || t.deadline || 0).getTime() > Date.now() - 7 * 86400000; if (range === "month") return new Date(t.createdAt || t.deadline || 0).getTime() > Date.now() - 30 * 86400000; return true; });
   return <div style={{ minHeight: "100vh", background: "#FAFAFA", padding: isMob ? 16 : 32 }}>
     <button style={Object.assign({}, S.cancelBtn, { marginBottom: 20, display: "flex", alignItems: "center", gap: 6 })} onClick={onBack}><Ic d={Icons.back} size={16} color="#64748B" /> Inapoi</button>
-    <Card style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}><div style={{ position: "relative" }}><Av color={m.color} size={56} fs={22}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2.5px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 20, fontWeight: 700 }}>{m.name}</div><div style={{ fontSize: 12, color: "#94A3B8" }}>{m.role === "pm" ? "PM" : m.role} | {on ? "Online" : "Offline - " + fr(lss)}</div></div><div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 700, color: perf.score >= 70 ? GR : perf.score >= 40 ? "#D97706" : "#DC2626" }}>{perf.score}%</div><div style={{ fontSize: 10, color: "#94A3B8" }}>Performance</div></div><div style={{ display: "flex", gap: 8 }}>{[{ l: "Done", v: perf.done, c: GR }, { l: "Active", v: perf.active, c: "#2563EB" }, { l: "Review", v: perf.review, c: "#D97706" }, { l: "Overdue", v: perf.overdue, c: "#DC2626" }].map(function(x) { return <div key={x.l} style={{ textAlign: "center", padding: "4px 12px", background: x.c + "12", borderRadius: 8 }}><div style={{ fontSize: 18, fontWeight: 700, color: x.c }}>{x.v}</div><div style={{ fontSize: 9, color: "#94A3B8" }}>{x.l}</div></div>; })}</div></Card>
+    <Card style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}><div style={{ position: "relative" }}><Av color={m.color} size={56} fs={22} userId={pu}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2.5px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 20, fontWeight: 700 }}>{m.name}</div><div style={{ fontSize: 12, color: "#94A3B8" }}>{m.role === "pm" ? "PM" : m.role} | {on ? "Online" : "Offline - " + fr(lss)}</div></div><div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 700, color: perf.score >= 70 ? GR : perf.score >= 40 ? "#D97706" : "#DC2626" }}>{perf.score}%</div><div style={{ fontSize: 10, color: "#94A3B8" }}>Performance</div></div><div style={{ display: "flex", gap: 8 }}>{[{ l: "Done", v: perf.done, c: GR }, { l: "Active", v: perf.active, c: "#2563EB" }, { l: "Review", v: perf.review, c: "#D97706" }, { l: "Overdue", v: perf.overdue, c: "#DC2626" }].map(function(x) { return <div key={x.l} style={{ textAlign: "center", padding: "4px 12px", background: x.c + "12", borderRadius: 8 }}><div style={{ fontSize: 18, fontWeight: 700, color: x.c }}>{x.v}</div><div style={{ fontSize: 9, color: "#94A3B8" }}>{x.l}</div></div>; })}</div></Card>
     {/* Achievements */}
     {userAch.length > 0 && <Card style={{ marginBottom: 16 }}><h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Achievements ({userAch.length}/{ACHIEVEMENTS.length})</h3><div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{userAch.map(function(a) { return <div key={a.id} title={a.desc} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 12px", background: "#F0FDF4", borderRadius: 10, border: "1px solid " + GR + "30" }}><span style={{ fontSize: 24 }}>{a.icon}</span><span style={{ fontSize: 10, fontWeight: 600, marginTop: 4, color: GR }}>{a.name}</span></div>; })}</div></Card>}
     {/* Login history */}
@@ -2599,7 +2606,7 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
   {!bulkMode && can && <button style={Object.assign({}, S.stDot, { color: SC[t.status], background: SC[t.status] + "12", border: "1.5px solid " + SC[t.status] + "40" })} onClick={function() { var i = STATUSES.indexOf(t.status); onChgSt(t.id, STATUSES[(i + 1) % STATUSES.length]); }}>{SI[t.status]}</button>}
   <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={function() { if (onView) onView(t); }}>
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 3 }}><span style={{ fontSize: 14, fontWeight: 700 }}>{t.title}</span><Badge bg={GR} color="#fff">STAN</Badge><Badge bg={PC[t.priority] + "18"} color={PC[t.priority]}>{t.priority}</Badge>{t.platform && <Badge bg="#F1F5F9" color="#475569">{t.platform}</Badge>}{t.taskType && <Badge bg="#F5F3FF" color="#7C3AED">{t.taskType}</Badge>}{t.department && <Badge bg="#FFF7ED" color="#EA580C">{t.department}</Badge>}{t.campaignItems && t.campaignItems.length > 0 && <Badge bg="#F0FDF4" color={GR}>{t.campaignItems.length} produse</Badge>}{t.recurring && <Badge bg="#ECFDF5" color={GR}><Ic d={Icons.recur} size={8} color={GR} /></Badge>}{ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}</div>
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={16} fs={8}>{a.name[0]}</Av>{a.name}</span>}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.productName && <Badge bg="#EFF6FF" color="#2563EB">{t.productName}</Badge>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{t.links && t.links.length > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2 }}><Ic d={Icons.link} size={10} color="#94A3B8" /> {t.links.length}</span>}{totalS > 0 && <span><Ic d={Icons.check} size={10} color="#94A3B8" /> {doneS}/{totalS}</span>}</div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={16} fs={8} userId={t.assignee}>{a.name[0]}</Av>{a.name}</span>}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.productName && <Badge bg="#EFF6FF" color="#2563EB">{t.productName}</Badge>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{t.links && t.links.length > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2 }}><Ic d={Icons.link} size={10} color="#94A3B8" /> {t.links.length}</span>}{totalS > 0 && <span><Ic d={Icons.check} size={10} color="#94A3B8" /> {doneS}/{totalS}</span>}</div>
     {t.description && <div style={{ fontSize: 12, color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: isMob ? "100%" : 400, marginBottom: 3 }}>{t.description}</div>}
   </div>
   <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
@@ -2628,7 +2635,7 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
         {isDone && me.role !== "admin" && <Badge bg="#F8FAFC" color="#94A3B8"><Ic d={Icons.lock} size={8} color="#94A3B8" /> Blocat</Badge>}
         {ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={16} fs={8}>{a.name[0]}</Av>{a.name}</span>}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.productName && <Badge bg="#EFF6FF" color="#2563EB">{t.productName}</Badge>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{t.links && t.links.length > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2 }}><Ic d={Icons.link} size={10} color="#94A3B8" /> {t.links.length}</span>}{totalS > 0 && <span><Ic d={Icons.check} size={10} color="#94A3B8" /> {doneS}/{totalS}</span>}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>{a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={16} fs={8} userId={t.assignee}>{a.name[0]}</Av>{a.name}</span>}{t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}{t.productName && <Badge bg="#EFF6FF" color="#2563EB">{t.productName}</Badge>}{t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}{t.links && t.links.length > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2 }}><Ic d={Icons.link} size={10} color="#94A3B8" /> {t.links.length}</span>}{totalS > 0 && <span><Ic d={Icons.check} size={10} color="#94A3B8" /> {doneS}/{totalS}</span>}</div>
     </div>
     <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
       {needsExplode && onExplode && <button style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 6, border: "1.5px solid " + GR, background: "#ECFDF5", color: GR, fontSize: 11, fontWeight: 700, cursor: "pointer" }} onClick={function(e) { e.stopPropagation(); if (confirm("Creezi " + t.campaignItems.length + " taskuri individuale din acest campaign?")) onExplode(t); }}>⚡ Split {t.campaignItems.length}</button>}
@@ -2794,7 +2801,7 @@ function KanbanPage({ fProps, tasks, user, team, onView, onEdit, onDel, onDup, o
                   {ov && <Badge bg="#FEF2F2" color="#DC2626">INTARZIAT</Badge>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "#94A3B8" }}>
-                  {a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={18} fs={9}>{a.name[0]}</Av>{a.name}</span>}
+                  {a.name && <span style={{ display: "flex", alignItems: "center", gap: 3 }}><Av color={a.color || "#94A3B8"} size={18} fs={9} userId={t.assignee}>{a.name[0]}</Av>{a.name}</span>}
                   {t.deadline && <span style={{ color: ov ? "#DC2626" : "#94A3B8" }}>{fd(t.deadline)}</span>}
                 </div>
                 {secs > 0 && <div style={{ marginTop: 6, fontSize: 10, color: run ? "#DC2626" : "#94A3B8", fontVariantNumeric: "tabular-nums", fontWeight: run ? 700 : 400 }}>{ft(secs)}</div>}
@@ -2834,7 +2841,7 @@ function AchievementsPage({ achievements, team, visUsers, tasks, isMob, userXP }
         var lvlColor = getLevelColor(lvl);
         return <Card key={u}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <div style={{ position: "relative" }}><Av color={m.color} size={36}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: -4, right: -4, background: lvlColor, color: "#fff", fontSize: 8, fontWeight: 800, padding: "1px 4px", borderRadius: 4, border: "1.5px solid #fff" }}>{lvl}</div></div>
+            <div style={{ position: "relative" }}><Av color={m.color} size={36} userId={u}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: -4, right: -4, background: lvlColor, color: "#fff", fontSize: 8, fontWeight: 800, padding: "1px 4px", borderRadius: 4, border: "1.5px solid #fff" }}>{lvl}</div></div>
             <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{m.name} <span style={{ fontSize: 10, color: lvlColor, fontWeight: 700 }}>Lv.{lvl} {lvlTitle}</span></div><div style={{ fontSize: 11, color: "#94A3B8" }}>{xp} XP | {userAch.length}/{ACHIEVEMENTS.length} achievements | {doneCount} done</div></div>
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -3188,16 +3195,16 @@ function TemplatesPage({ templates, setTemplates, canEdit, isAdmin, shops, onCre
 function WorkPage({ users, team, tasks, getPerf, timers, getTS, isMob, onClickUser }) {
   var data = users.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) { var ut = tasks.filter(function(t) { return t.assignee === u; }); var byS = {}; STATUSES.forEach(function(s) { byS[s] = ut.filter(function(t) { return t.status === s; }).length; }); var od = ut.filter(function(t) { return isOv(t); }).length; var actT = ut.filter(function(t) { return timers[t.id] && timers[t.id].running; }).length; var tT = 0; ut.forEach(function(t) { tT += getTS(t.id); }); return { key: u, name: team[u].name, color: team[u].color, role: team[u].role, total: ut.length, byS: byS, od: od, actT: actT, tT: tT, perf: getPerf(u) }; }).sort(function(a, b) { return b.total - a.total; });
   var mx = Math.max.apply(null, data.map(function(d) { return d.total; }).concat([1]));
-  return <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(340px,1fr))", gap: 14 }}>{data.map(function(d) { return <Card key={d.key} style={{ cursor: "pointer" }}><div onClick={function() { onClickUser(d.key); }}><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}><Av color={d.color} size={42}>{d.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"}</div></div>{d.actT > 0 && <Badge bg="#FEF2F2" color="#DC2626"><span style={{ animation: "pulse 2s infinite" }}>{d.actT} active</span></Badge>}<div style={{ fontSize: 20, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div></div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748B", marginBottom: 4 }}><span>{d.total} taskuri</span><span>Tracked: {ft(d.tT)}</span></div><div style={{ height: 8, borderRadius: 8, background: "#F1F5F9", overflow: "hidden", display: "flex", marginBottom: 10 }}>{STATUSES.map(function(s) { var w = (d.byS[s] / mx) * 100; return w > 0 ? <div key={s} style={{ width: w + "%", height: "100%", background: SC[s] }} /> : null; })}</div><div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 4, textAlign: "center", fontSize: 10 }}>{STATUSES.map(function(s) { return <div key={s} style={{ background: SC[s] + "12", borderRadius: 6, padding: "4px 2px" }}><div style={{ fontSize: 14, fontWeight: 700, color: SC[s] }}>{d.byS[s]}</div><div style={{ color: "#94A3B8" }}>{s === "In Progress" ? "Active" : s}</div></div>; })}<div style={{ background: d.od ? "#FEF2F2" : "#F8FAFC", borderRadius: 6, padding: "4px 2px" }}><div style={{ fontSize: 14, fontWeight: 700, color: d.od ? "#DC2626" : "#94A3B8" }}>{d.od}</div><div style={{ color: "#94A3B8" }}>Overdue</div></div></div></div></Card>; })}</div>;
+  return <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(340px,1fr))", gap: 14 }}>{data.map(function(d) { return <Card key={d.key} style={{ cursor: "pointer" }}><div onClick={function() { onClickUser(d.key); }}><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}><Av color={d.color} size={42} userId={d.key}>{d.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{d.role === "pm" ? "PM" : "Member"}</div></div>{d.actT > 0 && <Badge bg="#FEF2F2" color="#DC2626"><span style={{ animation: "pulse 2s infinite" }}>{d.actT} active</span></Badge>}<div style={{ fontSize: 20, fontWeight: 700, color: d.perf.score >= 70 ? GR : d.perf.score >= 40 ? "#D97706" : "#DC2626" }}>{d.perf.score}%</div></div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748B", marginBottom: 4 }}><span>{d.total} taskuri</span><span>Tracked: {ft(d.tT)}</span></div><div style={{ height: 8, borderRadius: 8, background: "#F1F5F9", overflow: "hidden", display: "flex", marginBottom: 10 }}>{STATUSES.map(function(s) { var w = (d.byS[s] / mx) * 100; return w > 0 ? <div key={s} style={{ width: w + "%", height: "100%", background: SC[s] }} /> : null; })}</div><div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 4, textAlign: "center", fontSize: 10 }}>{STATUSES.map(function(s) { return <div key={s} style={{ background: SC[s] + "12", borderRadius: 6, padding: "4px 2px" }}><div style={{ fontSize: 14, fontWeight: 700, color: SC[s] }}>{d.byS[s]}</div><div style={{ color: "#94A3B8" }}>{s === "In Progress" ? "Active" : s}</div></div>; })}<div style={{ background: d.od ? "#FEF2F2" : "#F8FAFC", borderRadius: 6, padding: "4px 2px" }}><div style={{ fontSize: 14, fontWeight: 700, color: d.od ? "#DC2626" : "#94A3B8" }}>{d.od}</div><div style={{ color: "#94A3B8" }}>Overdue</div></div></div></div></Card>; })}</div>;
 }
 
 function TeamPage({ users, team, sessions, getPerf, isMob, onClickUser }) {
-  return <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>{users.map(function(u) { var m = team[u]; if (!m) return null; var p = getPerf(u); var lss = sessions[u]; var on = lss && (Date.now() - new Date(lss).getTime()) < 120000; return <Card key={u} style={{ cursor: "pointer" }}><div onClick={function() { onClickUser(u); }}><div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}><div style={{ position: "relative" }}><Av color={m.color} size={42}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 600 }}>{m.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{m.role === "pm" ? "PM" : m.role === "admin" ? "Admin" : "Member"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: 11, fontWeight: 600, color: on ? "#16A34A" : "#94A3B8" }}>{on ? "Online" : "Offline"}</div><div style={{ fontSize: 10, color: "#CBD5E1" }}>Last: {fr(lss)}</div></div></div>{m.role !== "admin" && <div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}><span style={{ color: "#64748B" }}>Performance</span><span style={{ fontWeight: 700, color: p.score >= 70 ? GR : p.score >= 40 ? "#D97706" : "#DC2626" }}>{p.score}%</span></div><div style={S.progBg}><div style={S.progBar(p.score >= 70 ? GR : p.score >= 40 ? "#D97706" : "#DC2626", p.score)} /></div></div>}</div></Card>; })}</div>;
+  return <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>{users.map(function(u) { var m = team[u]; if (!m) return null; var p = getPerf(u); var lss = sessions[u]; var on = lss && (Date.now() - new Date(lss).getTime()) < 120000; return <Card key={u} style={{ cursor: "pointer" }}><div onClick={function() { onClickUser(u); }}><div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}><div style={{ position: "relative" }}><Av color={m.color} size={42} userId={u}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 600 }}>{m.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{m.role === "pm" ? "PM" : m.role === "admin" ? "Admin" : "Member"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: 11, fontWeight: 600, color: on ? "#16A34A" : "#94A3B8" }}>{on ? "Online" : "Offline"}</div><div style={{ fontSize: 10, color: "#CBD5E1" }}>Last: {fr(lss)}</div></div></div>{m.role !== "admin" && <div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}><span style={{ color: "#64748B" }}>Performance</span><span style={{ fontWeight: 700, color: p.score >= 70 ? GR : p.score >= 40 ? "#D97706" : "#DC2626" }}>{p.score}%</span></div><div style={S.progBg}><div style={S.progBar(p.score >= 70 ? GR : p.score >= 40 ? "#D97706" : "#DC2626", p.score)} /></div></div>}</div></Card>; })}</div>;
 }
 
 function PerfPage({ users, team, getPerf, isMob }) {
   var data = users.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) { return Object.assign({ key: u }, team[u], getPerf(u)); }).sort(function(a, b) { return b.score - a.score; });
-  return <Card><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Clasament Echipa</h3>{data.map(function(d, i) { return <div key={d.key} style={{ display: "flex", alignItems: isMob ? "flex-start" : "center", gap: 12, padding: "12px 0", borderBottom: i < data.length - 1 ? "1px solid #F1F5F9" : "none", flexDirection: isMob ? "column" : "row" }}><span style={{ fontSize: 16, width: 28, textAlign: "center", fontWeight: 700, color: i < 3 ? GR : "#94A3B8" }}>#{i + 1}</span><div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 120 }}><Av color={d.color} size={30}>{d.name[0]}</Av><span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span></div><div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, width: "100%" }}><div style={Object.assign({}, S.progBg, { flex: 1 })}><div style={S.progBar(d.score >= 70 ? GR : d.score >= 40 ? "#D97706" : "#DC2626", d.score)} /></div><span style={{ fontSize: 14, fontWeight: 700, minWidth: 40, textAlign: "right", color: d.score >= 70 ? GR : d.score >= 40 ? "#D97706" : "#DC2626" }}>{d.score}%</span></div><div style={{ display: "flex", gap: 10, fontSize: 11, color: "#94A3B8" }}><span>{d.done}/{d.total}</span>{d.overdue > 0 && <span style={{ color: "#DC2626" }}>{d.overdue} ovd</span>}{d.avgTime > 0 && <span>avg {ft(d.avgTime)}</span>}</div></div>; })}</Card>;
+  return <Card><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Clasament Echipa</h3>{data.map(function(d, i) { return <div key={d.key} style={{ display: "flex", alignItems: isMob ? "flex-start" : "center", gap: 12, padding: "12px 0", borderBottom: i < data.length - 1 ? "1px solid #F1F5F9" : "none", flexDirection: isMob ? "column" : "row" }}><span style={{ fontSize: 16, width: 28, textAlign: "center", fontWeight: 700, color: i < 3 ? GR : "#94A3B8" }}>#{i + 1}</span><div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 120 }}><Av color={d.color} size={30} userId={d.key}>{d.name[0]}</Av><span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span></div><div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, width: "100%" }}><div style={Object.assign({}, S.progBg, { flex: 1 })}><div style={S.progBar(d.score >= 70 ? GR : d.score >= 40 ? "#D97706" : "#DC2626", d.score)} /></div><span style={{ fontSize: 14, fontWeight: 700, minWidth: 40, textAlign: "right", color: d.score >= 70 ? GR : d.score >= 40 ? "#D97706" : "#DC2626" }}>{d.score}%</span></div><div style={{ display: "flex", gap: 10, fontSize: 11, color: "#94A3B8" }}><span>{d.done}/{d.total}</span>{d.overdue > 0 && <span style={{ color: "#DC2626" }}>{d.overdue} ovd</span>}{d.avgTime > 0 && <span>avg {ft(d.avgTime)}</span>}</div></div>; })}</Card>;
 }
 
 function DigestPage({ team, tasks, timers, getPerf, visUsers, isMob }) {
@@ -3205,7 +3212,7 @@ function DigestPage({ team, tasks, timers, getPerf, visUsers, isMob }) {
   var users = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; });
   var digest = users.map(function(u) { var ut = tasks.filter(function(t) { return t.assignee === u; }); var weekDone = ut.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) >= weekAgoStr; }).length; var weekCreated = ut.filter(function(t) { return t.createdAt && ds(t.createdAt) >= weekAgoStr; }).length; var overdue = ut.filter(function(t) { return isOv(t); }).length; var perf = getPerf(u); var totalTime = 0; ut.forEach(function(t) { var tm = timers[t.id]; if (tm) totalTime += tm.total; }); return { key: u, name: team[u].name, color: team[u].color, weekDone: weekDone, weekCreated: weekCreated, overdue: overdue, perf: perf, totalTime: totalTime }; }).sort(function(a, b) { return b.weekDone - a.weekDone; });
   var copyDigest = function() { var text = "WEEKLY DIGEST - " + fd(weekAgoStr) + " -> " + fd(TD) + "\n\n"; digest.forEach(function(d) { text += d.name + ": " + d.weekDone + " done, " + d.overdue + " overdue, " + d.perf.score + "% perf, " + ft(d.totalTime) + " tracked\n"; }); navigator.clipboard.writeText(text); };
-  return <div><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={{ fontSize: 15, fontWeight: 700 }}>Weekly Digest ({fd(weekAgoStr)} - {fd(TD)})</h3><button style={S.primBtn} onClick={copyDigest}><Ic d={Icons.copy} size={14} color="#fff" /> Copy</button></div><div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(320px,1fr))", gap: 12 }}>{digest.map(function(d) { return <Card key={d.key} style={{ borderLeft: "3px solid " + d.color }}><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}><Av color={d.color} size={36}>{d.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>Score: {d.perf.score}%</div></div></div><div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6, textAlign: "center" }}>{[{ l: "Done", v: d.weekDone, c: GR }, { l: "Noi", v: d.weekCreated, c: "#2563EB" }, { l: "Overdue", v: d.overdue, c: "#DC2626" }, { l: "Timp", v: ft(d.totalTime), c: "#64748B" }].map(function(x) { return <div key={x.l} style={{ background: x.c + "12", borderRadius: 6, padding: "6px 4px" }}><div style={{ fontSize: 16, fontWeight: 700, color: x.c }}>{x.v}</div><div style={{ fontSize: 9, color: "#94A3B8" }}>{x.l}</div></div>; })}</div></Card>; })}</div></div>;
+  return <div><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}><h3 style={{ fontSize: 15, fontWeight: 700 }}>Weekly Digest ({fd(weekAgoStr)} - {fd(TD)})</h3><button style={S.primBtn} onClick={copyDigest}><Ic d={Icons.copy} size={14} color="#fff" /> Copy</button></div><div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(320px,1fr))", gap: 12 }}>{digest.map(function(d) { return <Card key={d.key} style={{ borderLeft: "3px solid " + d.color }}><div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}><Av color={d.color} size={36} userId={d.key}>{d.name[0]}</Av><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>Score: {d.perf.score}%</div></div></div><div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6, textAlign: "center" }}>{[{ l: "Done", v: d.weekDone, c: GR }, { l: "Noi", v: d.weekCreated, c: "#2563EB" }, { l: "Overdue", v: d.overdue, c: "#DC2626" }, { l: "Timp", v: ft(d.totalTime), c: "#64748B" }].map(function(x) { return <div key={x.l} style={{ background: x.c + "12", borderRadius: 6, padding: "6px 4px" }}><div style={{ fontSize: 16, fontWeight: 700, color: x.c }}>{x.v}</div><div style={{ fontSize: 9, color: "#94A3B8" }}>{x.l}</div></div>; })}</div></Card>; })}</div></div>;
 }
 
 function LogPage({ logs, visUsers, isMob }) {
@@ -3512,21 +3519,21 @@ function PodiumCompact({ leaderboard, onNavigate }) {
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, alignItems: "end" }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 24, marginBottom: 2 }}>🥈</div>
-        <Av color={leaderboard[1].color} size={38} fs={14}>{leaderboard[1].name[0]}</Av>
+        <Av color={leaderboard[1].color} size={38} fs={14} userId={leaderboard[1].user}>{leaderboard[1].name[0]}</Av>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B", marginTop: 4 }}>{leaderboard[1].name}</div>
         <div style={{ fontSize: 10, color: "#64748B" }}>{leaderboard[1].doneThis} taskuri</div>
         <div style={{ height: 40, background: "#E5E7EB", borderRadius: "6px 6px 0 0", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B", fontWeight: 800, fontSize: 14 }}>2</div>
       </div>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 30, marginBottom: 2 }}>👑</div>
-        <Av color={leaderboard[0].color} size={48} fs={18}>{leaderboard[0].name[0]}</Av>
+        <Av color={leaderboard[0].color} size={48} fs={18} userId={leaderboard[0].user}>{leaderboard[0].name[0]}</Av>
         <div style={{ fontSize: 13, fontWeight: 800, color: "#1E293B", marginTop: 4 }}>{leaderboard[0].name}</div>
         <div style={{ fontSize: 11, color: "#D97706", fontWeight: 700 }}>{leaderboard[0].doneThis} taskuri</div>
         <div style={{ height: 60, background: "linear-gradient(180deg, #FDE047, #EAB308)", borderRadius: "6px 6px 0 0", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: 18, boxShadow: "0 3px 8px rgba(234,179,8,0.3)" }}>1</div>
       </div>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 24, marginBottom: 2 }}>🥉</div>
-        <Av color={leaderboard[2].color} size={34} fs={13}>{leaderboard[2].name[0]}</Av>
+        <Av color={leaderboard[2].color} size={34} fs={13} userId={leaderboard[2].user}>{leaderboard[2].name[0]}</Av>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B", marginTop: 4 }}>{leaderboard[2].name}</div>
         <div style={{ fontSize: 10, color: "#64748B" }}>{leaderboard[2].doneThis} taskuri</div>
         <div style={{ height: 28, background: "#F97316", borderRadius: "6px 6px 0 0", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 13 }}>3</div>
@@ -3671,7 +3678,7 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
 
           <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
             <div style={{ width: 32, textAlign: "center", fontSize: 16, fontWeight: 800, color: idx === 0 ? "#EAB308" : idx === 1 ? "#94A3B8" : idx === 2 ? "#F97316" : "#CBD5E1" }}>{idx < 3 ? ["🥇", "🥈", "🥉"][idx] : "#" + (idx + 1)}</div>
-            <Av color={p.color} size={32} fs={12}>{p.name[0]}</Av>
+            <Av color={p.color} size={32} fs={12} userId={p.user}>{p.name[0]}</Av>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{p.name}</span>
@@ -3744,24 +3751,29 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
   </div>;
 }
 
-function LeavesPage({ leaves, setLeaves, team, user, visUsers, me, addLog }) {
+function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, user, visUsers, me, addLog, addNotif }) {
   var [selectedUser, setSelectedUser] = useState(visUsers.filter(function(u) { return u !== "admin" && team[u] && team[u].role !== "admin"; })[0] || "");
   var [calMonth, setCalMonth] = useState(new Date());
+  var [showRequestForm, setShowRequestForm] = useState(false);
+  var [reqFrom, setReqFrom] = useState("");
+  var [reqTo, setReqTo] = useState("");
+  var [reqReason, setReqReason] = useState("");
 
   var canEditUser = function(uid) {
     if (!team[uid]) return false;
     if (me.role === "admin") return true;
-    if (me.role === "pm") {
-      var myTeam = me.team || [];
-      return myTeam.includes(uid) || uid === user;
-    }
+    if (me.role === "pm") { return (me.team || []).includes(uid) || uid === user; }
     return uid === user;
   };
 
   var editableUsers = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin" && canEditUser(u); });
 
+  // Members can only request, not directly add
+  var canDirectEdit = me.role === "admin" || me.role === "pm";
+
   var toggleDate = function(dateStr) {
     if (!selectedUser || !canEditUser(selectedUser)) return;
+    if (!canDirectEdit) return; // members use request system
     setLeaves(function(prev) {
       var copy = Object.assign({}, prev);
       var userLeaves = (copy[selectedUser] || []).slice();
@@ -3773,47 +3785,135 @@ function LeavesPage({ leaves, setLeaves, team, user, visUsers, me, addLog }) {
     });
   };
 
+  // Submit leave request (for members)
+  var submitRequest = function() {
+    if (!reqFrom) return;
+    var dates = [];
+    var from = new Date(reqFrom + "T00:00:00");
+    var to = reqTo ? new Date(reqTo + "T00:00:00") : from;
+    for (var d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      var dow = d.getDay();
+      if (dow !== 0 && dow !== 6) dates.push(ds(d));
+    }
+    if (dates.length === 0) return;
+    var req = { id: gid(), userId: user, userName: (team[user] || {}).name, dates: dates, from: reqFrom, to: reqTo || reqFrom, reason: reqReason, status: "pending", createdAt: ts() };
+    setLeaveRequests(function(p) { return [req].concat(p); });
+    // Notify PM and admin
+    var pmUser = (team[user] || {}).pm;
+    if (pmUser) addNotif("leave_request", (team[user] || {}).name + " cere concediu " + reqFrom + " - " + (reqTo || reqFrom) + " (" + dates.length + " zile)", null, pmUser);
+    addNotif("leave_request", (team[user] || {}).name + " cere concediu " + reqFrom + " - " + (reqTo || reqFrom) + " (" + dates.length + " zile)", null, "admin");
+    addLog("LEAVE", "Cerere concediu: " + dates.length + " zile");
+    setShowRequestForm(false); setReqFrom(""); setReqTo(""); setReqReason("");
+  };
+
+  // Approve/reject request
+  var handleRequest = function(reqId, action) {
+    var req = leaveRequests.find(function(r) { return r.id === reqId; });
+    if (!req) return;
+    setLeaveRequests(function(p) { return p.map(function(r) { return r.id === reqId ? Object.assign({}, r, { status: action, handledBy: user, handledAt: ts() }) : r; }); });
+    if (action === "approved") {
+      setLeaves(function(prev) {
+        var copy = Object.assign({}, prev);
+        var userLeaves = (copy[req.userId] || []).slice();
+        req.dates.forEach(function(d) { if (!userLeaves.includes(d)) userLeaves.push(d); });
+        copy[req.userId] = userLeaves.sort();
+        return copy;
+      });
+      addNotif("leave_approved", "Concediu aprobat: " + req.from + " - " + req.to, null, req.userId);
+      addLog("LEAVE", "Aprobat concediu " + (req.userName) + " " + req.from + " - " + req.to);
+    } else {
+      addNotif("leave_rejected", "Concediu respins: " + req.from + " - " + req.to, null, req.userId);
+      addLog("LEAVE", "Respins concediu " + (req.userName) + " " + req.from + " - " + req.to);
+    }
+  };
+
   var y = calMonth.getFullYear(), m = calMonth.getMonth();
   var dim = new Date(y, m + 1, 0).getDate();
   var fd1 = new Date(y, m, 1).getDay();
-  var offset = fd1 === 0 ? 6 : fd1 - 1; // Monday-first
+  var offset = fd1 === 0 ? 6 : fd1 - 1;
   var cells = [];
   for (var i = 0; i < offset; i++) cells.push(null);
-  for (var d = 1; d <= dim; d++) cells.push(d);
-
+  for (var d2 = 1; d2 <= dim; d2++) cells.push(d2);
   var userLeaves = (leaves[selectedUser] || []);
-  var todayOnLeave = editableUsers.filter(function(u) { return isOnLeave(leaves, u, TD); });
+  var todayOnLeave = editableUsers.filter(function(u2) { return isOnLeave(leaves, u2, TD); });
+  var pendingRequests = (leaveRequests || []).filter(function(r) { return r.status === "pending"; });
 
   return <div>
     <div style={{ marginBottom: 16 }}>
       <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Concedii</h3>
-      <div style={{ fontSize: 12, color: "#94A3B8" }}>Click pe zi pentru a adauga / scoate concediu. Zilele de concediu nu afecteaza targetul si performance-ul.</div>
+      <div style={{ fontSize: 12, color: "#94A3B8" }}>{canDirectEdit ? "Click pe zi pentru a adauga / scoate concediu." : "Trimite o cerere de concediu pentru aprobare."} Zilele de concediu nu afecteaza targetul si performance-ul.</div>
     </div>
+
+    {/* Pending requests alert for admin/pm */}
+    {canDirectEdit && pendingRequests.length > 0 && <Card style={{ marginBottom: 16, borderLeft: "3px solid #D97706", background: "#FFFBEB" }}>
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#D97706", marginBottom: 10 }}>Cereri de concediu in asteptare ({pendingRequests.length})</div>
+      {pendingRequests.map(function(req) {
+        var reqUser = team[req.userId] || {};
+        return <div key={req.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fff", borderRadius: 8, marginBottom: 6, border: "1px solid #FDE68A" }}>
+          <Av color={reqUser.color || "#94A3B8"} size={32} userId={req.userId}>{(reqUser.name || "?")[0]}</Av>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{reqUser.name || req.userId}</div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>{req.from} - {req.to} ({req.dates.length} zile){req.reason ? " | " + req.reason : ""}</div>
+            <div style={{ fontSize: 10, color: "#94A3B8" }}>Cerut: {ff(req.createdAt)}</div>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button style={Object.assign({}, S.primBtn, { padding: "6px 14px", fontSize: 12 })} onClick={function() { handleRequest(req.id, "approved"); }}>Aproba</button>
+            <button style={Object.assign({}, S.cancelBtn, { padding: "6px 14px", fontSize: 12, color: "#DC2626", borderColor: "#DC2626" })} onClick={function() { handleRequest(req.id, "rejected"); }}>Respinge</button>
+          </div>
+        </div>;
+      })}
+    </Card>}
 
     {todayOnLeave.length > 0 && <Card style={{ marginBottom: 16, borderLeft: "3px solid #D97706", background: "#FFFBEB" }}>
       <div style={{ fontWeight: 700, fontSize: 13, color: "#D97706", marginBottom: 6 }}>Azi in concediu</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{todayOnLeave.map(function(u) { var t = team[u] || {}; return <Badge key={u} bg="#FEF3C7" color="#92400E">{t.name}</Badge>; })}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{todayOnLeave.map(function(u2) { var t2 = team[u2] || {}; return <Badge key={u2} bg="#FEF3C7" color="#92400E">{t2.name}</Badge>; })}</div>
+    </Card>}
+
+    {/* Member: request button */}
+    {!canDirectEdit && <div style={{ marginBottom: 16 }}>
+      <button style={S.primBtn} onClick={function() { setShowRequestForm(!showRequestForm); }}>Cere concediu</button>
+    </div>}
+    {showRequestForm && <Card style={{ marginBottom: 16, borderLeft: "3px solid #2563EB" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#2563EB", marginBottom: 10 }}>Cerere concediu</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <div><label style={S.label}>De la</label><input type="date" style={S.input} value={reqFrom} onChange={function(e) { setReqFrom(e.target.value); }} /></div>
+        <div><label style={S.label}>Pana la</label><input type="date" style={S.input} value={reqTo} onChange={function(e) { setReqTo(e.target.value); }} /></div>
+      </div>
+      <label style={S.label}>Motiv (optional)</label>
+      <input style={S.input} value={reqReason} onChange={function(e) { setReqReason(e.target.value); }} placeholder="Ex: Concediu medical, personal, etc." />
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button style={S.primBtn} onClick={submitRequest}>Trimite cererea</button><button style={S.cancelBtn} onClick={function() { setShowRequestForm(false); }}>Anuleaza</button></div>
+    </Card>}
+
+    {/* My requests history (for members) */}
+    {!canDirectEdit && leaveRequests && leaveRequests.filter(function(r) { return r.userId === user; }).length > 0 && <Card style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Cererile mele</div>
+      {leaveRequests.filter(function(r) { return r.userId === user; }).slice(0, 10).map(function(r) {
+        var sc = r.status === "approved" ? "#10B981" : r.status === "rejected" ? "#DC2626" : "#D97706";
+        var sl = r.status === "approved" ? "Aprobat" : r.status === "rejected" ? "Respins" : "In asteptare";
+        return <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", marginBottom: 4, borderRadius: 6, borderLeft: "3px solid " + sc, background: sc + "08" }}>
+          <div style={{ flex: 1, fontSize: 12 }}><span style={{ fontWeight: 600 }}>{r.from} - {r.to}</span> ({r.dates.length} zile){r.reason ? " - " + r.reason : ""}</div>
+          <Badge bg={sc + "18"} color={sc}>{sl}</Badge>
+        </div>;
+      })}
     </Card>}
 
     <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 16 }}>
-      {/* User sidebar */}
       <Card style={{ padding: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Selecteaza user</div>
-        {editableUsers.map(function(u) {
-          var t = team[u] || {};
-          var count = (leaves[u] || []).length;
-          var isSel = selectedUser === u;
-          return <div key={u} onClick={function() { setSelectedUser(u); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: isSel ? GR + "15" : "transparent", marginBottom: 3, border: "1px solid " + (isSel ? GR + "30" : "transparent") }}>
-            <Av color={t.color} size={26} fs={11}>{(t.name || "?")[0]}</Av>
+        {editableUsers.map(function(u2) {
+          var t2 = team[u2] || {};
+          var count = (leaves[u2] || []).length;
+          var isSel = selectedUser === u2;
+          return <div key={u2} onClick={function() { setSelectedUser(u2); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: isSel ? GR + "15" : "transparent", marginBottom: 3, border: "1px solid " + (isSel ? GR + "30" : "transparent") }}>
+            <Av color={t2.color} size={26} fs={11} userId={u2}>{(t2.name || "?")[0]}</Av>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 500, color: isSel ? GR : "#1E293B" }}>{t.name}</div>
+              <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 500, color: isSel ? GR : "#1E293B" }}>{t2.name}</div>
               <div style={{ fontSize: 10, color: "#94A3B8" }}>{count} zile concediu</div>
             </div>
           </div>;
         })}
       </Card>
 
-      {/* Calendar */}
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <button style={S.cancelBtn} onClick={function() { var n = new Date(calMonth); n.setMonth(n.getMonth() - 1); setCalMonth(n); }}>&lt;</button>
@@ -3821,34 +3921,23 @@ function LeavesPage({ leaves, setLeaves, team, user, visUsers, me, addLog }) {
           <button style={S.cancelBtn} onClick={function() { var n = new Date(calMonth); n.setMonth(n.getMonth() + 1); setCalMonth(n); }}>&gt;</button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
-          {["L", "Ma", "Mi", "J", "V", "S", "D"].map(function(d, i) { return <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#94A3B8", padding: 4 }}>{d}</div>; })}
+          {["L", "Ma", "Mi", "J", "V", "S", "D"].map(function(d3, i2) { return <div key={i2} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#94A3B8", padding: 4 }}>{d3}</div>; })}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-          {cells.map(function(cell, i) {
-            if (cell === null) return <div key={i} style={{ padding: 8 }} />;
+          {cells.map(function(cell, i3) {
+            if (cell === null) return <div key={i3} style={{ padding: 8 }} />;
             var dStr = y + "-" + String(m + 1).padStart(2, "0") + "-" + String(cell).padStart(2, "0");
-            var isToday = dStr === TD;
+            var isToday2 = dStr === TD;
             var isLeave = userLeaves.includes(dStr);
             var dt = new Date(y, m, cell);
             var dow = dt.getDay();
             var isWeekend = dow === 0 || dow === 6;
-            return <div key={i} onClick={function() { toggleDate(dStr); }} style={{
-              padding: "10px 0",
-              textAlign: "center",
-              cursor: selectedUser ? "pointer" : "default",
-              borderRadius: 6,
-              background: isLeave ? "#D97706" : isToday ? GR + "20" : isWeekend ? "#F8FAFC" : "#fff",
-              color: isLeave ? "#fff" : isWeekend ? "#94A3B8" : "#1E293B",
-              fontWeight: isLeave ? 700 : isToday ? 700 : 500,
-              fontSize: 13,
-              border: "1px solid " + (isLeave ? "#D97706" : isToday ? GR : "#E2E8F0"),
-              transition: "all 0.1s"
-            }}>{cell}</div>;
+            return <div key={i3} onClick={function() { if (canDirectEdit) toggleDate(dStr); }} style={{ padding: "10px 0", textAlign: "center", cursor: canDirectEdit ? "pointer" : "default", borderRadius: 6, background: isLeave ? "#D97706" : isToday2 ? GR + "20" : isWeekend ? "#F8FAFC" : "#fff", color: isLeave ? "#fff" : isWeekend ? "#94A3B8" : "#1E293B", fontWeight: isLeave ? 700 : isToday2 ? 700 : 500, fontSize: 13, border: "1px solid " + (isLeave ? "#D97706" : isToday2 ? GR : "#E2E8F0") }}>{cell}</div>;
           })}
         </div>
         {selectedUser && <div style={{ marginTop: 14, padding: 10, background: "#F8FAFC", borderRadius: 6, fontSize: 12 }}>
           <div style={{ fontWeight: 700, marginBottom: 4, color: "#475569" }}>Concediu {(team[selectedUser] || {}).name}: {userLeaves.length} zile</div>
-          {userLeaves.length > 0 ? <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{userLeaves.slice(0, 20).map(function(d) { return <Badge key={d} bg="#FEF3C7" color="#92400E">{d}</Badge>; })}{userLeaves.length > 20 && <Badge bg="#F1F5F9" color="#64748B">+{userLeaves.length - 20}</Badge>}</div> : <div style={{ color: "#94A3B8" }}>Niciun concediu inca.</div>}
+          {userLeaves.length > 0 ? <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{userLeaves.slice(0, 20).map(function(d4) { return <Badge key={d4} bg="#FEF3C7" color="#92400E">{d4}</Badge>; })}{userLeaves.length > 20 && <Badge bg="#F1F5F9" color="#64748B">+{userLeaves.length - 20}</Badge>}</div> : <div style={{ color: "#94A3B8" }}>Niciun concediu inca.</div>}
         </div>}
       </Card>
     </div>
@@ -4073,7 +4162,7 @@ function UsersPage({ team, setTeam, addLog }) {
       var m = team[u]; if (!m) return null; var isEd = editU === u;
       return <Card key={u} style={{ marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Av color={m.color} size={36}>{m.name[0]}</Av>
+          <Av color={m.color} size={36} userId={u}>{m.name[0]}</Av>
           <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{m.name}</div><div style={{ fontSize: 11, color: "#94A3B8" }}>{u} | {m.role}</div></div>
           <button style={S.iconBtn} onClick={function() { setEditU(isEd ? null : u); }}><Ic d={Icons.edit} size={16} color={isEd ? GR : "#94A3B8"} /></button>
           <button style={S.iconBtn} onClick={function() { if (confirm("Stergi user?")) delU(u); }}><Ic d={Icons.del} size={16} color="#EF4444" /></button>
@@ -4090,13 +4179,13 @@ function EditUserInline({ u, m, team, setTeam }) {
   var curPerms = m.permissions || {};
   var upd = function(field, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { [field]: val }); return n; }); };
   var updPerm = function(perm, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { permissions: Object.assign({}, n[u].permissions || {}, { [perm]: val }) }); return n; }); };
-  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "wallfame", "brandstats", "league", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "backups"];
+  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "wallfame", "brandstats", "league", "leagueMonthly", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "backups"];
   var pageLabels = {
     dashboard: "Dashboard", tasks: "Taskuri", kanban: "Kanban Board",
     targets: "Targets", templates: "Templates", recurring: "Recurring",
     leaves: "Concedii", workload: "Workload", performance: "Performance",
     digest: "Weekly Digest", achievements: "Achievements", wallfame: "Wall of Fame",
-    brandstats: "Brand Analytics", league: "Liga Saptamanii",
+    brandstats: "Brand Analytics", league: "Liga Saptamanii", leagueMonthly: "Liga Lunara",
     announce: "Announcements", departments: "Departamente", shops: "Magazine",
     products: "Produse", sheets: "Sheets", manage_users: "Manage Users",
     branding: "Branding", config: "Configurare Rapida", pipeline: "Pipeline Builder",
@@ -4482,6 +4571,191 @@ function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievem
   </div>;
   } catch(err) { return <Card style={{ padding: 30, textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>Eroare Wall of Fame</div><div style={{ fontSize: 12, color: "#64748B" }}>{err.message}</div></Card>; }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// MONTHLY LEAGUE — Clasament lunar cu bonus, reset la 1 a lunii
+// ═══════════════════════════════════════════════════════════════
+function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, visUsers, isMob, monthlyBonus, setMonthlyBonus, userXP }) {
+  var now = new Date();
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  var monthNames = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
+  var monthLabel = monthNames[now.getMonth()] + " " + now.getFullYear();
+  var daysInMonth = monthEnd.getDate();
+  var daysPassed = now.getDate();
+  var daysRemaining = daysInMonth - daysPassed;
+
+  var competitors = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; });
+
+  var leaderboard = competitors.map(function(u) {
+    var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
+    var thisMonth = userTasks.filter(function(t) {
+      return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd;
+    });
+    var overdue = userTasks.filter(function(t) { return t.status !== "Done" && t.deadline && t.deadline < ds(now); }).length;
+
+    // Streak bonus
+    var userTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
+    var streakBonus = 0;
+    if (userTargets.length > 0) {
+      var tgt = userTargets[0];
+      var daysWithTarget = 0;
+      for (var d = 0; d < daysPassed; d++) {
+        var dt = new Date(monthStart); dt.setDate(dt.getDate() + d);
+        if (dt > now) break;
+        if (dt.getDay() === 0 || dt.getDay() === 6) continue;
+        var doneDay = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length;
+        if (doneDay >= (tgt.target || 0)) daysWithTarget++;
+      }
+      streakBonus = daysWithTarget * 3;
+    }
+
+    var score = thisMonth.length * 10 - overdue * 5 + streakBonus;
+    var xp = (userXP || {})[u] || 0;
+    var lvl = getLevel(xp);
+
+    // Weekly breakdown
+    var weeklyDone = [];
+    for (var w = 0; w < 5; w++) {
+      var wStart = new Date(monthStart); wStart.setDate(wStart.getDate() + w * 7);
+      var wEnd = new Date(wStart); wEnd.setDate(wEnd.getDate() + 6);
+      if (wStart > now) break;
+      var wDone = thisMonth.filter(function(t) { var d2 = new Date(t.updatedAt); return d2 >= wStart && d2 <= wEnd; }).length;
+      weeklyDone.push(wDone);
+    }
+
+    return {
+      user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8",
+      doneThis: thisMonth.length, overdue: overdue, score: Math.max(0, score),
+      xp: xp, level: lvl, title: getLevelTitle(lvl), weeklyDone: weeklyDone,
+      achCount: ((achievements || {})[u] || []).length
+    };
+  }).sort(function(a, b) { return b.score - a.score; });
+
+  var maxScore = leaderboard.length > 0 ? leaderboard[0].score : 1;
+  var myPos = leaderboard.findIndex(function(p) { return p.user === user; });
+  var myData = myPos >= 0 ? leaderboard[myPos] : null;
+
+  return <div>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Liga Lunara - {monthLabel}</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Clasament lunar. Se reseteaza pe 1 a fiecarei luni. {daysRemaining} zile ramase.</div>
+    </div>
+
+    {/* Bonus Prize Banner */}
+    {monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FEFCE8, #FEF3C7 40%, #FFF 80%)", borderLeft: "4px solid #EAB308", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: -20, right: -10, fontSize: 100, opacity: 0.06 }}>💰</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 48 }}>🏆</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Premiu Locul 1 - {monthLabel}</div>
+          <div style={{ fontSize: 36, fontWeight: 900, color: "#1E293B" }}>{monthlyBonus.amount} {monthlyBonus.currency}</div>
+          <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>Persoana cu cel mai mare scor la sfarsitul lunii castiga bonusul.</div>
+        </div>
+        {leaderboard.length > 0 && <div style={{ textAlign: "center", padding: "12px 20px", background: "#EAB30815", borderRadius: 12, border: "1px solid #EAB30830" }}>
+          <div style={{ fontSize: 11, color: "#92400E", fontWeight: 600, marginBottom: 4 }}>Lider curent</div>
+          <Av color={leaderboard[0].color} size={44} fs={16} userId={leaderboard[0].user}>{leaderboard[0].name[0]}</Av>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#1E293B", marginTop: 4 }}>{leaderboard[0].name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{leaderboard[0].score} pts | Lv.{leaderboard[0].level}</div>
+        </div>}
+      </div>
+    </Card>}
+
+    {/* My position */}
+    {myData && <Card style={{ marginBottom: 16, background: myData.color + "08", borderLeft: "4px solid " + myData.color }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ fontSize: 48, fontWeight: 900, color: myData.color }}>#{myPos + 1}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Pozitia ta, {myData.name}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{myData.doneThis} taskuri | {myData.score} puncte | Lv.{myData.level} {myData.title}</div>
+        </div>
+        {myPos === 0 && monthlyBonus && monthlyBonus.enabled && <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 28 }}>👑</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308" }}>Lider + {monthlyBonus.amount} {monthlyBonus.currency}</div>
+        </div>}
+      </div>
+    </Card>}
+
+    {/* Progress bar for month */}
+    <Card style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
+        <span style={{ fontWeight: 700, color: "#475569" }}>Progres luna</span>
+        <span style={{ color: "#64748B" }}>Ziua {daysPassed}/{daysInMonth}</span>
+      </div>
+      <div style={{ height: 8, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: Math.round((daysPassed / daysInMonth) * 100) + "%", background: "linear-gradient(90deg, #EAB308, #F59E0B)", borderRadius: 4 }} />
+      </div>
+    </Card>
+
+    {/* Full leaderboard */}
+    <Card>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "#1E293B", marginBottom: 16 }}>Clasament {monthLabel}</div>
+      {leaderboard.map(function(p, idx) {
+        var isMe = p.user === user;
+        var lvlColor = getLevelColor(p.level);
+        var widthPct = maxScore > 0 ? (p.score / maxScore) * 100 : 0;
+        var medals = ["🥇", "🥈", "🥉"];
+        var isLeader = idx === 0 && monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0;
+        return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginBottom: 6, borderRadius: 10, background: isLeader ? "linear-gradient(135deg, #FEFCE810, #FEF3C720)" : isMe ? p.color + "08" : idx < 3 ? "#FEFCE8" + (idx === 0 ? "" : "80") : "#fff", border: "1px solid " + (isLeader ? "#EAB30840" : isMe ? p.color + "40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #EAB30810, transparent)" : "transparent", zIndex: 0 }} />
+          <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+            <div style={{ fontSize: 20, width: 30, textAlign: "center" }}>{idx < 3 ? medals[idx] : <span style={{ fontSize: 14, color: "#94A3B8", fontWeight: 700 }}>#{idx + 1}</span>}</div>
+            <Av color={p.color} size={36} fs={13} userId={p.user}>{p.name[0]}</Av>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{p.name}</span>
+                <span style={{ fontSize: 10, color: lvlColor, fontWeight: 700, background: lvlColor + "15", padding: "2px 8px", borderRadius: 4 }}>Lv.{p.level} {p.title}</span>
+                {isMe && <Badge bg={p.color + "15"} color={p.color}>TU</Badge>}
+                {isLeader && <Badge bg="#FEF3C7" color="#92400E">+{monthlyBonus.amount} {monthlyBonus.currency}</Badge>}
+              </div>
+              <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>{p.doneThis} done | {p.overdue} overdue | {p.achCount} ach</div>
+              {/* Mini weekly bars */}
+              {p.weeklyDone.length > 0 && <div style={{ display: "flex", gap: 2, marginTop: 4 }}>
+                {p.weeklyDone.map(function(w, wi) {
+                  var maxW = Math.max.apply(null, p.weeklyDone.concat([1]));
+                  return <div key={wi} style={{ width: 16, height: 12, borderRadius: 2, background: w > 0 ? lvlColor : "#E2E8F0", opacity: 0.3 + (w / maxW) * 0.7 }} title={"S" + (wi + 1) + ": " + w + " done"} />;
+                })}
+              </div>}
+            </div>
+            <div style={{ textAlign: "right", minWidth: 60 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: idx === 0 ? "#EAB308" : "#1E293B" }}>{p.score}</div>
+              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase" }}>puncte</div>
+            </div>
+          </div>
+        </div>;
+      })}
+    </Card>
+
+    {/* Admin: Set bonus */}
+    {me.role === "admin" && <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premiu Lunar (admin)</div>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+          <input type="checkbox" checked={monthlyBonus.enabled} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { enabled: e.target.checked })); }} style={{ accentColor: "#7C3AED" }} /> Activ
+        </label>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <label style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>Suma:</label>
+          <input type="number" min="0" step="10" value={monthlyBonus.amount} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { amount: parseInt(e.target.value) || 0 })); }} style={Object.assign({}, S.input, { width: 100, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+        </div>
+        <select value={monthlyBonus.currency} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { currency: e.target.value })); }} style={Object.assign({}, S.fSel, { padding: "6px 10px" })}>
+          <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
+        </select>
+      </div>
+    </Card>}
+
+    {/* Scoring */}
+    <Card style={{ marginTop: 16, background: "#F8FAFC" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>Cum se calculeaza scorul lunar:</div>
+      <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.7 }}>
+        <span style={{ display: "block" }}>+10 puncte per task finalizat</span>
+        <span style={{ display: "block" }}>+3 puncte per zi cu target atins</span>
+        <span style={{ display: "block" }}>-5 puncte per task intarziat activ</span>
+        <span style={{ display: "block" }}>Clasamentul se reseteaza automat pe 1 a fiecarei luni.</span>
+      </div>
+    </Card>
+  </div>;
+}
+
 function BrandStatsPage({ tasks, team, shops, timers, isMob }) {
   var [selectedShop, setSelectedShop] = useState(shops[0] || "");
 
