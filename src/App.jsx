@@ -405,6 +405,25 @@ export default function App() {
       if (plf && plf.length > 0) setPlatforms(plf); else { setPlatforms(DEF_PLATFORMS); cloudSave("platforms", DEF_PLATFORMS); }
       setPipelineRules(plr || []);
       setUserXP(uxp || {});
+      // Backfill XP for existing Done tasks (one-time)
+      if (t && t.length > 0) {
+        var xpMap = Object.assign({}, uxp || {});
+        var XP_MAP = { "Ad Creation": 15, "Product Launch": 20, "Creative": 12, "Copy": 10, "Landing Page": 18, "Tracking/Pixel": 15, "Foto Produs": 12, "Raportare": 8, "General": 10 };
+        var needsSave = false;
+        t.filter(function(tk2) { return tk2.status === "Done" && tk2.assignee && !tk2._campaignParent; }).forEach(function(tk2) {
+          if (!xpMap[tk2.assignee]) xpMap[tk2.assignee] = 0;
+        });
+        // Only backfill if all users have 0 XP (first time)
+        var allZero = Object.keys(xpMap).every(function(k) { return xpMap[k] === 0; });
+        if (allZero && t.filter(function(tk2) { return tk2.status === "Done"; }).length > 0) {
+          t.filter(function(tk2) { return tk2.status === "Done" && tk2.assignee && !tk2._campaignParent; }).forEach(function(tk2) {
+            var xpVal = XP_MAP[tk2.taskType] || XP_MAP["General"] || 10;
+            xpMap[tk2.assignee] = (xpMap[tk2.assignee] || 0) + xpVal;
+            needsSave = true;
+          });
+          if (needsSave) { setUserXP(xpMap); cloudSave("userXP", xpMap); }
+        }
+      }
       if (mb) { if (mb.amount !== undefined && mb.memberAmount === undefined) { mb.memberAmount = mb.amount; mb.memberCurrency = mb.currency || "RON"; mb.pmAmount = 0; mb.pmCurrency = "RON"; } setMonthlyBonus(mb); }
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
@@ -486,7 +505,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("departments", departments, 1000); }, [departments]);
   useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
   useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
-  useEffect(function() { if (!loading) debouncedSave("userXP", userXP, 1000); _globalUserXP = userXP || {}; }, [userXP]);
+  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && userXP && Object.keys(userXP).length > 0) cloudSave("userXP", userXP); }, [userXP]);
   // monthlyBonus saved manually via Salveaza button
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
   useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
@@ -501,7 +520,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("slas", slas, 1000); }, [slas]);
   useEffect(function() { if (!loading) debouncedSave("leaves", leaves, 1000); }, [leaves]);
   useEffect(function() { if (!loading) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
-  useEffect(function() { if (!loading) debouncedSave("branding", branding, 1000); }, [branding]);
+  // branding saved manually via Salveaza button in BrandingPage
   useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
   // Apply favicon dynamically
   useEffect(function() {
@@ -841,6 +860,20 @@ export default function App() {
       setCelebration({ type: "levelup", id: gid(), level: newLevel, title: getLevelTitle(newLevel) });
       setTimeout(function() { setCelebration(null); }, 3000);
     }
+  };
+
+  // Recalculate XP from all Done tasks (admin backfill)
+  var recalculateXP = function() {
+    var newXP = {};
+    tasks.forEach(function(t) {
+      if (t.status === "Done" && t.assignee && !t._campaignParent) {
+        var xp = XP_PER_TASK[t.taskType] || XP_PER_TASK["General"] || 10;
+        newXP[t.assignee] = (newXP[t.assignee] || 0) + xp;
+      }
+    });
+    setUserXP(newXP);
+    cloudSave("userXP", newXP);
+    addLog("SYSTEM", "XP recalculat pentru toti userii");
   };
 
   var handleLogin = function(u, pw) {
@@ -1379,7 +1412,7 @@ export default function App() {
           {page === "performance" && <PerfPage users={visUsers} team={team} getPerf={getPerf} isMob={isMob} />}
           {page === "digest" && <DigestPage team={team} tasks={tasks} timers={timers} getPerf={getPerf} visUsers={visUsers} isMob={isMob} />}
           {page === "achievements" && <AchievementsPage achievements={achievements} team={team} visUsers={visUsers} tasks={tasks} isMob={isMob} userXP={userXP} />}
-          {page === "wallfame" && <WallOfFamePage tasks={tasks} team={team} timers={timers} visUsers={visUsers} isMob={isMob} userXP={userXP} achievements={achievements} monthlyBonus={monthlyBonus} />}
+          {page === "wallfame" && <WallOfFamePage tasks={tasks} team={team} timers={timers} visUsers={visUsers} isMob={isMob} userXP={userXP} achievements={achievements} monthlyBonus={monthlyBonus} recalculateXP={recalculateXP} isAdmin={me.role === "admin"} />}
           {page === "brandstats" && <BrandStatsPage tasks={tasks} team={team} shops={shops} timers={timers} isMob={isMob} />}
           {page === "announce" && <AnnouncePage announcements={announcements} setAnnouncements={setAnnouncements} isAdmin={isAdmin} user={user} team={team} />}
           {page === "challenge" && <ChallengePage dailyChallenge={dailyChallenge} setDailyChallenge={setDailyChallenge} isAdmin={isAdmin} team={team} tasks={tasks} user={user} visUsers={visUsers} />}
@@ -3424,6 +3457,7 @@ function BrandingPage({ branding, setBranding, addLog }) {
 
   var save = function() {
     setBranding(form);
+    cloudSave("branding", form);
     addLog("BRANDING", "Actualizat branding: " + form.title);
     setSavedMsg("Salvat!");
     setTimeout(function() { setSavedMsg(""); }, 2000);
@@ -4438,7 +4472,7 @@ function Sparkline({ data, color, height }) {
 // ═══════════════════════════════════════════════════════════════
 // WALL OF FAME — All-time records, streaks, speed records
 // ═══════════════════════════════════════════════════════════════
-function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievements, monthlyBonus }) {
+function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievements, monthlyBonus, recalculateXP, isAdmin }) {
   try {
   var users = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; });
   var doneTasks = tasks.filter(function(t) { return t.status === "Done" && !t._campaignParent; });
@@ -4514,9 +4548,12 @@ function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievem
   }).sort(function(a, b) { return b.xp - a.xp; });
 
   return <div>
-    <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>🏛️ Wall of Fame</h2>
-      <div style={{ fontSize: 12, color: "#64748B" }}>Recorduri all-time, nivele si clasament permanent al echipei.</div>
+    <div style={{ marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+      <div>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Wall of Fame</h2>
+        <div style={{ fontSize: 12, color: "#64748B" }}>Recorduri all-time, nivele si clasament permanent al echipei.</div>
+      </div>
+      {isAdmin && recalculateXP && <button style={Object.assign({}, S.cancelBtn, { padding: "8px 16px", fontSize: 12 })} onClick={function() { if (confirm("Recalculeaza XP-ul tuturor din taskurile Done existente?")) { recalculateXP(); alert("XP recalculat!"); } }}>Recalculeaza XP</button>}
     </div>
 
     {/* Monthly bonus banner */}
