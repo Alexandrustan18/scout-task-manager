@@ -487,7 +487,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
   useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
   useEffect(function() { if (!loading) debouncedSave("userXP", userXP, 1000); _globalUserXP = userXP || {}; }, [userXP]);
-  useEffect(function() { if (!loading) debouncedSave("monthlyBonus", monthlyBonus, 1000); }, [monthlyBonus]);
+  useEffect(function() { if (!loading) cloudSave("monthlyBonus", monthlyBonus); }, [monthlyBonus]);
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
   useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
   useEffect(function() { if (!loading) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
@@ -4520,12 +4520,12 @@ function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievem
     </div>
 
     {/* Monthly bonus banner */}
-    {monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && leaderboard.length > 0 && <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FEFCE8, #FEF3C7)", borderLeft: "4px solid #EAB308" }}>
+    {monthlyBonus && monthlyBonus.enabled && (monthlyBonus.memberAmount > 0 || monthlyBonus.amount > 0) && leaderboard.length > 0 && <Card style={{ marginBottom: 16, background: "linear-gradient(135deg, #FEFCE8, #FEF3C7)", borderLeft: "4px solid #EAB308" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <div style={{ fontSize: 40 }}>💰</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1 }}>Premiu luna aceasta</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#1E293B" }}>{monthlyBonus.amount} {monthlyBonus.currency}</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#1E293B" }}>{monthlyBonus.memberAmount || monthlyBonus.amount || 0} {monthlyBonus.memberCurrency || monthlyBonus.currency || "RON"} bonus extra</div>
           <div style={{ fontSize: 12, color: "#64748B" }}>Lider curent: <b>{leaderboard[0].name}</b> ({leaderboard[0].xp} XP, Level {leaderboard[0].level})</div>
         </div>
       </div>
@@ -4627,7 +4627,9 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
       var lvlColor = getLevelColor(p.level);
       var widthPct = maxScore > 0 ? (p.score / maxScore) * 100 : 0;
       var medals = ["🥇", "🥈", "🥉"];
-      var isLeader = idx === 0 && monthlyBonus && monthlyBonus.enabled && monthlyBonus.amount > 0 && !isPM;
+      var isLeader = idx === 0 && monthlyBonus && monthlyBonus.enabled && ((isPM && monthlyBonus.pmAmount > 0) || (!isPM && (monthlyBonus.memberAmount > 0 || monthlyBonus.amount > 0)));
+      var leaderAmt = isPM ? (monthlyBonus.pmAmount || 0) : (monthlyBonus.memberAmount || monthlyBonus.amount || 0);
+      var leaderCur = isPM ? (monthlyBonus.pmCurrency || "RON") : (monthlyBonus.memberCurrency || monthlyBonus.currency || "RON");
       return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginBottom: 6, borderRadius: 10, background: isLeader ? "linear-gradient(135deg, #FEFCE810, #FEF3C720)" : isMe ? p.color + "08" : idx < 3 ? "#FEFCE880" : "#fff", border: "1px solid " + (isLeader ? "#EAB30840" : isMe ? p.color + "40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #EAB30810, transparent)" : "transparent", zIndex: 0 }} />
         <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
@@ -4638,7 +4640,7 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
               <span style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{p.name}</span>
               <span style={{ fontSize: 10, color: lvlColor, fontWeight: 700, background: lvlColor + "15", padding: "2px 8px", borderRadius: 4 }}>Lv.{p.level} {p.title}</span>
               {isMe && <Badge bg={p.color + "15"} color={p.color}>TU</Badge>}
-              {isLeader && <Badge bg="#FEF3C7" color="#92400E">+{monthlyBonus.amount} {monthlyBonus.currency}</Badge>}
+              {isLeader && <Badge bg="#FEF3C7" color="#92400E">+{leaderAmt} {leaderCur} bonus extra</Badge>}
             </div>
             <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>
               {isPM ? (p.created + " create | " + p.teamDone + " echipa done | " + p.ownDone + " proprii | " + p.teamOverdue + " overdue echipa") : (p.doneThis + " done | " + p.overdue + " overdue")}
