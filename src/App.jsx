@@ -1456,7 +1456,7 @@ export default function App() {
           {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} addNotif={addNotif} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
-          {page === "wheelSetup" && <WheelSetupPage wheelConfig={wheelConfig} setWheelConfig={setWheelConfig} />}
+          {page === "wheelSetup" && <WheelSetupPage wheelConfig={wheelConfig} setWheelConfig={setWheelConfig} team={team} />}
           {page === "pipeline" && <PipelinePage pipelineRules={pipelineRules} setPipelineRules={setPipelineRules} team={team} assUsers={assUsers} shops={shops} taskTypes={taskTypes} departments={departments} platforms={platforms} addLog={addLog} />}
           {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
           {page === "leagueMonthly" && <MonthlyLeaguePage allTasks={tasks} team={team} user={user} me={me} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
@@ -4661,9 +4661,10 @@ function CampaignFinalizeModal({ task, onFinalize, onClose }) {
 // ═══════════════════════════════════════════════════════════════
 // WHEEL SETUP — Admin configures daily wheel prizes & chances
 // ═══════════════════════════════════════════════════════════════
-function WheelSetupPage({ wheelConfig, setWheelConfig }) {
+function WheelSetupPage({ wheelConfig, setWheelConfig, team }) {
   var [form, setForm] = useState(Object.assign({ enabled: true, prizes: [] }, wheelConfig || {}));
   var [saved, setSaved] = useState(false);
+  var [showPreview, setShowPreview] = useState(false);
   var [newPrize, setNewPrize] = useState({ label: "", type: "xp", value: 0, chance: 10, color: "#10B981" });
 
   var typeOptions = [
@@ -4753,17 +4754,21 @@ function WheelSetupPage({ wheelConfig, setWheelConfig }) {
       </div>
     </Card>
 
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <button style={Object.assign({}, S.primBtn, { padding: "12px 30px", fontSize: 14, fontWeight: 700 })} onClick={doSave}>Salveaza Configurare Roata</button>
+      <button style={Object.assign({}, S.cancelBtn, { padding: "12px 24px", fontSize: 14, fontWeight: 700, color: "#7C3AED", borderColor: "#7C3AED" })} onClick={function() { setShowPreview(true); }}>Preview Demo</button>
       {saved && <span style={{ fontSize: 13, color: GR, fontWeight: 700 }}>Salvat!</span>}
     </div>
+
+    {/* Preview demo */}
+    {showPreview && (form.prizes || []).length > 0 && <DailyWheel userId="admin" team={team || {}} prizes={form.prizes} awardXP={function(){}} onResult={function(){}} onClose={function() { setShowPreview(false); }} isDemo={true} />}
   </div>;
 }
 
 // ═══════════════════════════════════════════════════════════════
 // DAILY WHEEL — Spin to win/lose each day
 // ═══════════════════════════════════════════════════════════════
-function DailyWheel({ userId, team, onClose, onResult, awardXP, prizes }) {
+function DailyWheel({ userId, team, onClose, onResult, awardXP, prizes, isDemo }) {
   var [spinning, setSpinning] = useState(false);
   var [result, setResult] = useState(null);
   var [rotation, setRotation] = useState(0);
@@ -4792,9 +4797,8 @@ function DailyWheel({ userId, team, onClose, onResult, awardXP, prizes }) {
       setSpinning(false);
       setResult(picked);
       // Save that user spun today
-      localStorage.setItem("s7_wheel_" + userId + "_" + TD, JSON.stringify(picked));
-      // Apply result
-      if (picked.type === "xp" && awardXP) awardXP(userId, picked.value, "Daily Wheel");
+      if (!isDemo) localStorage.setItem("s7_wheel_" + userId + "_" + TD, JSON.stringify(picked));
+      if (picked.type === "xp" && awardXP && !isDemo) awardXP(userId, picked.value, "Daily Wheel");
       if (onResult) onResult(picked);
     }, 4000);
   };
@@ -4804,8 +4808,8 @@ function DailyWheel({ userId, team, onClose, onResult, awardXP, prizes }) {
 
   return <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center" }}>
     <div style={{ background: "#fff", borderRadius: 20, padding: 30, maxWidth: 420, width: "90%", textAlign: "center", position: "relative", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-      <div style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Roata Zilnica</div>
-      <div style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>Buna, {userName}! Invarte roata si vezi ce primesti azi.</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>{isDemo ? "Preview Roata" : "Roata Zilnica"}</div>
+      <div style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>{isDemo ? "Asta e un demo. Nu se acorda XP si nu se salveaza." : "Buna, " + userName + "! Invarte roata si vezi ce primesti azi."}</div>
 
       {/* Wheel */}
       <div style={{ position: "relative", width: 280, height: 280, margin: "0 auto 20px" }}>
