@@ -361,6 +361,7 @@ export default function App() {
     { label: "2 taskuri extra", color: "#EA580C", type: "penalty", value: 2, chance: 10 },
     { label: "Nimic", color: "#94A3B8", type: "nothing", value: 0, chance: 12 },
   ] });
+  var [wheelHistory, setWheelHistory] = useState([]);
   // Undo stack - last 10 actions
   var [undoStack, setUndoStack] = useState([]);
   // User XP & Levels
@@ -374,7 +375,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -406,6 +407,7 @@ export default function App() {
         cloudLoad("userXP", {}),
         cloudLoad("monthlyBonus", { memberAmount: 0, memberCurrency: "RON", pmAmount: 0, pmCurrency: "RON", enabled: false }),
         cloudLoad("wheelConfig", null),
+        cloudLoad("wheelHistory", []),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -444,6 +446,7 @@ export default function App() {
       }
       if (mb) { if (mb.amount !== undefined && mb.memberAmount === undefined) { mb.memberAmount = mb.amount; mb.memberCurrency = mb.currency || "RON"; mb.pmAmount = 0; mb.pmCurrency = "RON"; } setMonthlyBonus(mb); }
       if (wc) setWheelConfig(wc);
+      setWheelHistory(wh || []);
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -551,6 +554,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
   // branding auto-save backup
   useEffect(function() { if (!loading) debouncedSave("branding", branding, 2000); }, [branding]);
+  useEffect(function() { if (!loading && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
   useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
   // Apply favicon dynamically
   useEffect(function() {
@@ -1356,7 +1360,18 @@ export default function App() {
     <div style={S.app}><style>{CSS}</style>
       <ToastBanner toasts={toasts} onDismiss={dismissToast} />
       {celebration && <ConfettiOverlay type={celebration.type} key={celebration.id} />}
-      {dailyWheelResult && dailyWheelResult.show && wheelConfig.enabled && <DailyWheel userId={dailyWheelResult.user} team={team} awardXP={awardXP} prizes={wheelConfig.prizes} onResult={function(r) { if (r.type === "penalty") addNotif("challenge", "Roata zilnica: " + r.label + " pentru " + (team[dailyWheelResult.user] || {}).name, null, dailyWheelResult.user); if (r.type === "bonus") addNotif("challenge", (team[dailyWheelResult.user] || {}).name + " a castigat " + r.value + " RON la roata zilnica!", null, "admin"); }} onClose={function() { setDailyWheelResult(null); }} />}
+      {dailyWheelResult && dailyWheelResult.show && wheelConfig.enabled && <DailyWheel userId={dailyWheelResult.user} team={team} awardXP={awardXP} prizes={wheelConfig.prizes} onResult={function(r) {
+        // Save to history
+        var entry = { id: gid(), userId: dailyWheelResult.user, userName: (team[dailyWheelResult.user] || {}).name, label: r.label, type: r.type, value: r.value, color: r.color, time: ts() };
+        setWheelHistory(function(p) { return [entry].concat(p).slice(0, 500); });
+        // Notify admin on EVERY spin
+        var msg = (team[dailyWheelResult.user] || {}).name + " a invartit roata: " + r.label;
+        addNotif("challenge", msg, null, "admin");
+        // Extra notif for money wins
+        if (r.type === "bonus") addNotif("challenge", "BANI! " + (team[dailyWheelResult.user] || {}).name + " a castigat " + r.value + " RON la roata zilnica!", null, "admin");
+        // Notify member for penalty
+        if (r.type === "penalty") addNotif("challenge", "Roata zilnica: " + r.label, null, dailyWheelResult.user);
+      }} onClose={function() { setDailyWheelResult(null); }} />}
       {achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}
       {isMob && mobNav && <div style={S.overlay} onClick={function() { setMobNav(false); }} />}
       <aside style={Object.assign({}, S.sidebar, isMob ? { position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 200, transform: mobNav ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.2s" } : {})}>
@@ -1456,7 +1471,7 @@ export default function App() {
           {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} addNotif={addNotif} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
-          {page === "wheelSetup" && <WheelSetupPage wheelConfig={wheelConfig} setWheelConfig={setWheelConfig} team={team} />}
+          {page === "wheelSetup" && <WheelSetupPage wheelConfig={wheelConfig} setWheelConfig={setWheelConfig} team={team} wheelHistory={wheelHistory} />}
           {page === "pipeline" && <PipelinePage pipelineRules={pipelineRules} setPipelineRules={setPipelineRules} team={team} assUsers={assUsers} shops={shops} taskTypes={taskTypes} departments={departments} platforms={platforms} addLog={addLog} />}
           {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
           {page === "leagueMonthly" && <MonthlyLeaguePage allTasks={tasks} team={team} user={user} me={me} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
@@ -4661,10 +4676,12 @@ function CampaignFinalizeModal({ task, onFinalize, onClose }) {
 // ═══════════════════════════════════════════════════════════════
 // WHEEL SETUP — Admin configures daily wheel prizes & chances
 // ═══════════════════════════════════════════════════════════════
-function WheelSetupPage({ wheelConfig, setWheelConfig, team }) {
+function WheelSetupPage({ wheelConfig, setWheelConfig, team, wheelHistory }) {
   var [form, setForm] = useState(Object.assign({ enabled: true, prizes: [] }, wheelConfig || {}));
   var [saved, setSaved] = useState(false);
   var [showPreview, setShowPreview] = useState(false);
+  var [histFrom, setHistFrom] = useState("");
+  var [histTo, setHistTo] = useState("");
   var [newPrize, setNewPrize] = useState({ label: "", type: "xp", value: 0, chance: 10, color: "#10B981" });
 
   var typeOptions = [
@@ -4762,6 +4779,56 @@ function WheelSetupPage({ wheelConfig, setWheelConfig, team }) {
 
     {/* Preview demo */}
     {showPreview && (form.prizes || []).length > 0 && <DailyWheel userId="admin" team={team || {}} prizes={form.prizes} awardXP={function(){}} onResult={function(){}} onClose={function() { setShowPreview(false); }} isDemo={true} />}
+
+    {/* Wheel History */}
+    {(function() {
+      var hist = (wheelHistory || []);
+      if (histFrom) hist = hist.filter(function(h) { return h.time && ds(h.time) >= histFrom; });
+      if (histTo) hist = hist.filter(function(h) { return h.time && ds(h.time) <= histTo; });
+      var bonusTotal = hist.filter(function(h) { return h.type === "bonus"; }).reduce(function(a, h) { return a + (h.value || 0); }, 0);
+      var bonusPeople = {};
+      hist.filter(function(h) { return h.type === "bonus"; }).forEach(function(h) {
+        if (!bonusPeople[h.userName]) bonusPeople[h.userName] = 0;
+        bonusPeople[h.userName] += h.value || 0;
+      });
+      return <Card style={{ marginTop: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#1E293B" }}>Istoric Roata ({hist.length} spinuri)</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "#94A3B8" }}>De la:</span>
+            <input type="date" style={Object.assign({}, S.fSel, { padding: "4px 8px", fontSize: 11 })} value={histFrom} onChange={function(e) { setHistFrom(e.target.value); }} />
+            <span style={{ fontSize: 11, color: "#94A3B8" }}>Pana la:</span>
+            <input type="date" style={Object.assign({}, S.fSel, { padding: "4px 8px", fontSize: 11 })} value={histTo} onChange={function(e) { setHistTo(e.target.value); }} />
+            {(histFrom || histTo) && <button style={{ border: "none", background: "none", color: "#DC2626", fontSize: 11, cursor: "pointer", fontWeight: 600 }} onClick={function() { setHistFrom(""); setHistTo(""); }}>Reset</button>}
+          </div>
+        </div>
+
+        {/* Money summary */}
+        {bonusTotal > 0 && <div style={{ padding: "12px 16px", background: "#FEFCE8", borderRadius: 8, border: "1px solid #FDE68A", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 24 }}>💰</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#92400E" }}>Total bani de platit: {bonusTotal} RON</div>
+            <div style={{ fontSize: 11, color: "#92400E", marginTop: 2 }}>{Object.keys(bonusPeople).map(function(name) { return name + ": " + bonusPeople[name] + " RON"; }).join(" | ")}</div>
+          </div>
+        </div>}
+
+        {/* History list */}
+        {hist.length > 0 ? hist.slice(0, 50).map(function(h, i) {
+          var typeIcon = h.type === "xp" ? "⭐" : h.type === "bonus" ? "💰" : h.type === "penalty" ? "😱" : "😐";
+          var isMoney = h.type === "bonus";
+          return <div key={h.id || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", marginBottom: 4, borderRadius: 6, background: isMoney ? "#FEFCE8" : "#F8FAFC", border: "1px solid " + (isMoney ? "#FDE68A" : "#E2E8F0") }}>
+            <span style={{ fontSize: 18 }}>{typeIcon}</span>
+            <Av color={(team[h.userId] || {}).color || "#94A3B8"} size={24} fs={9} userId={h.userId}>{((team[h.userId] || {}).name || "?")[0]}</Av>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#1E293B" }}>{h.userName || h.userId}</div>
+              <div style={{ fontSize: 10, color: "#94A3B8" }}>{ff(h.time)}</div>
+            </div>
+            <Badge bg={h.color + "18"} color={h.color}>{h.label}</Badge>
+            {isMoney && <span style={{ fontSize: 12, fontWeight: 800, color: "#EAB308" }}>{h.value} RON</span>}
+          </div>;
+        }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt spinuri inca.</div>}
+      </Card>;
+    })()}
   </div>;
 }
 
