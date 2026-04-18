@@ -1059,6 +1059,8 @@ export default function App() {
       if (t.tags && t.tags.length > 0) {
         setAllTags(function(p) { var merged = p.slice(); t.tags.forEach(function(tag) { if (!merged.includes(tag)) merged.push(tag); }); return merged; });
       }
+      // PM gets XP for creating tasks
+      if (team[user] && team[user].role === "pm") awardXP(user, 3, "Task creat: " + t.title);
     }
     setShowAdd(false); setEditTask(null);
     // clear draft
@@ -1138,6 +1140,9 @@ export default function App() {
       var taskXP = XP_PER_TASK[prevTask.taskType] || XP_PER_TASK["General"] || 10;
       var tm2 = timers[tid]; if (tm2 && tm2.total > 0 && tm2.total < 1800) taskXP += XP_BONUS.fast; // fast bonus under 30min
       awardXP(prevTask.assignee, taskXP, "Task Done: " + prevTask.title);
+      // Award XP to PM when their team member finishes a task
+      var assigneePM = (team[prevTask.assignee] || {}).pm;
+      if (assigneePM && team[assigneePM]) awardXP(assigneePM, 5, "Team Done: " + prevTask.title);
       setTimeout(function() { checkAchievements(prevTask.assignee); }, 500);
       // Execute custom pipeline rules
       executePipelineRules(prevTask, st);
@@ -1401,7 +1406,7 @@ export default function App() {
           </Card>}
           {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
           {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
-          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} monthlyBonus={monthlyBonus} />}
+          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} monthlyBonus={monthlyBonus} logs={logs} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
@@ -2335,7 +2340,7 @@ function AdminInsights({ allTasks, team, visUsers, timers, isMob, setPage }) {
   </div>;
 }
 
-function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves, setPage, achievements, monthlyBonus }) {
+function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves, setPage, achievements, monthlyBonus, logs }) {
   var [dashFrom, setDashFrom] = useState(TD);
   var [kpiModal, setKpiModal] = useState(null);
   var [dashTo, setDashTo] = useState(TD);
@@ -2343,11 +2348,29 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
   var [editMode, setEditMode] = useState(false);
   var [dragBlockId, setDragBlockId] = useState(null);
   var [dashLayout, setDashLayout] = useState(function() {
-    try { var saved = localStorage.getItem("s7_dash_layout"); if (saved) return JSON.parse(saved); } catch(e) {}
+    try { var saved = localStorage.getItem("s7_dash_layout"); if (saved) {
+      var parsed = JSON.parse(saved);
+      // Migrate: add new blocks if missing
+      var allIds = ["kpiRow", "aziVsIeri", "live", "podium", "velocity", "taskFlow", "weekVsLast", "monthProgress", "platformSplit", "efficiency", "workloadMap", "slaCompliance", "activityFeed", "insights", "team"];
+      var existing = parsed.map(function(b) { return b.id; });
+      var newBlocks = allIds.filter(function(id) { return !existing.includes(id); }).map(function(id) { return { id: id, visible: true }; });
+      if (newBlocks.length > 0) return parsed.concat(newBlocks);
+      return parsed;
+    }} catch(e) {}
     return [
       { id: "kpiRow", visible: true },
+      { id: "aziVsIeri", visible: true },
       { id: "live", visible: true },
       { id: "podium", visible: true },
+      { id: "velocity", visible: true },
+      { id: "taskFlow", visible: true },
+      { id: "weekVsLast", visible: true },
+      { id: "monthProgress", visible: true },
+      { id: "platformSplit", visible: true },
+      { id: "efficiency", visible: true },
+      { id: "workloadMap", visible: true },
+      { id: "slaCompliance", visible: true },
+      { id: "activityFeed", visible: true },
       { id: "insights", visible: true },
       { id: "team", visible: true }
     ];
@@ -2375,17 +2398,37 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     if (!window.confirm("Resetezi dashboard-ul la ordinea default?")) return;
     setDashLayout([
       { id: "kpiRow", visible: true },
+      { id: "aziVsIeri", visible: true },
       { id: "live", visible: true },
       { id: "podium", visible: true },
+      { id: "velocity", visible: true },
+      { id: "taskFlow", visible: true },
+      { id: "weekVsLast", visible: true },
+      { id: "monthProgress", visible: true },
+      { id: "platformSplit", visible: true },
+      { id: "efficiency", visible: true },
+      { id: "workloadMap", visible: true },
+      { id: "slaCompliance", visible: true },
+      { id: "activityFeed", visible: true },
       { id: "insights", visible: true },
       { id: "team", visible: true }
     ]);
   };
 
   var blockLabels = {
-    kpiRow: "KPI Row (Total/To Do/...)",
+    kpiRow: "KPI-uri principale",
+    aziVsIeri: "Azi vs Ieri",
     live: "Live Timers",
-    podium: "Liga Saptamanii - Podium",
+    podium: "Liga - Podium",
+    velocity: "Velocity Chart (30 zile)",
+    taskFlow: "Task Flow (Create vs Done)",
+    weekVsLast: "Saptamana vs Anterioara",
+    monthProgress: "Progres Luna",
+    platformSplit: "Per Platforma",
+    efficiency: "Eficienta Echipa",
+    workloadMap: "Workload Heatmap",
+    slaCompliance: "SLA per Magazin",
+    activityFeed: "Activity Feed (live)",
     insights: "Admin Insights (grafice, alerts)",
     team: "Cardurile Echipei"
   };
@@ -2552,6 +2595,147 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
       </Card>;
     })}</div>
         </div>;
+
+        // ═══ AZI VS IERI ═══
+        if (id === "aziVsIeri") {
+          var todayAll = allTasks.filter(function(t) { return !t._campaignParent; });
+          var aziDone = todayAll.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
+          var aziCreated = todayAll.filter(function(t) { return t.createdAt && ds(t.createdAt) === TD; }).length;
+          var aziOverdue = todayAll.filter(function(t) { return isOv(t); }).length;
+          var ieriDone = todayAll.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === YESTERDAY; }).length;
+          var ieriCreated = todayAll.filter(function(t) { return t.createdAt && ds(t.createdAt) === YESTERDAY; }).length;
+          var ieriOv = todayAll.filter(function(t) { return t.deadline === YESTERDAY && t.status !== "Done"; }).length;
+          var renderDelta = function(a2, b2) { var d2 = a2 - b2; return d2 === 0 ? <span style={{ color: "#94A3B8" }}>-</span> : <span style={{ color: d2 > 0 ? GR : "#DC2626", fontWeight: 700 }}>{d2 > 0 ? "+" : ""}{d2}</span>; };
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>Azi vs Ieri</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, textAlign: "center" }}>
+              <div /><div style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8" }}>AZI</div><div style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8" }}>IERI</div><div style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8" }}>DELTA</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", textAlign: "left" }}>Done</div><div style={{ fontSize: 20, fontWeight: 800, color: GR }}>{aziDone}</div><div style={{ fontSize: 20, fontWeight: 700, color: "#64748B" }}>{ieriDone}</div><div style={{ fontSize: 16 }}>{renderDelta(aziDone, ieriDone)}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", textAlign: "left" }}>Create</div><div style={{ fontSize: 20, fontWeight: 800, color: "#2563EB" }}>{aziCreated}</div><div style={{ fontSize: 20, fontWeight: 700, color: "#64748B" }}>{ieriCreated}</div><div style={{ fontSize: 16 }}>{renderDelta(aziCreated, ieriCreated)}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", textAlign: "left" }}>Overdue</div><div style={{ fontSize: 20, fontWeight: 800, color: "#DC2626" }}>{aziOverdue}</div><div style={{ fontSize: 20, fontWeight: 700, color: "#64748B" }}>{ieriOv}</div><div style={{ fontSize: 16 }}>{renderDelta(ieriOv, aziOverdue)}</div>
+            </div>
+          </Card>;
+        }
+
+        // ═══ VELOCITY CHART ═══
+        if (id === "velocity") {
+          var velData = []; for (var vi = 29; vi >= 0; vi--) { var vd = new Date(); vd.setDate(vd.getDate() - vi); var vStr = ds(vd); velData.push({ d: vd.getDate() + " " + MN[vd.getMonth()].substring(0, 3), v: allTasks.filter(function(t) { return t.status === "Done" && !t._campaignParent && t.updatedAt && ds(t.updatedAt) === vStr; }).length }); }
+          var velMax = Math.max.apply(null, velData.map(function(x) { return x.v; }).concat([1]));
+          var velAvg = Math.round(velData.reduce(function(a2, x) { return a2 + x.v; }, 0) / velData.length * 10) / 10;
+          return <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}><div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Velocity (Done/zi - 30 zile)</div><div style={{ fontSize: 12, color: "#64748B" }}>Media: <span style={{ fontWeight: 700, color: GR }}>{velAvg}/zi</span></div></div>
+            <svg viewBox="0 0 700 120" style={{ width: "100%", height: "auto" }}>{velData.map(function(x, i) { var h = (x.v / velMax) * 80; return <g key={i}><rect x={10 + i * 23} y={100 - h} width={18} height={Math.max(h, 2)} fill={GR} opacity={0.7 + (i / 30) * 0.3} rx="2" />{x.v > 0 && i % 3 === 0 && <text x={10 + i * 23 + 9} y={100 - h - 4} fontSize="8" fill={GR} textAnchor="middle" fontWeight="700">{x.v}</text>}</g>; })}<line x1="10" y1={100 - (velAvg / velMax) * 80} x2="690" y2={100 - (velAvg / velMax) * 80} stroke="#D97706" strokeWidth="1" strokeDasharray="4" /></svg>
+          </Card>;
+        }
+
+        // ═══ TASK FLOW ═══
+        if (id === "taskFlow") {
+          var tfData = []; for (var ti = 13; ti >= 0; ti--) { var td2 = new Date(); td2.setDate(td2.getDate() - ti); var tStr = ds(td2); tfData.push({ d: td2.getDate() + "/" + (td2.getMonth() + 1), done: allTasks.filter(function(t) { return t.status === "Done" && !t._campaignParent && t.updatedAt && ds(t.updatedAt) === tStr; }).length, created: allTasks.filter(function(t) { return !t._campaignParent && t.createdAt && ds(t.createdAt) === tStr; }).length }); }
+          var tfMax = Math.max.apply(null, tfData.map(function(x) { return Math.max(x.done, x.created); }).concat([1]));
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 10 }}>Task Flow - 14 zile</div>
+            <svg viewBox="0 0 700 130" style={{ width: "100%", height: "auto" }}>{tfData.map(function(x, i) { var xp3 = 20 + i * 48; var hD = (x.done / tfMax) * 85; var hC = (x.created / tfMax) * 85; return <g key={i}><rect x={xp3} y={100 - hC} width={20} height={Math.max(hC, 1)} fill="#3B82F6" opacity="0.7" rx="2" /><rect x={xp3 + 22} y={100 - hD} width={20} height={Math.max(hD, 1)} fill={GR} opacity="0.85" rx="2" />{x.done > 0 && <text x={xp3 + 32} y={100 - hD - 3} fontSize="8" fill={GR} textAnchor="middle" fontWeight="700">{x.done}</text>}<text x={xp3 + 20} y="118" fontSize="8" fill="#94A3B8" textAnchor="middle">{x.d}</text></g>; })}</svg>
+            <div style={{ display: "flex", gap: 14, fontSize: 10, marginTop: 4 }}><div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: "#3B82F6", borderRadius: 2 }} />Create</div><div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, background: GR, borderRadius: 2 }} />Done</div></div>
+          </Card>;
+        }
+
+        // ═══ WEEK VS LAST WEEK ═══
+        if (id === "weekVsLast") {
+          var nw2 = new Date(); var dw2 = nw2.getDay(); var dfm2 = dw2 === 0 ? 6 : dw2 - 1;
+          var ws2 = new Date(nw2); ws2.setDate(ws2.getDate() - dfm2); ws2.setHours(0, 0, 0, 0);
+          var we3 = new Date(ws2); we3.setDate(we3.getDate() + 6);
+          var lws2 = new Date(ws2); lws2.setDate(lws2.getDate() - 7);
+          var lwe2 = new Date(ws2); lwe2.setDate(lwe2.getDate() - 1);
+          var wDone2 = allTasks.filter(function(t) { return t.status === "Done" && !t._campaignParent && t.updatedAt && new Date(t.updatedAt) >= ws2 && new Date(t.updatedAt) <= we3; }).length;
+          var wCr2 = allTasks.filter(function(t) { return !t._campaignParent && t.createdAt && new Date(t.createdAt) >= ws2 && new Date(t.createdAt) <= we3; }).length;
+          var lwD2 = allTasks.filter(function(t) { return t.status === "Done" && !t._campaignParent && t.updatedAt && new Date(t.updatedAt) >= lws2 && new Date(t.updatedAt) <= lwe2; }).length;
+          var lwC2 = allTasks.filter(function(t) { return !t._campaignParent && t.createdAt && new Date(t.createdAt) >= lws2 && new Date(t.createdAt) <= lwe2; }).length;
+          var rd2 = function(a2, b2) { var d2 = a2 - b2; return d2 === 0 ? "-" : (d2 > 0 ? "+" : "") + d2; };
+          var rc3 = function(a2, b2) { return a2 > b2 ? GR : a2 < b2 ? "#DC2626" : "#94A3B8"; };
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>Saptamana curenta vs anterioara</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, textAlign: "center" }}>
+              {[{ l: "Done", c: wDone2, p: lwD2, col: GR }, { l: "Create", c: wCr2, p: lwC2, col: "#2563EB" }].map(function(x) { return <div key={x.l}><div style={{ fontSize: 10, fontWeight: 600, color: "#94A3B8", marginBottom: 4 }}>{x.l}</div><div style={{ fontSize: 28, fontWeight: 800, color: x.col }}>{x.c}</div><div style={{ fontSize: 12, color: "#64748B" }}>vs {x.p}</div><div style={{ fontSize: 14, fontWeight: 700, color: rc3(x.c, x.p), marginTop: 4 }}>{rd2(x.c, x.p)}</div></div>; })}
+              <div><div style={{ fontSize: 10, fontWeight: 600, color: "#94A3B8", marginBottom: 4 }}>Ritm</div><div style={{ fontSize: 28, fontWeight: 800, color: wDone2 >= lwD2 ? GR : "#DC2626" }}>{wDone2 >= lwD2 ? "↑" : "↓"}</div><div style={{ fontSize: 12, color: "#64748B" }}>{wDone2 >= lwD2 ? "Creste" : "Scade"}</div></div>
+            </div>
+          </Card>;
+        }
+
+        // ═══ MONTH PROGRESS ═══
+        if (id === "monthProgress") {
+          var mn2 = new Date(); var mS2 = new Date(mn2.getFullYear(), mn2.getMonth(), 1); var mE2 = new Date(mn2.getFullYear(), mn2.getMonth() + 1, 0);
+          var lmS2 = new Date(mn2.getFullYear(), mn2.getMonth() - 1, 1); var lmE2 = new Date(mn2.getFullYear(), mn2.getMonth(), 0);
+          var mDn2 = allTasks.filter(function(t) { return t.status === "Done" && !t._campaignParent && t.updatedAt && new Date(t.updatedAt) >= mS2; }).length;
+          var lmDn2 = allTasks.filter(function(t) { return t.status === "Done" && !t._campaignParent && t.updatedAt && new Date(t.updatedAt) >= lmS2 && new Date(t.updatedAt) <= lmE2; }).length;
+          var dom2 = mn2.getDate(); var dtl2 = mE2.getDate(); var proj2 = dom2 > 0 ? Math.round(mDn2 / dom2 * dtl2) : 0;
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 8 }}>Progres Luna ({MN[mn2.getMonth()]})</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, textAlign: "center", marginBottom: 12 }}>
+              <div><div style={{ fontSize: 24, fontWeight: 800, color: GR }}>{mDn2}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>Done</div></div>
+              <div><div style={{ fontSize: 24, fontWeight: 800, color: "#2563EB" }}>{proj2}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>Proiectat</div></div>
+              <div><div style={{ fontSize: 24, fontWeight: 800, color: "#64748B" }}>{lmDn2}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>Luna trec.</div></div>
+              <div><div style={{ fontSize: 24, fontWeight: 800, color: proj2 >= lmDn2 ? GR : "#DC2626" }}>{lmDn2 > 0 ? Math.round((proj2 / lmDn2) * 100) + "%" : "-"}</div><div style={{ fontSize: 10, color: "#94A3B8" }}>vs luna trec.</div></div>
+            </div>
+            <div style={{ height: 8, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}><div style={{ height: "100%", width: Math.round((dom2 / dtl2) * 100) + "%", background: "linear-gradient(90deg, #EAB308, #F59E0B)", borderRadius: 4 }} /></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94A3B8", marginTop: 4 }}><span>Ziua {dom2}</span><span>{dtl2 - dom2} zile ramase</span></div>
+          </Card>;
+        }
+
+        // ═══ PLATFORM SPLIT ═══
+        if (id === "platformSplit") {
+          var plMap2 = {}; allTasks.filter(function(t) { return !t._campaignParent && t.platform; }).forEach(function(t) { var p2 = t.platform; plMap2[p2] = (plMap2[p2] || { total: 0, done: 0 }); plMap2[p2].total++; if (t.status === "Done") plMap2[p2].done++; });
+          var plArr2 = Object.keys(plMap2).map(function(k) { return { name: k, total: plMap2[k].total, done: plMap2[k].done, rate: plMap2[k].total > 0 ? Math.round((plMap2[k].done / plMap2[k].total) * 100) : 0 }; }).sort(function(a2, b2) { return b2.total - a2.total; });
+          var plCl2 = ["#3B82F6", "#10B981", "#F59E0B", "#7C3AED", "#EC4899", "#06B6D4", "#EA580C"];
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>Per Platforma</div>
+            {plArr2.map(function(p2, i) { return <div key={p2.name} style={{ marginBottom: 8 }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}><span style={{ fontWeight: 600, color: "#475569", display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: plCl2[i % plCl2.length] }} />{p2.name}</span><span style={{ color: "#94A3B8" }}>{p2.done}/{p2.total} ({p2.rate}%)</span></div><div style={{ height: 6, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}><div style={{ height: "100%", width: p2.rate + "%", background: plCl2[i % plCl2.length], borderRadius: 3 }} /></div></div>; })}
+            {plArr2.length === 0 && <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt taskuri cu platforma.</div>}
+          </Card>;
+        }
+
+        // ═══ EFFICIENCY ═══
+        if (id === "efficiency") {
+          var effData2 = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) { var ut = allTasks.filter(function(t) { return t.assignee === u && t.status === "Done" && !t._campaignParent; }); var tmd = ut.filter(function(t) { return timers[t.id] && timers[t.id].total > 0; }); var avg2 = tmd.length > 0 ? Math.round(tmd.reduce(function(a2, t) { return a2 + timers[t.id].total; }, 0) / tmd.length) : 0; return { user: u, name: (team[u] || {}).name, color: (team[u] || {}).color, avg: avg2, timed: tmd.length }; }).filter(function(x) { return x.timed > 0; }).sort(function(a2, b2) { return a2.avg - b2.avg; });
+          var effMx2 = effData2.length > 0 ? effData2[effData2.length - 1].avg : 1;
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 2 }}>Eficienta Echipa</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 12 }}>Timp mediu per task (cu timer)</div>
+            {effData2.map(function(x, i) { return <div key={x.user} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}><Av color={x.color} size={24} fs={9} userId={x.user}>{x.name[0]}</Av><span style={{ fontSize: 12, fontWeight: 600, minWidth: 80 }}>{x.name}</span><div style={{ flex: 1, height: 8, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}><div style={{ height: "100%", width: (effMx2 > 0 ? (x.avg / effMx2) * 100 : 0) + "%", background: i === 0 ? GR : "#3B82F6", borderRadius: 4 }} /></div><span style={{ fontSize: 12, fontWeight: 700, color: i === 0 ? GR : "#475569", minWidth: 50, textAlign: "right" }}>{ft(x.avg)}</span></div>; })}
+            {effData2.length === 0 && <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt date cu timer.</div>}
+          </Card>;
+        }
+
+        // ═══ WORKLOAD HEATMAP ═══
+        if (id === "workloadMap") {
+          var wlD2 = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin"; }).map(function(u) { var ac2 = allTasks.filter(function(t) { return t.assignee === u && t.status !== "Done" && !t._campaignParent; }).length; var ov2 = allTasks.filter(function(t) { return t.assignee === u && isOv(t) && !t._campaignParent; }).length; var dt2 = allTasks.filter(function(t) { return t.assignee === u && t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD && !t._campaignParent; }).length; var st2 = ac2 > 8 ? "overloaded" : ac2 > 4 ? "busy" : ac2 > 0 ? "normal" : "free"; return { user: u, name: (team[u] || {}).name, color: (team[u] || {}).color, active: ac2, overdue: ov2, doneToday: dt2, status: st2 }; }).sort(function(a2, b2) { return b2.active - a2.active; });
+          var stCl = { overloaded: "#DC2626", busy: "#D97706", normal: "#2563EB", free: "#94A3B8" };
+          var stLb = { overloaded: "Overloaded", busy: "Busy", normal: "Normal", free: "Liber" };
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>Workload Echipa</div>
+            <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>{wlD2.map(function(x) { return <div key={x.user} style={{ padding: "10px 12px", borderRadius: 8, background: stCl[x.status] + "08", border: "1px solid " + stCl[x.status] + "25" }}><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}><Av color={x.color} size={24} fs={9} userId={x.user}>{x.name[0]}</Av><span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{x.name}</span><Badge bg={stCl[x.status] + "18"} color={stCl[x.status]}>{stLb[x.status]}</Badge></div><div style={{ display: "flex", gap: 8, fontSize: 10 }}><span style={{ color: "#2563EB", fontWeight: 600 }}>{x.active} active</span>{x.overdue > 0 && <span style={{ color: "#DC2626", fontWeight: 600 }}>{x.overdue} ov</span>}<span style={{ color: GR }}>{x.doneToday} azi</span></div></div>; })}</div>
+          </Card>;
+        }
+
+        // ═══ SLA PER MAGAZIN ═══
+        if (id === "slaCompliance") {
+          var sh2 = Object.keys(allTasks.reduce(function(a2, t) { if (t.shop && !t._campaignParent) a2[t.shop] = true; return a2; }, {}));
+          var slD2 = sh2.map(function(s) { var st2 = allTasks.filter(function(t) { return t.shop === s && !t._campaignParent; }); var dn2 = st2.filter(function(t) { return t.status === "Done"; }); var ot2 = dn2.filter(function(t) { return !t.deadline || (t.updatedAt && ds(t.updatedAt) <= t.deadline); }).length; return { shop: s, total: st2.length, done: dn2.length, onTime: ot2, rate: dn2.length > 0 ? Math.round((ot2 / dn2.length) * 100) : 0, overdue: st2.filter(function(t) { return isOv(t); }).length }; }).sort(function(a2, b2) { return b2.total - a2.total; });
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>SLA per Magazin</div>
+            {slD2.map(function(x) { var rC2 = x.rate >= 80 ? GR : x.rate >= 50 ? "#D97706" : "#DC2626"; return <div key={x.shop} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, padding: "6px 0", borderBottom: "1px solid #F1F5F9" }}><span style={{ fontSize: 12, fontWeight: 600, minWidth: 120, color: "#475569" }}>{x.shop}</span><div style={{ flex: 1, height: 6, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}><div style={{ height: "100%", width: x.rate + "%", background: rC2, borderRadius: 3 }} /></div><span style={{ fontSize: 12, fontWeight: 700, color: rC2, minWidth: 40, textAlign: "right" }}>{x.rate}%</span><span style={{ fontSize: 10, color: "#94A3B8", minWidth: 50 }}>{x.onTime}/{x.done}</span>{x.overdue > 0 && <Badge bg="#FEF2F2" color="#DC2626">{x.overdue} ov</Badge>}</div>; })}
+          </Card>;
+        }
+
+        // ═══ ACTIVITY FEED ═══
+        if (id === "activityFeed") {
+          var feedL = (logs || []).slice(0, 20);
+          var aCl = { NEW: "#2563EB", STATUS: GR, DELETE: "#DC2626", EDIT: "#D97706", LOGIN: "#7C3AED", PIPELINE: "#EC4899", LEAVE: "#06B6D4", UNDO: "#94A3B8" };
+          return <Card>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>Activity Feed</div>
+            {feedL.length > 0 ? feedL.map(function(l, i) { var lU = team[l.user] || {}; var ac3 = aCl[l.action] || "#94A3B8"; return <div key={l.id || i} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 0", borderBottom: i < feedL.length - 1 ? "1px solid #F8FAFC" : "none" }}><div style={{ width: 6, height: 6, borderRadius: "50%", background: ac3, marginTop: 5, flexShrink: 0 }} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 11, color: "#1E293B" }}><span style={{ fontWeight: 600 }}>{lU.name || l.user}</span> <span style={{ color: "#64748B" }}>{l.detail}</span></div><div style={{ fontSize: 9, color: "#94A3B8" }}>{fr(l.time)}</div></div><Badge bg={ac3 + "15"} color={ac3}>{l.action}</Badge></div>; }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt actiuni.</div>}
+          </Card>;
+        }
+
         return null;
       };
 
@@ -3595,7 +3779,7 @@ function calcPMLeaderboard(allTasks, team, users) {
     // Team overdue
     var teamOverdue = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && isOv(t); }).length;
     // Score: created tasks weight + team done weight + own done - team overdue penalty
-    var score = createdThisMonth * 5 + teamDoneThisMonth * 8 + ownDone * 10 - teamOverdue * 8;
+    var score = createdThisMonth * 5 + teamDoneThisMonth * 8 + ownDone * 10 - teamOverdue * 15;
     return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", created: createdThisMonth, teamDone: teamDoneThisMonth, ownDone: ownDone, teamOverdue: teamOverdue, doneThis: createdThisMonth, score: Math.max(0, score), role: "pm", teamSize: pmTeam.length };
   }).sort(function(a, b) { return b.score - a.score; });
 }
@@ -3686,7 +3870,7 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
     var teamDone = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; }).length;
     var ownDone = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; }).length;
     var teamOv = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && isOv(t); }).length;
-    var score = created * 5 + teamDone * 8 + ownDone * 10 - teamOv * 8;
+    var score = created * 5 + teamDone * 8 + ownDone * 10 - teamOv * 15;
     var xp = (userXP || {})[u] || 0;
     return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", created: created, teamDone: teamDone, ownDone: ownDone, teamOverdue: teamOv, doneThis: created, score: Math.max(0, score), level: getLevel(xp), title: getLevelTitle(getLevel(xp)), teamSize: pmTeam.length };
   }).sort(function(a, b) { return b.score - a.score; });
@@ -3799,7 +3983,7 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
             <span style={{ display: "block" }}>+5 per task creat catre echipa</span>
             <span style={{ display: "block" }}>+8 per task finalizat de echipa</span>
             <span style={{ display: "block" }}>+10 per task propriu finalizat</span>
-            <span style={{ display: "block" }}>-8 per task intarziat in echipa</span>
+            <span style={{ display: "block" }}>-15 per task intarziat in echipa</span>
           </div>
         </div>
       </div>
@@ -4838,7 +5022,7 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
             <span style={{ display: "block" }}>+5 per task creat catre echipa</span>
             <span style={{ display: "block" }}>+8 per task finalizat de echipa</span>
             <span style={{ display: "block" }}>+10 per task propriu finalizat</span>
-            <span style={{ display: "block" }}>-8 per task intarziat in echipa</span>
+            <span style={{ display: "block" }}>-15 per task intarziat in echipa</span>
           </div>
         </div>
       </div>
