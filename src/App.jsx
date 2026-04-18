@@ -2046,10 +2046,10 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
           <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{finishedWithTime.length} taskuri cronometrate</div>
         </div>
       </Card>
-    </div>
+    </div>}
 
     {/* Performance gauge + Achievements */}
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 2fr", gap: 12, marginBottom: 16 }}>
+    {memLayout.stats !== false && <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 2fr", gap: 12, marginBottom: 16 }}>
       {/* Performance gauge */}
       <Card style={{ textAlign: "center" }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 4 }}>Performance</div>
