@@ -487,7 +487,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
   useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
   useEffect(function() { if (!loading) debouncedSave("userXP", userXP, 1000); _globalUserXP = userXP || {}; }, [userXP]);
-  useEffect(function() { if (!loading) cloudSave("monthlyBonus", monthlyBonus); }, [monthlyBonus]);
+  // monthlyBonus saved manually via Salveaza button
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
   useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
   useEffect(function() { if (!loading) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
@@ -4731,14 +4731,16 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
     </Card>
 
     {/* Admin bonus config */}
-    {me.role === "admin" && <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
+    {me.role === "admin" && (function() {
+      var _s = monthlyBonus;
+      return <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premii Lunare (admin)</div>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-          <input type="checkbox" checked={monthlyBonus.enabled} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { enabled: e.target.checked })); }} style={{ accentColor: "#7C3AED" }} /> Activ
+          <input type="checkbox" checked={monthlyBonus.enabled} onChange={function(e) { var n = Object.assign({}, monthlyBonus, { enabled: e.target.checked }); setMonthlyBonus(n); cloudSave("monthlyBonus", n); }} style={{ accentColor: "#7C3AED" }} /> Activ
         </label>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
         <div style={{ padding: 12, background: "#EFF6FF", borderRadius: 8, border: "1px solid #BFDBFE" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#2563EB", marginBottom: 8 }}>Premiu Membri (implementare)</div>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -4758,7 +4760,9 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
           </div>
         </div>
       </div>
-    </Card>}
+      <button style={Object.assign({}, S.primBtn, { padding: "10px 28px", fontSize: 13, fontWeight: 700 })} onClick={function() { cloudSave("monthlyBonus", monthlyBonus); alert("Premii salvate!"); }}>Salveaza Premii</button>
+    </Card>;
+    })()}
 
     {/* Scoring explanation */}
     <Card style={{ marginTop: 16, background: "#F8FAFC" }}>
