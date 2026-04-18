@@ -11,22 +11,20 @@ async function cloudLoad(key, fallback) {
   try {
     var { data, error } = await supabase.from("app_data").select("data").eq("id", key).single();
     if (!error && data && data.data) {
-      try { localStorage.setItem("s7_cloud_" + key, JSON.stringify(data.data)); } catch(e2) {}
+      try { localStorage.setItem("s7_" + key, JSON.stringify(data.data)); } catch(e2) {}
       return data.data;
     }
   } catch (e) {}
-  // Fallback to localStorage
-  try { var ls = localStorage.getItem("s7_cloud_" + key); if (ls) return JSON.parse(ls); } catch(e3) {}
+  try { var ls = localStorage.getItem("s7_" + key); if (ls) return JSON.parse(ls); } catch(e3) {}
   return fallback;
 }
 
 async function cloudSave(key, value) {
-  // Always save to localStorage immediately
-  try { localStorage.setItem("s7_cloud_" + key, JSON.stringify(value)); } catch(e2) {}
-  // Then try Supabase
+  try { localStorage.setItem("s7_" + key, JSON.stringify(value)); } catch(e2) {}
   try {
-    await supabase.from("app_data").upsert({ id: key, data: value, updated_at: new Date().toISOString() });
-  } catch (e) { console.error("Save error:", key, e); }
+    var { error } = await supabase.from("app_data").upsert({ id: key, data: value, updated_at: new Date().toISOString() }, { onConflict: "id" });
+    if (error) console.error("cloudSave error:", key, error);
+  } catch (e) { console.error("cloudSave exception:", key, e); }
 }
 
 var saveTimers = {};
