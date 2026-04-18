@@ -189,8 +189,14 @@ function Av({ color, size, fs, children, level, userId }) {
   } else if (lvl >= 10 && s >= 24) {
     outerSize = s + 4;
     ringStyle = { padding: 2, borderRadius: "50%", background: "linear-gradient(135deg, #10B981, #34D399)", boxShadow: "0 0 4px rgba(16,185,129,0.25)" };
+  } else if (lvl >= 5 && s >= 24) {
+    outerSize = s + 4;
+    ringStyle = { padding: 1, borderRadius: "50%", background: "linear-gradient(135deg, #94A3B8, #CBD5E1)", boxShadow: "0 0 2px rgba(148,163,184,0.2)" };
+  } else if (lvl >= 1 && s >= 24) {
+    outerSize = s + 2;
+    ringStyle = { padding: 1, borderRadius: "50%", background: "#CBD5E1" };
   }
-  var hasRing = lvl >= 10 && s >= 24;
+  var hasRing = lvl >= 1 && s >= 24;
   var avatarInner = <div style={{ width: s, height: s, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: fs || 13, fontWeight: 700, color: "#fff", flexShrink: 0, border: hasRing ? "2px solid #fff" : "none", boxSizing: "border-box" }}>{children}</div>;
   var badge = showBadge ? <div style={{ position: "absolute", bottom: s > 28 ? -4 : -3, right: s > 28 ? -4 : -3, background: getLevelColor(lvl), color: "#fff", fontSize: s > 28 ? 8 : 7, fontWeight: 800, padding: s > 28 ? "1px 4px" : "0px 3px", borderRadius: 4, border: s > 28 ? "1.5px solid #fff" : "1px solid #fff", lineHeight: 1.3, minWidth: s > 28 ? 14 : 10, textAlign: "center" }}>{lvl}</div> : null;
   if (hasRing) {
@@ -466,7 +472,7 @@ export default function App() {
           var su = JSON.parse(savedUser);
           setUser(su);
           var wheelKey = "s7_wheel_" + su + "_" + TD;
-          if (!localStorage.getItem(wheelKey) && su !== "admin") {
+          if (!localStorage.getItem(wheelKey) && su !== "admin" && t && t[su] && t[su].role === "member") {
             setTimeout(function() { setDailyWheelResult({ user: su, show: true }); }, 1500);
           }
         } catch(e) {}
@@ -927,7 +933,7 @@ export default function App() {
       else n[u][today].last = ts();
       return n;
     });
-    if (t.role === "member" || t.role === "pm") {
+    if (t.role === "member") {
       // Daily wheel - check if already spun today
       var wheelKey = "s7_wheel_" + u + "_" + TD;
       if (!localStorage.getItem(wheelKey)) {
@@ -940,7 +946,7 @@ export default function App() {
   var handleLogout = function() { if (user) addLog("LOGOUT", (team[user] ? team[user].name : "") + " a iesit"); setUser(null); localStorage.removeItem("s7_user"); setPage("dashboard"); };
 
   var visUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
-  var assUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") return [user, "admin"].concat(m.team || []); return [user]; }, [user, team]);
+  var assUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") { var otherPMs = Object.keys(team).filter(function(k) { return team[k].role === "pm" && k !== user; }); return [user, "admin"].concat(m.team || []).concat(otherPMs); } return [user]; }, [user, team]);
   var visTasks = useMemo(function() {
     if (!user) return [];
     return tasks.filter(function(t) {
@@ -1408,7 +1414,15 @@ export default function App() {
             </div>;
           })}
         </nav>
-        <div style={S.sidebarUser}><Av color={me.color} size={32} userId={user}>{me.name[0]}</Av><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#D1D9E6" }}>{me.name}</div><div style={{ fontSize: 10, color: "#7A8BA0" }}>{me.role === "pm" ? "PM" : me.role}{user !== "admin" ? " | Lv." + getLevel((_globalUserXP[user]) || 0) + " " + getLevelTitle(getLevel((_globalUserXP[user]) || 0)) : ""}</div></div></div>
+        <div style={S.sidebarUser}>
+          <Av color={me.color} size={32} userId={user}>{me.name[0]}</Av>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#D1D9E6" }}>{me.name}</div>
+            <div style={{ fontSize: 10, color: "#7A8BA0" }}>{me.role === "pm" ? "PM" : me.role} | Lv.{getLevel((_globalUserXP[user]) || 0)} {getLevelTitle(getLevel((_globalUserXP[user]) || 0))}</div>
+            <div style={{ height: 3, background: "hsl(216,18%,18%)", borderRadius: 2, marginTop: 4 }}><div style={{ height: "100%", width: getLevelProgress((_globalUserXP[user]) || 0) + "%", background: getLevelColor(getLevel((_globalUserXP[user]) || 0)), borderRadius: 2, transition: "width 0.5s" }} /></div>
+            <div style={{ fontSize: 8, color: "#4A5A70", marginTop: 2 }}>{(_globalUserXP[user]) || 0} XP | {getLevelProgress((_globalUserXP[user]) || 0)}% spre Lv.{getLevel((_globalUserXP[user]) || 0) + 1}</div>
+          </div>
+        </div>
         <div style={{ padding: "0 16px 16px" }}><button style={S.logoutBtn} onClick={handleLogout}><Ic d={Icons.out} size={15} color="#7A8BA0" /> Sign out</button></div>
       </aside>
       <main style={S.main}>
@@ -1638,8 +1652,8 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
       </div>
       <div style={{ display: "flex", gap: 6 }}>
         {pmEditMode && <button onClick={pmResetLayout} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#fff", color: "#64748B", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↻ Reset</button>}
-        <button onClick={function() { setPmEditMode(!pmEditMode); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid " + (pmEditMode ? GR : "#CBD5E1"), background: pmEditMode ? GR : "#fff", color: pmEditMode ? "#fff" : "#475569", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-          {pmEditMode ? "✓ Gata" : "✎ Customizeaza"}
+        <button onClick={function() { if (!pmEditMode) { var pw = prompt("Parola pentru editare dashboard:"); if (pw !== "hey") { alert("Parola gresita!"); return; } } setPmEditMode(!pmEditMode); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid " + (pmEditMode ? GR : "#CBD5E1"), background: pmEditMode ? GR : "#fff", color: pmEditMode ? "#fff" : "#475569", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+          {pmEditMode ? "Gata" : "Customizeaza"}
         </button>
       </div>
     </div>
@@ -2548,8 +2562,8 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
       </div>
       {me && me.role === "admin" && <div style={{ display: "flex", gap: 6 }}>
         {editMode && <button onClick={resetLayout} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD5E1", background: "#fff", color: "#64748B", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>↻ Reset</button>}
-        <button onClick={function() { setEditMode(!editMode); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid " + (editMode ? GR : "#CBD5E1"), background: editMode ? GR : "#fff", color: editMode ? "#fff" : "#475569", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-          {editMode ? "✓ Gata" : "✎ Customizeaza"}
+        <button onClick={function() { if (!editMode) { var pw = prompt("Parola pentru editare dashboard:"); if (pw !== "hey") { alert("Parola gresita!"); return; } } setEditMode(!editMode); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid " + (editMode ? GR : "#CBD5E1"), background: editMode ? GR : "#fff", color: editMode ? "#fff" : "#475569", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+          {editMode ? "Gata" : "Customizeaza"}
         </button>
       </div>}
     </div>
@@ -4875,6 +4889,7 @@ function DailyWheel({ userId, team, onClose, onResult, awardXP, prizes, isDemo }
 
   return <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center" }}>
     <div style={{ background: "#fff", borderRadius: 20, padding: 30, maxWidth: 420, width: "90%", textAlign: "center", position: "relative", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+      {!isDemo && !result && <button onClick={function() { localStorage.setItem("s7_wheel_" + userId + "_" + TD, "skipped"); onClose(); }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 22, color: "#94A3B8", cursor: "pointer", fontWeight: 700 }}>x</button>}
       <div style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>{isDemo ? "Preview Roata" : "Roata Zilnica"}</div>
       <div style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>{isDemo ? "Asta e un demo. Nu se acorda XP si nu se salveaza." : "Buna, " + userName + "! Invarte roata si vezi ce primesti azi."}</div>
 
