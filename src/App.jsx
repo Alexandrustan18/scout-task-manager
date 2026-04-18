@@ -514,6 +514,29 @@ export default function App() {
 
   useEffect(function() { var h = function() { setIsMob(window.innerWidth < 820); }; window.addEventListener("resize", h); return function() { window.removeEventListener("resize", h); }; }, []);
 
+  // Penalty check on auto-login (runs after loading completes when user was restored from localStorage)
+  useEffect(function() {
+    if (loading || !user || tasks.length === 0) return;
+    var t = team[user];
+    if (!t || t.role === "admin") return;
+    var todayDow = new Date().getDay();
+    if (todayDow < 1 || todayDow > 5) return;
+    var penKey = "s7_penalty_" + user + "_" + TD;
+    if (localStorage.getItem(penKey)) return; // already checked today
+    setTimeout(function() {
+      // Re-check localStorage in case handleLogin already ran
+      if (localStorage.getItem(penKey)) return;
+      var overdueCount = tasks.filter(function(tk2) { return tk2.assignee === user && isOv(tk2) && !tk2._campaignParent; }).length;
+      if (overdueCount > 0) {
+        localStorage.setItem(penKey, "1");
+        var penEntry = { id: gid(), userId: user, userName: t.name, date: TD, overdueCount: overdueCount, time: ts() };
+        setPenalties(function(p) { return [penEntry].concat(p).slice(0, 1000); });
+        addNotif("anomaly", "PENALIZARE: " + t.name + " are " + overdueCount + " taskuri intarziate", null, "admin");
+        setShowPenaltyPopup({ user: user, name: t.name, count: overdueCount });
+      }
+    }, 3000);
+  }, [loading, user, tasks.length > 0]);
+
   // Auto-saves
   useEffect(function() { if (!loading) debouncedSave("team", team, 1000); }, [team]);
   useEffect(function() { if (!loading && tasks.length > 0) debouncedSave("tasks", tasks, 500); }, [tasks]);
@@ -1538,7 +1561,7 @@ export default function App() {
           {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
           {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} monthlyBonus={monthlyBonus} logs={logs} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
-          {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} />}
+          {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} visTasks={visTasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
           {page === "calendar" && <CalendarPage tasks={visTasks} user={user} team={team} calDate={calDate} setCalDate={setCalDate} onView={setViewTask} isMob={isMob} me={me} />}
           {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} taskTypes={taskTypes} departments={departments} leaves={leaves} />}
@@ -3028,7 +3051,7 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
     {(me.role === "admin" || me.role === "pm") && <button style={S.iconBtn} onMouseDown={function(e) { e.stopPropagation(); }} onClick={function(e) { e.stopPropagation(); if (confirm("Stergi?")) onDel(t.id); }}><Ic d={Icons.del} size={14} color="#EF4444" /></button>}
   </div>
 </Card></div>;
-  return <Card style={{ display: "flex", flexDirection: isMob ? "column" : "row", alignItems: isMob ? "stretch" : "center", gap: 10, marginBottom: 6, borderLeft: "3px solid " + (ov ? "#EF4444" : SC[t.status] || "#E2E8F0"), background: ov ? "#FFFBFB" : SBG[t.status] || "#fff", boxShadow: "none" }}>
+  return <Card style={{ display: "flex", flexDirection: isMob ? "column" : "row", alignItems: isMob ? "stretch" : "center", gap: 10, marginBottom: 6, borderLeft: (ov ? "4px" : "3px") + " solid " + (ov ? "#DC2626" : SC[t.status] || "#E2E8F0"), background: ov ? "#FEF2F2" : SBG[t.status] || "#fff", boxShadow: ov ? "0 0 0 1px #FECACA" : "none", border: ov ? "1px solid #FECACA" : undefined }}>
     {bulkMode && <input type="checkbox" checked={isSelected} onChange={function() { if (toggleSel) toggleSel(t.id); }} style={{ width: 18, height: 18, accentColor: GR }} />}
     {!bulkMode && can && <button style={Object.assign({}, S.stDot, { color: SC[t.status], background: SC[t.status] + "12", border: "1.5px solid " + SC[t.status] + "40" })} onClick={function() { var i = STATUSES.indexOf(t.status); onChgSt(t.id, STATUSES[(i + 1) % STATUSES.length]); }}>{SI[t.status]}</button>}
     <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={function() { if (onView) onView(t); }}>
@@ -3059,14 +3082,47 @@ function TRow({ t, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, sec
   </Card>;
 }
 
-function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer, bulkMode, selectedTasks, toggleSel, canEdit, canDelete, onExplode, tasks }) {
+function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDel, onDup, onChgSt, isMob, timers, getTS, togTimer, bulkMode, selectedTasks, toggleSel, canEdit, canDelete, onExplode, tasks, visTasks }) {
   var st = fProps.stats;
   var me = team[user] || {};
   var showTeamSection = me.role === "admin" || me.role === "pm";
+  var currentDateF = fProps.dateF;
+
+  // Pinned overdue: compute from visTasks (ignores date filter), exclude Done
+  var pinnedOverdue = useMemo(function() {
+    if (currentDateF === "overdue") return []; // already showing overdue filter, no need to pin
+    var allOverdue = (visTasks || []).filter(function(t) { return isOv(t) && t.status !== "Done"; });
+    // Apply other active filters (status, prio, assign, shop, tag) but NOT date
+    return allOverdue.filter(function(t) {
+      if (fProps.statusF !== "all" && t.status !== fProps.statusF) return false;
+      if (fProps.prioF !== "all" && t.priority !== fProps.prioF) return false;
+      if (fProps.assignF !== "all" && t.assignee !== fProps.assignF) return false;
+      if (fProps.shopF !== "all" && t.shop !== fProps.shopF) return false;
+      if (fProps.tagFilter !== "all" && !(t.tags || []).includes(fProps.tagFilter)) return false;
+      return true;
+    });
+  }, [visTasks, currentDateF, fProps.statusF, fProps.prioF, fProps.assignF, fProps.shopF, fProps.tagFilter]);
+
+  // IDs of pinned overdue tasks to exclude from normal list (avoid duplicates)
+  var pinnedIds = useMemo(function() {
+    var ids = {};
+    pinnedOverdue.forEach(function(t) { ids[t.id] = true; });
+    return ids;
+  }, [pinnedOverdue]);
+
+  // Remove pinned overdue from filtered to avoid showing them twice
+  var filteredClean = useMemo(function() {
+    if (pinnedOverdue.length === 0) return filtered;
+    return filtered.filter(function(t) { return !pinnedIds[t.id]; });
+  }, [filtered, pinnedIds, pinnedOverdue]);
 
   // Split filtered into mine vs team
-  var mine = filtered.filter(function(t) { return t.assignee === user; });
-  var teamOnly = filtered.filter(function(t) { return t.assignee !== user; });
+  var mine = filteredClean.filter(function(t) { return t.assignee === user; });
+  var teamOnly = filteredClean.filter(function(t) { return t.assignee !== user; });
+
+  // Split pinned overdue into mine vs team
+  var pinnedMine = pinnedOverdue.filter(function(t) { return t.assignee === user; });
+  var pinnedTeam = pinnedOverdue.filter(function(t) { return t.assignee !== user; });
 
   var groupBy = function(arr) {
     var groups = {};
@@ -3081,7 +3137,20 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
   var mineGroups = useMemo(function() { return groupBy(mine); }, [mine]);
   var teamGroups = useMemo(function() { return groupBy(teamOnly); }, [teamOnly]);
 
-  var renderSection = function(groups, title, color, icon) {
+  var renderPinnedOverdue = function(overdueTasks, label) {
+    if (!overdueTasks || overdueTasks.length === 0) return null;
+    return <div style={{ marginBottom: 20, border: "2px solid #DC2626", borderRadius: 12, background: "#FEF2F2", padding: "12px 14px", boxShadow: "0 2px 12px rgba(220,38,38,0.15)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />
+        <span style={{ fontSize: 13, fontWeight: 800, color: "#DC2626", letterSpacing: 0.5, textTransform: "uppercase" }}>INTARZIATE - {label}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "#DC2626", padding: "1px 8px", borderRadius: 10 }}>{overdueTasks.length}</span>
+        <span style={{ fontSize: 10, color: "#991B1B", marginLeft: "auto", fontWeight: 600 }}>Nu au scapat!</span>
+      </div>
+      {overdueTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
+    </div>;
+  };
+
+  var renderSection = function(groups, title, color, icon, pinnedOvTasks) {
     var hasUrgent = groups["Urgent"] && groups["Urgent"].length > 0;
     var hasActive = hasUrgent || (groups["In Progress"] && groups["In Progress"].length > 0) || (groups["Review"] && groups["Review"].length > 0) || (groups["To Do"] && groups["To Do"].length > 0);
     var totalActive = (groups["Urgent"] || []).length + (groups["In Progress"] || []).length + (groups["Review"] || []).length + (groups["To Do"] || []).length;
@@ -3093,6 +3162,7 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
           <div style={{ fontSize: 11, color: "#64748B" }}>{totalActive} taskuri active{groups["Done"] && groups["Done"].length > 0 ? " | " + groups["Done"].length + " finalizate" : ""}</div>
         </div>
       </div>
+      {renderPinnedOverdue(pinnedOvTasks, title.includes("echip") ? "echipa" : "ale tale")}
       {hasUrgent && <div style={{ marginBottom: 20 }}>
         <div style={Object.assign({}, S.groupHdr, { color: "#DC2626" })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />URGENT</span><span style={S.countBadge}>{groups["Urgent"].length}</span></div>
         {groups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
@@ -3105,7 +3175,7 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
           {sectionTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
         </div>;
       })}
-      {!hasActive && <Card style={{ textAlign: "center", padding: 30, color: "#94A3B8", fontSize: 13 }}>Niciun task activ.</Card>}
+      {!hasActive && pinnedOvTasks.length === 0 && <Card style={{ textAlign: "center", padding: 30, color: "#94A3B8", fontSize: 13 }}>Niciun task activ.</Card>}
       <DoneCollapse tasks={groups["Done"] || []} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />
     </div>;
   };
@@ -3115,12 +3185,12 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
     <FiltersBar {...fProps} />
     {showTeamSection ? <div>
       <div style={{ marginBottom: 30 }}>
-        {renderSection(mineGroups, "Taskurile mele", "#2563EB", Icons.work)}
+        {renderSection(mineGroups, "Taskurile mele", "#2563EB", Icons.work, pinnedMine)}
       </div>
       <div style={{ marginTop: 40 }}>
-        {renderSection(teamGroups, "Taskurile echipei", "#7C3AED", Icons.team)}
+        {renderSection(teamGroups, "Taskurile echipei", "#7C3AED", Icons.team, pinnedTeam)}
       </div>
-    </div> : renderSection(mineGroups, "Taskurile mele", "#2563EB", Icons.work)}
+    </div> : renderSection(mineGroups, "Taskurile mele", "#2563EB", Icons.work, pinnedMine)}
   </div>;
 }
 
