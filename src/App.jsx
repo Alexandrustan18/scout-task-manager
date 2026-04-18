@@ -350,6 +350,17 @@ export default function App() {
   // Sound & celebration settings
   var [soundEnabled, setSoundEnabled] = useState(function() { try { return localStorage.getItem("s7_sound") !== "off"; } catch(e) { return true; } });
   var [celebration, setCelebration] = useState(null);
+  var [dailyWheelResult, setDailyWheelResult] = useState(null);
+  var [wheelConfig, setWheelConfig] = useState({ enabled: true, prizes: [
+    { label: "+20 XP", color: "#7C3AED", type: "xp", value: 20, chance: 25 },
+    { label: "+50 XP", color: "#10B981", type: "xp", value: 50, chance: 20 },
+    { label: "+100 XP", color: "#2563EB", type: "xp", value: 100, chance: 10 },
+    { label: "+200 XP", color: "#EC4899", type: "xp", value: 200, chance: 5 },
+    { label: "50 RON bonus", color: "#EAB308", type: "bonus", value: 50, chance: 3 },
+    { label: "Task extra", color: "#DC2626", type: "penalty", value: 1, chance: 15 },
+    { label: "2 taskuri extra", color: "#EA580C", type: "penalty", value: 2, chance: 10 },
+    { label: "Nimic", color: "#94A3B8", type: "nothing", value: 0, chance: 12 },
+  ] });
   // Undo stack - last 10 actions
   var [undoStack, setUndoStack] = useState([]);
   // User XP & Levels
@@ -363,7 +374,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -394,6 +405,7 @@ export default function App() {
         cloudLoad("pipelineRules", []),
         cloudLoad("userXP", {}),
         cloudLoad("monthlyBonus", { memberAmount: 0, memberCurrency: "RON", pmAmount: 0, pmCurrency: "RON", enabled: false }),
+        cloudLoad("wheelConfig", null),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -431,6 +443,7 @@ export default function App() {
         }
       }
       if (mb) { if (mb.amount !== undefined && mb.memberAmount === undefined) { mb.memberAmount = mb.amount; mb.memberCurrency = mb.currency || "RON"; mb.pmAmount = 0; mb.pmCurrency = "RON"; } setMonthlyBonus(mb); }
+      if (wc) setWheelConfig(wc);
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -445,7 +458,16 @@ export default function App() {
       setLeaveRequests(lr || []);
       if (brd) setBranding(brd);
       var savedUser = localStorage.getItem("s7_user");
-      if (savedUser) { try { setUser(JSON.parse(savedUser)); } catch(e) {} }
+      if (savedUser) {
+        try {
+          var su = JSON.parse(savedUser);
+          setUser(su);
+          var wheelKey = "s7_wheel_" + su + "_" + TD;
+          if (!localStorage.getItem(wheelKey) && su !== "admin") {
+            setTimeout(function() { setDailyWheelResult({ user: su, show: true }); }, 1500);
+          }
+        } catch(e) {}
+      }
       setLoading(false);
     }
     loadAll();
@@ -901,6 +923,13 @@ export default function App() {
       else n[u][today].last = ts();
       return n;
     });
+    if (t.role === "member" || t.role === "pm") {
+      // Daily wheel - check if already spun today
+      var wheelKey = "s7_wheel_" + u + "_" + TD;
+      if (!localStorage.getItem(wheelKey)) {
+        setTimeout(function() { setDailyWheelResult({ user: u, show: true }); }, 800);
+      }
+    }
     if (t.role === "member") setPage("tasks");
     return true;
   };
@@ -1001,6 +1030,14 @@ export default function App() {
       // FEATURE 16: clear editor lock
       setTaskEditors(function(p) { var n = Object.assign({}, p); delete n[t.id]; return n; });
     } else {
+      // DUPLICATE CHECK: warn if task with same title + shop + assignee exists
+      var dupTitle = (t.title || "").trim().toLowerCase();
+      var duplicates = tasks.filter(function(x) {
+        return !x._campaignParent && x.title && x.title.trim().toLowerCase() === dupTitle && x.shop === t.shop && x.status !== "Done";
+      });
+      if (duplicates.length > 0 && !t._skipDupCheck) {
+        if (!window.confirm("Atentie: Exista deja un task similar:\n\"" + duplicates[0].title + "\" (" + duplicates[0].shop + ", " + (duplicates[0].status) + ")\n\nVrei sa-l creezi oricum?")) return;
+      }
       // FEATURE 3: auto-priority on create
       var autoPrio2 = autoPriority(t.deadline, t.priority);
       var assignees = t.assignees && t.assignees.length > 0 ? t.assignees : [t.assignee];
@@ -1293,6 +1330,7 @@ export default function App() {
     { id: "manage_users", label: "Manage Users", icon: Icons.usrs },
     { id: "branding", label: "Branding", icon: Icons.settings },
     { id: "config", label: "Configurare Rapida", icon: Icons.filter },
+    { id: "wheelSetup", label: "Roata Zilnica", icon: Icons.challenge },
     { id: "pipeline", label: "Pipeline Builder", icon: Icons.dep },
   ];
 
@@ -1301,7 +1339,7 @@ export default function App() {
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
     { label: "Echipa", items: ["workload", "performance", "league", "leagueMonthly", "digest", "achievements", "wallfame", "brandstats"] },
     { label: "Comunicare", items: ["announce"] },
-    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "backups"] },
+    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "backups"] },
   ];
 
   var accessibleNav = navItems.filter(function(n) {
@@ -1318,6 +1356,7 @@ export default function App() {
     <div style={S.app}><style>{CSS}</style>
       <ToastBanner toasts={toasts} onDismiss={dismissToast} />
       {celebration && <ConfettiOverlay type={celebration.type} key={celebration.id} />}
+      {dailyWheelResult && dailyWheelResult.show && wheelConfig.enabled && <DailyWheel userId={dailyWheelResult.user} team={team} awardXP={awardXP} prizes={wheelConfig.prizes} onResult={function(r) { if (r.type === "penalty") addNotif("challenge", "Roata zilnica: " + r.label + " pentru " + (team[dailyWheelResult.user] || {}).name, null, dailyWheelResult.user); if (r.type === "bonus") addNotif("challenge", (team[dailyWheelResult.user] || {}).name + " a castigat " + r.value + " RON la roata zilnica!", null, "admin"); }} onClose={function() { setDailyWheelResult(null); }} />}
       {achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}
       {isMob && mobNav && <div style={S.overlay} onClick={function() { setMobNav(false); }} />}
       <aside style={Object.assign({}, S.sidebar, isMob ? { position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 200, transform: mobNav ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.2s" } : {})}>
@@ -1417,6 +1456,7 @@ export default function App() {
           {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} addNotif={addNotif} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
+          {page === "wheelSetup" && <WheelSetupPage wheelConfig={wheelConfig} setWheelConfig={setWheelConfig} />}
           {page === "pipeline" && <PipelinePage pipelineRules={pipelineRules} setPipelineRules={setPipelineRules} team={team} assUsers={assUsers} shops={shops} taskTypes={taskTypes} departments={departments} platforms={platforms} addLog={addLog} />}
           {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
           {page === "leagueMonthly" && <MonthlyLeaguePage allTasks={tasks} team={team} user={user} me={me} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
@@ -4421,7 +4461,7 @@ function EditUserInline({ u, m, team, setTeam }) {
   var curPerms = m.permissions || {};
   var upd = function(field, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { [field]: val }); return n; }); };
   var updPerm = function(perm, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { permissions: Object.assign({}, n[u].permissions || {}, { [perm]: val }) }); return n; }); };
-  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "wallfame", "brandstats", "league", "leagueMonthly", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "backups"];
+  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "wallfame", "brandstats", "league", "leagueMonthly", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "backups"];
   var pageLabels = {
     dashboard: "Dashboard", tasks: "Taskuri", kanban: "Kanban Board",
     targets: "Targets", templates: "Templates", recurring: "Recurring",
@@ -4430,7 +4470,7 @@ function EditUserInline({ u, m, team, setTeam }) {
     brandstats: "Brand Analytics", league: "Liga Saptamanii", leagueMonthly: "Liga Lunara",
     announce: "Announcements", departments: "Departamente", shops: "Magazine",
     products: "Produse", sheets: "Sheets", manage_users: "Manage Users",
-    branding: "Branding", config: "Configurare Rapida", pipeline: "Pipeline Builder",
+    branding: "Branding", config: "Configurare Rapida", pipeline: "Pipeline Builder", wheelSetup: "Roata Zilnica",
     backups: "Backup Taskuri"
   };
   var curAccess = m.access || [];
@@ -4618,6 +4658,200 @@ function CampaignFinalizeModal({ task, onFinalize, onClose }) {
 // ═══════════════════════════════════════════════════════════════
 // CONFETTI OVERLAY — Visual celebration on task Done / target hit
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// WHEEL SETUP — Admin configures daily wheel prizes & chances
+// ═══════════════════════════════════════════════════════════════
+function WheelSetupPage({ wheelConfig, setWheelConfig }) {
+  var [form, setForm] = useState(Object.assign({ enabled: true, prizes: [] }, wheelConfig || {}));
+  var [saved, setSaved] = useState(false);
+  var [newPrize, setNewPrize] = useState({ label: "", type: "xp", value: 0, chance: 10, color: "#10B981" });
+
+  var typeOptions = [
+    { value: "xp", label: "XP Bonus" },
+    { value: "bonus", label: "Bani (RON)" },
+    { value: "penalty", label: "Task extra" },
+    { value: "nothing", label: "Nimic" },
+  ];
+  var colorOptions = ["#10B981", "#2563EB", "#7C3AED", "#EAB308", "#DC2626", "#EA580C", "#EC4899", "#94A3B8", "#06B6D4", "#F59E0B"];
+
+  var totalChance = (form.prizes || []).reduce(function(a, p) { return a + (p.chance || 0); }, 0);
+
+  var addPrize = function() {
+    if (!newPrize.label.trim()) return;
+    setForm(function(p) { return Object.assign({}, p, { prizes: (p.prizes || []).concat([Object.assign({}, newPrize, { id: gid() })]) }); });
+    setNewPrize({ label: "", type: "xp", value: 0, chance: 10, color: "#10B981" });
+    setSaved(false);
+  };
+
+  var removePrize = function(idx) {
+    setForm(function(p) { var arr = (p.prizes || []).slice(); arr.splice(idx, 1); return Object.assign({}, p, { prizes: arr }); });
+    setSaved(false);
+  };
+
+  var updatePrize = function(idx, field, val) {
+    setForm(function(p) { var arr = (p.prizes || []).slice(); arr[idx] = Object.assign({}, arr[idx]); arr[idx][field] = val; return Object.assign({}, p, { prizes: arr }); });
+    setSaved(false);
+  };
+
+  var doSave = function() {
+    setWheelConfig(form);
+    cloudSave("wheelConfig", form);
+    setSaved(true);
+    setTimeout(function() { setSaved(false); }, 3000);
+  };
+
+  return <div style={{ maxWidth: 800 }}>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Roata Zilnica - Configurare</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Seteaza premiile si sansele de castig. Fiecare membru invarte roata o data pe zi la login.</div>
+    </div>
+
+    <Card style={{ marginBottom: 16 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+        <input type="checkbox" checked={form.enabled} onChange={function(e) { setForm(Object.assign({}, form, { enabled: e.target.checked })); setSaved(false); }} style={{ accentColor: "#7C3AED", width: 18, height: 18 }} />
+        Roata zilnica activa
+      </label>
+    </Card>
+
+    <Card style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Premii ({(form.prizes || []).length})</div>
+        <div style={{ fontSize: 12, color: totalChance === 100 ? GR : "#D97706", fontWeight: 700 }}>Total sanse: {totalChance}% {totalChance !== 100 && "(recomand 100%)"}</div>
+      </div>
+
+      {(form.prizes || []).map(function(p, idx) {
+        return <div key={p.id || idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", marginBottom: 6, borderRadius: 8, background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+          <div style={{ width: 16, height: 16, borderRadius: 4, background: p.color, flexShrink: 0 }} />
+          <input style={Object.assign({}, S.input, { flex: 1, padding: "6px 8px", fontSize: 13, fontWeight: 600 })} value={p.label} onChange={function(e) { updatePrize(idx, "label", e.target.value); }} />
+          <select style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 11, width: 100 })} value={p.type} onChange={function(e) { updatePrize(idx, "type", e.target.value); }}>
+            {typeOptions.map(function(o) { return <option key={o.value} value={o.value}>{o.label}</option>; })}
+          </select>
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <span style={{ fontSize: 10, color: "#94A3B8" }}>Val:</span>
+            <input type="number" min="0" style={Object.assign({}, S.input, { width: 60, padding: "6px", fontSize: 12, textAlign: "center" })} value={p.value} onChange={function(e) { updatePrize(idx, "value", parseInt(e.target.value) || 0); }} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <span style={{ fontSize: 10, color: "#94A3B8" }}>%:</span>
+            <input type="number" min="0" max="100" style={Object.assign({}, S.input, { width: 50, padding: "6px", fontSize: 12, textAlign: "center", fontWeight: 700 })} value={p.chance} onChange={function(e) { updatePrize(idx, "chance", parseInt(e.target.value) || 0); }} />
+          </div>
+          <select style={{ border: "none", background: "none", cursor: "pointer" }} value={p.color} onChange={function(e) { updatePrize(idx, "color", e.target.value); }}>
+            {colorOptions.map(function(c) { return <option key={c} value={c} style={{ background: c, color: "#fff" }}>{c}</option>; })}
+          </select>
+          <button style={{ border: "none", background: "none", color: "#DC2626", cursor: "pointer", fontSize: 16, fontWeight: 700 }} onClick={function() { removePrize(idx); }}>x</button>
+        </div>;
+      })}
+
+      {/* Add new prize */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", marginTop: 10, borderRadius: 8, background: "#ECFDF5", border: "1px dashed " + GR }}>
+        <input style={Object.assign({}, S.input, { flex: 1, padding: "6px 8px", fontSize: 13 })} placeholder="Nume premiu (ex: +50 XP)" value={newPrize.label} onChange={function(e) { setNewPrize(Object.assign({}, newPrize, { label: e.target.value })); }} />
+        <select style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 11, width: 100 })} value={newPrize.type} onChange={function(e) { setNewPrize(Object.assign({}, newPrize, { type: e.target.value })); }}>
+          {typeOptions.map(function(o) { return <option key={o.value} value={o.value}>{o.label}</option>; })}
+        </select>
+        <input type="number" min="0" style={Object.assign({}, S.input, { width: 60, padding: "6px", fontSize: 12, textAlign: "center" })} placeholder="Val" value={newPrize.value || ""} onChange={function(e) { setNewPrize(Object.assign({}, newPrize, { value: parseInt(e.target.value) || 0 })); }} />
+        <input type="number" min="0" max="100" style={Object.assign({}, S.input, { width: 50, padding: "6px", fontSize: 12, textAlign: "center" })} placeholder="%" value={newPrize.chance || ""} onChange={function(e) { setNewPrize(Object.assign({}, newPrize, { chance: parseInt(e.target.value) || 0 })); }} />
+        <button style={Object.assign({}, S.primBtn, { padding: "6px 14px", fontSize: 12 })} onClick={addPrize}>+ Adauga</button>
+      </div>
+    </Card>
+
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button style={Object.assign({}, S.primBtn, { padding: "12px 30px", fontSize: 14, fontWeight: 700 })} onClick={doSave}>Salveaza Configurare Roata</button>
+      {saved && <span style={{ fontSize: 13, color: GR, fontWeight: 700 }}>Salvat!</span>}
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DAILY WHEEL — Spin to win/lose each day
+// ═══════════════════════════════════════════════════════════════
+function DailyWheel({ userId, team, onClose, onResult, awardXP, prizes }) {
+  var [spinning, setSpinning] = useState(false);
+  var [result, setResult] = useState(null);
+  var [rotation, setRotation] = useState(0);
+
+  var totalWeight = prizes.reduce(function(a, p) { return a + (p.chance || 10); }, 0);
+
+  var spin = function() {
+    if (spinning || result) return;
+    setSpinning(true);
+
+    // Weighted random pick
+    var r = Math.random() * totalWeight;
+    var cumulative = 0;
+    var picked = prizes[0];
+    for (var i = 0; i < prizes.length; i++) {
+      cumulative += (prizes[i].chance || 10);
+      if (r <= cumulative) { picked = prizes[i]; break; }
+    }
+
+    var sliceAngle = 360 / prizes.length;
+    var pickedIdx = prizes.indexOf(picked);
+    var targetAngle = 360 * 5 + (360 - pickedIdx * sliceAngle - sliceAngle / 2);
+    setRotation(targetAngle);
+
+    setTimeout(function() {
+      setSpinning(false);
+      setResult(picked);
+      // Save that user spun today
+      localStorage.setItem("s7_wheel_" + userId + "_" + TD, JSON.stringify(picked));
+      // Apply result
+      if (picked.type === "xp" && awardXP) awardXP(userId, picked.value, "Daily Wheel");
+      if (onResult) onResult(picked);
+    }, 4000);
+  };
+
+  var userName = (team[userId] || {}).name || userId;
+  var sliceAngle = 360 / prizes.length;
+
+  return <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ background: "#fff", borderRadius: 20, padding: 30, maxWidth: 420, width: "90%", textAlign: "center", position: "relative", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Roata Zilnica</div>
+      <div style={{ fontSize: 13, color: "#64748B", marginBottom: 20 }}>Buna, {userName}! Invarte roata si vezi ce primesti azi.</div>
+
+      {/* Wheel */}
+      <div style={{ position: "relative", width: 280, height: 280, margin: "0 auto 20px" }}>
+        {/* Arrow pointer */}
+        <div style={{ position: "absolute", top: -15, left: "50%", transform: "translateX(-50%)", zIndex: 2, width: 0, height: 0, borderLeft: "12px solid transparent", borderRight: "12px solid transparent", borderTop: "20px solid #1E293B" }} />
+        {/* Spinning wheel */}
+        <svg viewBox="0 0 300 300" style={{ width: 280, height: 280, transition: spinning ? "transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)" : "none", transform: "rotate(" + rotation + "deg)" }}>
+          {prizes.map(function(p, i) {
+            var startAngle = i * sliceAngle * Math.PI / 180;
+            var endAngle = (i + 1) * sliceAngle * Math.PI / 180;
+            var x1 = 150 + 140 * Math.cos(startAngle);
+            var y1 = 150 + 140 * Math.sin(startAngle);
+            var x2 = 150 + 140 * Math.cos(endAngle);
+            var y2 = 150 + 140 * Math.sin(endAngle);
+            var largeArc = sliceAngle > 180 ? 1 : 0;
+            var midAngle = (startAngle + endAngle) / 2;
+            var tx = 150 + 90 * Math.cos(midAngle);
+            var ty = 150 + 90 * Math.sin(midAngle);
+            var textRot = (midAngle * 180 / Math.PI);
+            return <g key={i}>
+              <path d={"M150,150 L" + x1 + "," + y1 + " A140,140 0 " + largeArc + ",1 " + x2 + "," + y2 + " Z"} fill={p.color} stroke="#fff" strokeWidth="2" />
+              <text x={tx} y={ty} fill="#fff" fontSize="10" fontWeight="700" textAnchor="middle" dominantBaseline="middle" transform={"rotate(" + textRot + "," + tx + "," + ty + ")"}>{p.label}</text>
+            </g>;
+          })}
+          <circle cx="150" cy="150" r="20" fill="#1E293B" />
+          <circle cx="150" cy="150" r="16" fill="#fff" />
+        </svg>
+      </div>
+
+      {/* Result or spin button */}
+      {!result ? <button onClick={spin} disabled={spinning} style={{ padding: "14px 40px", fontSize: 16, fontWeight: 800, background: spinning ? "#94A3B8" : "linear-gradient(135deg, #EAB308, #F59E0B)", color: "#fff", border: "none", borderRadius: 12, cursor: spinning ? "not-allowed" : "pointer", boxShadow: spinning ? "none" : "0 4px 15px rgba(234,179,8,0.4)", transition: "all 0.3s" }}>{spinning ? "Se invarte..." : "INVARTE ROATA!"}</button>
+      : <div>
+        <div style={{ fontSize: 40, marginBottom: 8 }}>{result.type === "xp" ? "🎉" : result.type === "bonus" ? "💰" : result.type === "penalty" ? "😱" : "😐"}</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: result.color, marginBottom: 8 }}>{result.label}</div>
+        <div style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>
+          {result.type === "xp" && "Ai primit " + result.value + " XP bonus! Bravo!"}
+          {result.type === "bonus" && "Felicitari! Ai castigat " + result.value + " RON bonus! Vorbeste cu adminul."}
+          {result.type === "penalty" && (result.value === 1 ? "Ai un task suplimentar azi! PM-ul tau te va anunta." : "Ai " + result.value + " taskuri suplimentare azi! PM-ul tau te va anunta.")}
+          {result.type === "nothing" && "Azi nu ai primit nimic. Maine ai mai mult noroc!"}
+        </div>
+        <button onClick={onClose} style={{ padding: "10px 30px", fontSize: 14, fontWeight: 600, background: "#F1F5F9", color: "#475569", border: "none", borderRadius: 8, cursor: "pointer" }}>OK, am inteles</button>
+      </div>}
+    </div>
+  </div>;
+}
+
 function ConfettiOverlay({ type }) {
   var colors = type === "target" ? ["#FFD700", "#FFA500", "#FF6347", "#4ADE80", "#3B82F6", "#A855F7"] : type === "levelup" ? ["#7C3AED", "#A855F7", "#C084FC", "#DDD6FE", "#EDE9FE", "#FFD700"] : ["#4ADE80", "#10B981", "#0C7E3E", "#6EE7B7", "#34D399"];
   var particles = [];
