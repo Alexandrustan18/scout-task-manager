@@ -506,7 +506,8 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
   useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
   useEffect(function() { _globalUserXP = userXP || {}; if (!loading && userXP && Object.keys(userXP).length > 0) cloudSave("userXP", userXP); }, [userXP]);
-  // monthlyBonus saved manually via Salveaza button
+  // monthlyBonus auto-save backup
+  useEffect(function() { if (!loading) debouncedSave("monthlyBonus", monthlyBonus, 2000); }, [monthlyBonus]);
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
   useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
   useEffect(function() { if (!loading) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
@@ -520,7 +521,8 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("slas", slas, 1000); }, [slas]);
   useEffect(function() { if (!loading) debouncedSave("leaves", leaves, 1000); }, [leaves]);
   useEffect(function() { if (!loading) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
-  // branding saved manually via Salveaza button in BrandingPage
+  // branding auto-save backup
+  useEffect(function() { if (!loading) debouncedSave("branding", branding, 2000); }, [branding]);
   useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
   // Apply favicon dynamically
   useEffect(function() {
@@ -4629,12 +4631,10 @@ function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievem
 // MONTHLY LEAGUE — Clasament lunar cu bonus, reset la 1 a lunii
 // ═══════════════════════════════════════════════════════════════
 function BonusConfig({ monthlyBonus, setMonthlyBonus }) {
-  var [form, setForm] = useState(Object.assign({ enabled: false, memberAmount: 0, memberCurrency: "RON", pmAmount: 0, pmCurrency: "RON" }, monthlyBonus || {}));
   var [saved, setSaved] = useState(false);
-  var upd = function(field, val) { setForm(function(p) { var n = Object.assign({}, p); n[field] = val; return n; }); setSaved(false); };
+  var upd = function(field, val) { var n = Object.assign({}, monthlyBonus); n[field] = val; setMonthlyBonus(n); setSaved(false); };
   var doSave = function() {
-    setMonthlyBonus(form);
-    cloudSave("monthlyBonus", form);
+    cloudSave("monthlyBonus", monthlyBonus);
     setSaved(true);
     setTimeout(function() { setSaved(false); }, 3000);
   };
@@ -4642,15 +4642,15 @@ function BonusConfig({ monthlyBonus, setMonthlyBonus }) {
     <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premii Lunare (admin)</div>
     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
       <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-        <input type="checkbox" checked={form.enabled} onChange={function(e) { upd("enabled", e.target.checked); }} style={{ accentColor: "#7C3AED" }} /> Activ
+        <input type="checkbox" checked={monthlyBonus.enabled} onChange={function(e) { upd("enabled", e.target.checked); }} style={{ accentColor: "#7C3AED" }} /> Activ
       </label>
     </div>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
       <div style={{ padding: 12, background: "#EFF6FF", borderRadius: 8, border: "1px solid #BFDBFE" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#2563EB", marginBottom: 8 }}>Premiu Membri (implementare)</div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <input type="number" min="0" step="10" value={form.memberAmount || 0} onChange={function(e) { upd("memberAmount", parseInt(e.target.value) || 0); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
-          <select value={form.memberCurrency || "RON"} onChange={function(e) { upd("memberCurrency", e.target.value); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
+          <input type="number" min="0" step="10" value={monthlyBonus.memberAmount || 0} onChange={function(e) { upd("memberAmount", parseInt(e.target.value) || 0); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+          <select value={monthlyBonus.memberCurrency || "RON"} onChange={function(e) { upd("memberCurrency", e.target.value); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
             <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
           </select>
         </div>
@@ -4658,8 +4658,8 @@ function BonusConfig({ monthlyBonus, setMonthlyBonus }) {
       <div style={{ padding: 12, background: "#F5F3FF", borderRadius: 8, border: "1px solid #DDD6FE" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED", marginBottom: 8 }}>Premiu PM (coordonare)</div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <input type="number" min="0" step="10" value={form.pmAmount || 0} onChange={function(e) { upd("pmAmount", parseInt(e.target.value) || 0); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
-          <select value={form.pmCurrency || "RON"} onChange={function(e) { upd("pmCurrency", e.target.value); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
+          <input type="number" min="0" step="10" value={monthlyBonus.pmAmount || 0} onChange={function(e) { upd("pmAmount", parseInt(e.target.value) || 0); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+          <select value={monthlyBonus.pmCurrency || "RON"} onChange={function(e) { upd("pmCurrency", e.target.value); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
             <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
           </select>
         </div>
