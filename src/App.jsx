@@ -368,6 +368,9 @@ export default function App() {
     { label: "Nimic", color: "#94A3B8", type: "nothing", value: 0, chance: 12 },
   ] });
   var [wheelHistory, setWheelHistory] = useState([]);
+  var [penalties, setPenalties] = useState([]);
+  var [penaltyConfig, setPenaltyConfig] = useState({ thresholds: [{ count: 3, amount: 100 }, { count: 5, amount: 200 }, { count: 10, amount: 500 }] });
+  var [showPenaltyPopup, setShowPenaltyPopup] = useState(null);
   // Undo stack - last 10 actions
   var [undoStack, setUndoStack] = useState([]);
   // User XP & Levels
@@ -381,7 +384,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -414,6 +417,8 @@ export default function App() {
         cloudLoad("monthlyBonus", { memberAmount: 0, memberCurrency: "RON", pmAmount: 0, pmCurrency: "RON", enabled: false }),
         cloudLoad("wheelConfig", null),
         cloudLoad("wheelHistory", []),
+        cloudLoad("penalties", []),
+        cloudLoad("penaltyConfig", null),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -453,6 +458,8 @@ export default function App() {
       if (mb) { if (mb.amount !== undefined && mb.memberAmount === undefined) { mb.memberAmount = mb.amount; mb.memberCurrency = mb.currency || "RON"; mb.pmAmount = 0; mb.pmCurrency = "RON"; } setMonthlyBonus(mb); }
       if (wc) setWheelConfig(wc);
       setWheelHistory(wh || []);
+      setPenalties(pen || []);
+      if (pc) setPenaltyConfig(pc);
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -561,6 +568,7 @@ export default function App() {
   // branding auto-save backup
   useEffect(function() { if (!loading) debouncedSave("branding", branding, 2000); }, [branding]);
   useEffect(function() { if (!loading && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
+  useEffect(function() { if (!loading && penalties.length > 0) debouncedSave("penalties", penalties, 1000); }, [penalties]);
   useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
   // Apply favicon dynamically
   useEffect(function() {
@@ -941,6 +949,22 @@ export default function App() {
       }
     }
     if (t.role === "member") setPage("tasks");
+    // Penalty check - overdue tasks = abatere (once per day)
+    if (t.role !== "admin") {
+      setTimeout(function() {
+        var penKey = "s7_penalty_" + u + "_" + TD;
+        if (!localStorage.getItem(penKey)) {
+          var overdueCount = tasks.filter(function(tk2) { return tk2.assignee === u && isOv(tk2) && !tk2._campaignParent; }).length;
+          if (overdueCount > 0) {
+            localStorage.setItem(penKey, "1");
+            var penEntry = { id: gid(), userId: u, userName: t.name, date: TD, overdueCount: overdueCount, time: ts() };
+            setPenalties(function(p) { return [penEntry].concat(p).slice(0, 1000); });
+            addNotif("anomaly", "ABATERE: " + t.name + " are " + overdueCount + " taskuri intarziate", null, "admin");
+            setShowPenaltyPopup({ user: u, name: t.name, count: overdueCount });
+          }
+        }
+      }, t.role === "member" ? 6000 : 1500);
+    }
     return true;
   };
   var handleLogout = function() { if (user) addLog("LOGOUT", (team[user] ? team[user].name : "") + " a iesit"); setUser(null); localStorage.removeItem("s7_user"); setPage("dashboard"); };
@@ -1341,6 +1365,7 @@ export default function App() {
     { id: "branding", label: "Branding", icon: Icons.settings },
     { id: "config", label: "Configurare Rapida", icon: Icons.filter },
     { id: "wheelSetup", label: "Roata Zilnica", icon: Icons.challenge },
+    { id: "penalizari", label: "Penalizari", icon: Icons.del },
     { id: "pipeline", label: "Pipeline Builder", icon: Icons.dep },
   ];
 
@@ -1349,7 +1374,7 @@ export default function App() {
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
     { label: "Echipa", items: ["workload", "performance", "league", "leagueMonthly", "digest", "achievements", "wallfame", "brandstats"] },
     { label: "Comunicare", items: ["announce"] },
-    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "backups"] },
+    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "penalizari", "backups"] },
   ];
 
   var accessibleNav = navItems.filter(function(n) {
@@ -1379,6 +1404,16 @@ export default function App() {
         if (r.type === "penalty") addNotif("challenge", "Roata zilnica: " + r.label, null, dailyWheelResult.user);
       }} onClose={function() { setDailyWheelResult(null); }} />}
       {achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}
+      {showPenaltyPopup && <div style={{ position: "fixed", inset: 0, background: "rgba(127,29,29,0.85)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ background: "#fff", borderRadius: 20, padding: 30, maxWidth: 440, width: "90%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.4)", border: "4px solid #DC2626" }}>
+          <div style={{ fontSize: 64, marginBottom: 12 }}>⚠️</div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#DC2626", marginBottom: 8 }}>ABATERE INREGISTRATA</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>{showPenaltyPopup.name}, ai {showPenaltyPopup.count} {showPenaltyPopup.count === 1 ? "task intarziat" : "taskuri intarziate"}!</div>
+          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 8 }}>Aceasta abatere a fost inregistrata automat. La acumularea mai multor abateri se aplica penalizari in salariu.</div>
+          <div style={{ fontSize: 12, color: "#DC2626", fontWeight: 700, padding: "8px 16px", background: "#FEF2F2", borderRadius: 8, marginBottom: 16 }}>Finalizeaza taskurile intarziate cat mai repede!</div>
+          <button onClick={function() { setShowPenaltyPopup(null); }} style={{ padding: "12px 40px", fontSize: 15, fontWeight: 700, background: "#DC2626", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer" }}>Am inteles</button>
+        </div>
+      </div>}
       {isMob && mobNav && <div style={S.overlay} onClick={function() { setMobNav(false); }} />}
       <aside style={Object.assign({}, S.sidebar, isMob ? { position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 200, transform: mobNav ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.2s" } : {})}>
         <div style={S.logoArea}>
@@ -1486,6 +1521,7 @@ export default function App() {
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
           {page === "wheelSetup" && <WheelSetupPage wheelConfig={wheelConfig} setWheelConfig={setWheelConfig} team={team} wheelHistory={wheelHistory} />}
+          {page === "penalizari" && <PenalizariPage penalties={penalties} setPenalties={setPenalties} penaltyConfig={penaltyConfig} setPenaltyConfig={setPenaltyConfig} team={team} tasks={tasks} />}
           {page === "pipeline" && <PipelinePage pipelineRules={pipelineRules} setPipelineRules={setPipelineRules} team={team} assUsers={assUsers} shops={shops} taskTypes={taskTypes} departments={departments} platforms={platforms} addLog={addLog} />}
           {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
           {page === "leagueMonthly" && <MonthlyLeaguePage allTasks={tasks} team={team} user={user} me={me} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
@@ -3977,11 +4013,11 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
       <div style={{ fontSize: 12, color: "#64748B" }}>{weekLabel}. Competitia se reseteaza lunea dimineata.</div>
     </div>
 
-    {/* Tab switcher */}
-    <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
+    {/* Tab switcher - members only see their league */}
+    {(me.role === "admin" || me.role === "pm") && <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
       <button onClick={function() { setLeagueTab("members"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "members" ? "#fff" : "transparent", color: leagueTab === "members" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: leagueTab === "members" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>Liga Membrilor ({memberBoard.length})</button>
       <button onClick={function() { setLeagueTab("pm"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "pm" ? "#fff" : "transparent", color: leagueTab === "pm" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: leagueTab === "pm" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>Liga PM-ilor ({pmBoard.length})</button>
-    </div>
+    </div>}
 
     {/* My rank */}
     {myData && <Card style={{ marginBottom: 16, background: myData.color + "08", borderLeft: "4px solid " + myData.color }}>
@@ -4512,7 +4548,7 @@ function EditUserInline({ u, m, team, setTeam }) {
   var curPerms = m.permissions || {};
   var upd = function(field, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { [field]: val }); return n; }); };
   var updPerm = function(perm, val) { setTeam(function(t) { var n = Object.assign({}, t); n[u] = Object.assign({}, n[u], { permissions: Object.assign({}, n[u].permissions || {}, { [perm]: val }) }); return n; }); };
-  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "wallfame", "brandstats", "league", "leagueMonthly", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "backups"];
+  var pages = ["dashboard", "tasks", "kanban", "targets", "templates", "recurring", "leaves", "workload", "performance", "digest", "achievements", "wallfame", "brandstats", "league", "leagueMonthly", "announce", "departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "penalizari", "backups"];
   var pageLabels = {
     dashboard: "Dashboard", tasks: "Taskuri", kanban: "Kanban Board",
     targets: "Targets", templates: "Templates", recurring: "Recurring",
@@ -4521,7 +4557,7 @@ function EditUserInline({ u, m, team, setTeam }) {
     brandstats: "Brand Analytics", league: "Liga Saptamanii", leagueMonthly: "Liga Lunara",
     announce: "Announcements", departments: "Departamente", shops: "Magazine",
     products: "Produse", sheets: "Sheets", manage_users: "Manage Users",
-    branding: "Branding", config: "Configurare Rapida", pipeline: "Pipeline Builder", wheelSetup: "Roata Zilnica",
+    branding: "Branding", config: "Configurare Rapida", pipeline: "Pipeline Builder", wheelSetup: "Roata Zilnica", penalizari: "Penalizari",
     backups: "Backup Taskuri"
   };
   var curAccess = m.access || [];
@@ -4712,6 +4748,138 @@ function CampaignFinalizeModal({ task, onFinalize, onClose }) {
 // ═══════════════════════════════════════════════════════════════
 // WHEEL SETUP — Admin configures daily wheel prizes & chances
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// PENALIZARI — Admin page for tracking violations & salary penalties
+// ═══════════════════════════════════════════════════════════════
+function PenalizariPage({ penalties, setPenalties, penaltyConfig, setPenaltyConfig, team, tasks }) {
+  var [filterFrom, setFilterFrom] = useState("");
+  var [filterTo, setFilterTo] = useState("");
+  var [configForm, setConfigForm] = useState((penaltyConfig || {}).thresholds || [{ count: 3, amount: 100 }, { count: 5, amount: 200 }, { count: 10, amount: 500 }]);
+  var [saved, setSaved] = useState(false);
+
+  var filtered = (penalties || []);
+  if (filterFrom) filtered = filtered.filter(function(p) { return p.date >= filterFrom; });
+  if (filterTo) filtered = filtered.filter(function(p) { return p.date <= filterTo; });
+
+  // Group by user for current month
+  var now = new Date();
+  var monthKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+  var monthPenalties = (penalties || []).filter(function(p) { return p.date && p.date.startsWith(monthKey); });
+  var byUser = {};
+  monthPenalties.forEach(function(p) {
+    if (!byUser[p.userId]) byUser[p.userId] = { name: p.userName, count: 0, totalOverdue: 0, dates: [] };
+    byUser[p.userId].count++;
+    byUser[p.userId].totalOverdue += p.overdueCount || 0;
+    byUser[p.userId].dates.push(p.date);
+  });
+
+  var thresholds = configForm.sort(function(a, b) { return a.count - b.count; });
+
+  var getPenaltyAmount = function(count) {
+    var amount = 0;
+    for (var i = thresholds.length - 1; i >= 0; i--) {
+      if (count >= thresholds[i].count) { amount = thresholds[i].amount; break; }
+    }
+    return amount;
+  };
+
+  var userSummary = Object.keys(byUser).map(function(uid) {
+    var u = byUser[uid];
+    var penAmount = getPenaltyAmount(u.count);
+    return { userId: uid, name: u.name, color: (team[uid] || {}).color || "#94A3B8", count: u.count, totalOverdue: u.totalOverdue, penaltyRON: penAmount, currentOverdue: tasks.filter(function(t) { return t.assignee === uid && isOv(t) && !t._campaignParent; }).length };
+  }).sort(function(a, b) { return b.count - a.count; });
+
+  var totalPenalty = userSummary.reduce(function(a, u) { return a + u.penaltyRON; }, 0);
+
+  var doSave = function() {
+    var cfg = { thresholds: configForm };
+    setPenaltyConfig(cfg);
+    cloudSave("penaltyConfig", cfg);
+    setSaved(true);
+    setTimeout(function() { setSaved(false); }, 3000);
+  };
+
+  var addThreshold = function() { setConfigForm(function(p) { return p.concat([{ count: 0, amount: 0 }]); }); setSaved(false); };
+  var removeThreshold = function(idx) { setConfigForm(function(p) { var n = p.slice(); n.splice(idx, 1); return n; }); setSaved(false); };
+  var updateThreshold = function(idx, field, val) { setConfigForm(function(p) { var n = p.slice(); n[idx] = Object.assign({}, n[idx]); n[idx][field] = parseInt(val) || 0; return n; }); setSaved(false); };
+
+  return <div style={{ maxWidth: 900 }}>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 800, color: "#DC2626", marginBottom: 4 }}>Penalizari si Abateri</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Sistemul inregistreaza automat cate o abatere pe zi pentru fiecare persoana cu taskuri intarziate la login.</div>
+    </div>
+
+    {/* Monthly summary */}
+    <Card style={{ marginBottom: 16, borderLeft: "4px solid #DC2626", background: totalPenalty > 0 ? "#FEF2F2" : "#fff" }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#DC2626", marginBottom: 12 }}>Sumar luna {MN[now.getMonth()]} {now.getFullYear()}</div>
+      {userSummary.length > 0 ? userSummary.map(function(u) {
+        return <div key={u.userId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, borderRadius: 8, background: u.penaltyRON > 0 ? "#FEF2F2" : "#F8FAFC", border: "1px solid " + (u.penaltyRON > 0 ? "#FECACA" : "#E2E8F0") }}>
+          <Av color={u.color} size={32} fs={12} userId={u.userId}>{u.name[0]}</Av>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{u.name}</div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>{u.count} abateri luna asta | {u.currentOverdue} intarziate acum</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: u.penaltyRON > 0 ? "#DC2626" : "#94A3B8" }}>{u.penaltyRON > 0 ? "-" + u.penaltyRON + " RON" : "OK"}</div>
+            <div style={{ fontSize: 10, color: "#94A3B8" }}>{u.count} abateri</div>
+          </div>
+        </div>;
+      }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nicio abatere luna asta.</div>}
+      {totalPenalty > 0 && <div style={{ marginTop: 10, padding: "10px 14px", background: "#DC2626", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Total penalizari salariu:</span>
+        <span style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>-{totalPenalty} RON</span>
+      </div>}
+    </Card>
+
+    {/* Threshold config */}
+    <Card style={{ marginBottom: 16, borderLeft: "3px solid #7C3AED" }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Configurare praguri penalizare</div>
+      <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>Seteaza cate abateri intr-o luna duc la penalizare si cat.</div>
+      {configForm.map(function(t, idx) {
+        return <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: "#64748B", minWidth: 60 }}>De la</span>
+          <input type="number" min="1" value={t.count} onChange={function(e) { updateThreshold(idx, "count", e.target.value); }} style={Object.assign({}, S.input, { width: 60, padding: "6px", textAlign: "center", fontSize: 13, fontWeight: 700 })} />
+          <span style={{ fontSize: 12, color: "#64748B" }}>abateri =</span>
+          <input type="number" min="0" step="10" value={t.amount} onChange={function(e) { updateThreshold(idx, "amount", e.target.value); }} style={Object.assign({}, S.input, { width: 80, padding: "6px", textAlign: "center", fontSize: 13, fontWeight: 700 })} />
+          <span style={{ fontSize: 12, color: "#DC2626", fontWeight: 700 }}>RON penalizare</span>
+          <button onClick={function() { removeThreshold(idx); }} style={{ border: "none", background: "none", color: "#DC2626", cursor: "pointer", fontSize: 16 }}>x</button>
+        </div>;
+      })}
+      <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+        <button style={Object.assign({}, S.cancelBtn, { fontSize: 12 })} onClick={addThreshold}>+ Adauga prag</button>
+        <button style={Object.assign({}, S.primBtn, { fontSize: 12 })} onClick={doSave}>Salveaza Praguri</button>
+        {saved && <span style={{ fontSize: 12, color: GR, fontWeight: 700 }}>Salvat!</span>}
+      </div>
+    </Card>
+
+    {/* Full history with date filter */}
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Istoric abateri ({filtered.length})</div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: "#94A3B8" }}>De la:</span>
+          <input type="date" style={Object.assign({}, S.fSel, { padding: "4px 8px", fontSize: 11 })} value={filterFrom} onChange={function(e) { setFilterFrom(e.target.value); }} />
+          <span style={{ fontSize: 11, color: "#94A3B8" }}>Pana la:</span>
+          <input type="date" style={Object.assign({}, S.fSel, { padding: "4px 8px", fontSize: 11 })} value={filterTo} onChange={function(e) { setFilterTo(e.target.value); }} />
+          {(filterFrom || filterTo) && <button style={{ border: "none", background: "none", color: "#DC2626", fontSize: 11, cursor: "pointer", fontWeight: 600 }} onClick={function() { setFilterFrom(""); setFilterTo(""); }}>Reset</button>}
+        </div>
+      </div>
+      {filtered.length > 0 ? filtered.slice(0, 100).map(function(p, i) {
+        var pu = team[p.userId] || {};
+        return <div key={p.id || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", marginBottom: 4, borderRadius: 6, background: "#FEF2F2", border: "1px solid #FECACA" }}>
+          <span style={{ fontSize: 16 }}>⚠️</span>
+          <Av color={pu.color || "#94A3B8"} size={24} fs={9} userId={p.userId}>{(pu.name || "?")[0]}</Av>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#1E293B" }}>{p.userName || p.userId}</div>
+            <div style={{ fontSize: 10, color: "#64748B" }}>{p.date} | {p.overdueCount} taskuri intarziate</div>
+          </div>
+          <div style={{ fontSize: 10, color: "#94A3B8" }}>{ff(p.time)}</div>
+        </div>;
+      }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt abateri.</div>}
+    </Card>
+  </div>;
+}
+
 function WheelSetupPage({ wheelConfig, setWheelConfig, team, wheelHistory }) {
   var [form, setForm] = useState(Object.assign({ enabled: true, prizes: [] }, wheelConfig || {}));
   var [saved, setSaved] = useState(false);
@@ -5275,7 +5443,7 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
     </div>
 
     {/* Bonus Banners */}
-    {monthlyBonus && monthlyBonus.enabled && (monthlyBonus.memberAmount > 0 || monthlyBonus.pmAmount > 0) && <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
+    {monthlyBonus && monthlyBonus.enabled && (monthlyBonus.memberAmount > 0 || (monthlyBonus.pmAmount > 0 && me.role !== "member")) && <div style={{ display: "grid", gridTemplateColumns: isMob || me.role === "member" ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
       {monthlyBonus.memberAmount > 0 && <Card style={{ background: "linear-gradient(135deg, #FEFCE8, #FEF3C7 40%, #FFF 80%)", borderLeft: "4px solid #EAB308", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: -10, right: -5, fontSize: 60, opacity: 0.06 }}>💰</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -5291,7 +5459,7 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
           <div><div style={{ fontSize: 12, fontWeight: 700 }}>{memberBoard[0].name}</div><div style={{ fontSize: 10, color: "#64748B" }}>{memberBoard[0].score} pts</div></div>
         </div>}
       </Card>}
-      {monthlyBonus.pmAmount > 0 && <Card style={{ background: "linear-gradient(135deg, #F5F3FF, #EDE9FE 40%, #FFF 80%)", borderLeft: "4px solid #7C3AED", position: "relative", overflow: "hidden" }}>
+      {me.role !== "member" && monthlyBonus.pmAmount > 0 && <Card style={{ background: "linear-gradient(135deg, #F5F3FF, #EDE9FE 40%, #FFF 80%)", borderLeft: "4px solid #7C3AED", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: -10, right: -5, fontSize: 60, opacity: 0.06 }}>💰</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ fontSize: 36 }}>🏆</div>
@@ -5319,11 +5487,11 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
       </div>
     </Card>
 
-    {/* Tab switcher: Members vs PMs */}
-    <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
+    {/* Tab switcher: Members vs PMs - members only see their league */}
+    {(me.role === "admin" || me.role === "pm") && <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
       <button onClick={function() { setLeagueTab("members"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "members" ? "#fff" : "transparent", color: leagueTab === "members" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: leagueTab === "members" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>Liga Membrilor ({memberBoard.length})</button>
       <button onClick={function() { setLeagueTab("pm"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "pm" ? "#fff" : "transparent", color: leagueTab === "pm" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: leagueTab === "pm" ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>Liga PM-ilor ({pmBoard.length})</button>
-    </div>
+    </div>}
 
     {/* My position */}
     {myData && <Card style={{ marginBottom: 16, background: myData.color + "08", borderLeft: "4px solid " + myData.color }}>
