@@ -371,6 +371,8 @@ export default function App() {
   var [penalties, setPenalties] = useState([]);
   var [penaltyConfig, setPenaltyConfig] = useState({ thresholds: [{ count: 3, amount: 100 }, { count: 5, amount: 200 }, { count: 10, amount: 500 }] });
   var [showPenaltyPopup, setShowPenaltyPopup] = useState(null);
+  // Task Activity / Audit Trail
+  var [taskActivity, setTaskActivity] = useState([]);
   // Undo stack - last 10 actions
   var [undoStack, setUndoStack] = useState([]);
   // User XP & Levels
@@ -384,7 +386,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc, ta] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -419,6 +421,7 @@ export default function App() {
         cloudLoad("wheelHistory", []),
         cloudLoad("penalties", []),
         cloudLoad("penaltyConfig", null),
+        cloudLoad("taskActivity", []),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       setTasks(tk || []);
@@ -460,6 +463,7 @@ export default function App() {
       setWheelHistory(wh || []);
       setPenalties(pen || []);
       if (pc) setPenaltyConfig(pc);
+      setTaskActivity(ta || []);
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -592,6 +596,33 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("branding", branding, 2000); }, [branding]);
   useEffect(function() { if (!loading && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
   useEffect(function() { if (!loading && penalties.length > 0) debouncedSave("penalties", penalties, 1000); }, [penalties]);
+  useEffect(function() { if (!loading && taskActivity.length > 0) debouncedSave("taskActivity", taskActivity, 1500); }, [taskActivity]);
+
+  // Feature 6: Auto-escalare admin - tasks overdue 5+ days
+  useEffect(function() {
+    if (loading || !user || user !== "admin" || tasks.length === 0) return;
+    var checkEscalation = function() {
+      var now = Date.now();
+      var escalKey = "s7_escalation_" + TD;
+      var already = {};
+      try { var stored = localStorage.getItem(escalKey); if (stored) already = JSON.parse(stored); } catch(e) {}
+      tasks.forEach(function(t) {
+        if (t.status === "Done" || t._campaignParent || !t.deadline) return;
+        var daysOver = Math.floor((now - new Date(t.deadline).getTime()) / 86400000);
+        if (daysOver >= 5 && !already[t.id]) {
+          var assigneeName = (team[t.assignee] || {}).name || t.assignee;
+          var pmKey = (team[t.assignee] || {}).pm;
+          var pmName = pmKey ? (team[pmKey] || {}).name || pmKey : "N/A";
+          addNotif("anomaly", "ESCALARE: \"" + t.title + "\" intarziat " + daysOver + " zile (" + assigneeName + ", PM: " + pmName + ")", t.id, "admin");
+          already[t.id] = true;
+        }
+      });
+      try { localStorage.setItem(escalKey, JSON.stringify(already)); } catch(e) {}
+    };
+    var timeout = setTimeout(checkEscalation, 5000);
+    var interval = setInterval(checkEscalation, 300000); // every 5 min
+    return function() { clearTimeout(timeout); clearInterval(interval); };
+  }, [loading, user, tasks]);
   useEffect(function() { try { localStorage.setItem("s7_nav_groups", JSON.stringify(expandedGroups)); } catch(e) {} }, [expandedGroups]);
   // Apply favicon dynamically
   useEffect(function() {
@@ -836,6 +867,9 @@ export default function App() {
   useEffect(function() { if (!user) return; var fn = function() { setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); return n; }); }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
 
   var addLog = useCallback(function(a, d) { setLogs(function(p) { return [{ id: gid(), user: user || "?", action: a, detail: d, time: ts() }].concat(p).slice(0, 500); }); }, [user]);
+  var addActivity = useCallback(function(taskId, taskTitle, action, details) {
+    setTaskActivity(function(p) { return [{ id: gid(), taskId: taskId, taskTitle: taskTitle, action: action, details: details || "", user: user || "?", userName: (team[user] || {}).name || "?", time: ts() }].concat(p).slice(0, 3000); });
+  }, [user, team]);
   var addNotif = function(type, message, taskId, forUser) {
     var notif = { id: gid(), type: type, taskId: taskId || null, message: message, time: ts(), read: false, forUser: forUser || null };
     setNotifications(function(p) { return [notif].concat(p); });
@@ -1087,6 +1121,22 @@ export default function App() {
       var autoPrio = autoPriority(t.deadline, t.priority);
       setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, t, { priority: autoPrio, updatedAt: ts() }) : x; }); });
       addLog("EDIT", (team[user] ? team[user].name : "") + " a editat \"" + t.title + "\"");
+      // Audit trail: track what changed
+      if (existing) {
+        var changes = [];
+        if (existing.title !== t.title) changes.push("titlu: \"" + existing.title + "\" -> \"" + t.title + "\"");
+        if (existing.assignee !== t.assignee) changes.push("asignat: " + ((team[existing.assignee] || {}).name || existing.assignee) + " -> " + ((team[t.assignee] || {}).name || t.assignee));
+        if (existing.deadline !== t.deadline) changes.push("deadline: " + (existing.deadline || "fara") + " -> " + (t.deadline || "fara"));
+        if (existing.priority !== t.priority) changes.push("prioritate: " + existing.priority + " -> " + t.priority);
+        if (existing.status !== t.status) changes.push("status: " + existing.status + " -> " + t.status);
+        if (existing.description !== t.description) changes.push("descriere modificata");
+        if (existing.shop !== t.shop) changes.push("shop: " + (existing.shop || "-") + " -> " + (t.shop || "-"));
+        if (existing.department !== t.department) changes.push("dept: " + (existing.department || "-") + " -> " + (t.department || "-"));
+        if (existing.platform !== t.platform) changes.push("platforma: " + (existing.platform || "-") + " -> " + (t.platform || "-"));
+        if (JSON.stringify(existing.links || []) !== JSON.stringify(t.links || [])) changes.push("linkuri modificate");
+        if (JSON.stringify(existing.subtasks || []) !== JSON.stringify(t.subtasks || [])) changes.push("subtaskuri modificate");
+        addActivity(t.id, t.title, "EDIT", changes.join("; ") || "modificari minore");
+      }
       // FEATURE 16: clear editor lock
       setTaskEditors(function(p) { var n = Object.assign({}, p); delete n[t.id]; return n; });
     } else {
@@ -1149,6 +1199,7 @@ export default function App() {
         var nt = Object.assign({}, t, { id: gid(), priority: autoPrio2, tags: t.tags || [], createdBy: user, createdAt: ts(), updatedAt: ts() });
         setTasks(function(p) { return [nt].concat(p); });
         addLog("NEW", (team[user] ? team[user].name : "") + " -> \"" + t.title + "\"");
+        addActivity(nt.id, t.title, "CREATE", "asignat: " + ((team[t.assignee] || {}).name || t.assignee) + ", shop: " + (t.shop || "-") + ", deadline: " + (t.deadline || "fara"));
         if (t.assignee && t.assignee !== user) addNotif("assigned", "Task nou: \"" + t.title + "\"", nt.id, t.assignee);
         setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[nt.id] = [{ status: "To Do", at: ts() }]; return n; });
       }
@@ -1182,8 +1233,8 @@ export default function App() {
     addLog("EXPLODE", "Split: " + t.title + " -> " + childTasks.length + " taskuri");
   };
 
-  var delTask = function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) { pushUndo("DELETE_TASK", Object.assign({}, t)); addLog("DELETE", "Sters \"" + t.title + "\""); } setTasks(function(p) { return p.filter(function(x) { return x.id !== tid; }); }); };
-  var dupTask = function(t) { var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) }); setTasks(function(p) { return [nt].concat(p); }); addLog("DUPLICATE", "Duplicat \"" + t.title + "\""); };
+  var delTask = function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) { pushUndo("DELETE_TASK", Object.assign({}, t)); addLog("DELETE", "Sters \"" + t.title + "\""); addActivity(tid, t.title, "DELETE", "sters de " + ((team[user] || {}).name || user)); } setTasks(function(p) { return p.filter(function(x) { return x.id !== tid; }); }); };
+  var dupTask = function(t) { var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) }); setTasks(function(p) { return [nt].concat(p); }); addLog("DUPLICATE", "Duplicat \"" + t.title + "\""); addActivity(nt.id, nt.title, "DUPLICATE", "duplicat din \"" + t.title + "\""); };
 
   var canChgDeps = function(tid, newSt) {
     var t = tasks.find(function(x) { return x.id === tid; });
@@ -1201,7 +1252,7 @@ export default function App() {
       setShowFinalize(prevTask); return;
     }
     setTasks(function(p) { return p.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts() }) : x; }); });
-    if (prevTask) { pushUndo("STATUS_CHANGE", { taskId: tid, title: prevTask.title, oldStatus: prevTask.status }); addLog("STATUS", "\"" + prevTask.title + "\" -> " + st); }
+    if (prevTask) { pushUndo("STATUS_CHANGE", { taskId: tid, title: prevTask.title, oldStatus: prevTask.status }); addLog("STATUS", "\"" + prevTask.title + "\" -> " + st); addActivity(tid, prevTask.title, "STATUS", prevTask.status + " -> " + st); }
     setStatusHistory(function(prev) { var n = Object.assign({}, prev); if (!n[tid]) n[tid] = []; n[tid] = n[tid].concat([{ status: st, at: ts() }]); return n; });
 
     // FEATURE 1: Notify on status change - notify assignee
@@ -1477,9 +1528,13 @@ export default function App() {
             if (groupItems.length === 0) return null;
             var renderItem = function(n) {
               var myActiveCount = n.id === "tasks" ? tasks.filter(function(t) { return t.assignee === user && t.status !== "Done" && !t._campaignParent; }).length : null;
+              var pmOverdueCount = (n.id === "dashboard" && me.role === "pm") ? tasks.filter(function(t) { return (me.team || []).includes(t.assignee) && isOv(t) && t.status !== "Done" && !t._campaignParent; }).length : 0;
+              var adminOverdueCount = (n.id === "dashboard" && me.role === "admin") ? tasks.filter(function(t) { return t.status !== "Done" && isOv(t) && !t._campaignParent; }).length : 0;
+              var overdueCount = pmOverdueCount || adminOverdueCount;
               return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}>
                 <Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} />
                 <span style={{ flex: 1 }}>{n.label}</span>
+                {n.id === "dashboard" && overdueCount > 0 && <span style={{ fontSize: 10, background: "#DC2626", color: "#fff", padding: "2px 7px", borderRadius: 10, fontWeight: 800, minWidth: 18, textAlign: "center", animation: "pulse 2s infinite", boxShadow: "0 0 8px rgba(220,38,38,0.5)" }}>{overdueCount}</span>}
                 {n.id === "tasks" && myActiveCount > 0 && <span style={{ fontSize: 11, background: "#16A34A", color: "#fff", padding: "2px 8px", borderRadius: 12, fontWeight: 700, minWidth: 20, textAlign: "center", boxShadow: "0 1px 4px rgba(22,163,74,0.4)", animation: myActiveCount > 0 ? "pulse 2s infinite" : "none" }}>{myActiveCount}</span>}
                 {n.id !== "tasks" && n.count != null && <span style={S.navBadge}>{n.count}</span>}
                 {n.id === "anomalies" && anomalies.length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626" }} />}
@@ -1559,7 +1614,7 @@ export default function App() {
           </Card>}
           {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
           {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
-          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} monthlyBonus={monthlyBonus} logs={logs} />}
+          {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} monthlyBonus={monthlyBonus} logs={logs} taskActivity={taskActivity} shops={shops} departments={departments} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} visTasks={visTasks} />}
           {page === "kanban" && <KanbanPage fProps={fProps} tasks={filtered} user={user} team={team} onView={setViewTask} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onDel={delTask} onDup={dupTask} onChgSt={chgSt} dragId={dragId} setDragId={setDragId} handleDrop={handleDrop} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} />}
@@ -1596,7 +1651,7 @@ export default function App() {
         </div>
       </main>
       {showAdd && <TaskModal task={editTask} team={team} assUsers={assUsers} shops={shops} products={products} onSave={saveTask} onClose={function() { setShowAdd(false); setEditTask(null); localStorage.removeItem("scout_task_draft"); }} taskTypes={taskTypes} departments={departments} allTasks={tasks} allTags={allTags} taskEditors={taskEditors} user={user} setTaskEditors={setTaskEditors} leaves={leaves} platforms={platforms} />}
-      {viewTask && <ViewTaskModal task={viewTask} team={team} user={user} tasks={tasks} setTasks={setTasks} timers={timers} getTS={getTS} togTimer={togTimer} products={products} onClose={function() { setViewTask(null); }} onEdit={function() { setEditTask(viewTask); setViewTask(null); setShowAdd(true); }} statusHistory={statusHistory} isAdmin={isAdmin} />}
+      {viewTask && <ViewTaskModal task={viewTask} team={team} user={user} tasks={tasks} setTasks={setTasks} timers={timers} getTS={getTS} togTimer={togTimer} products={products} onClose={function() { setViewTask(null); }} onEdit={function() { setEditTask(viewTask); setViewTask(null); setShowAdd(true); }} statusHistory={statusHistory} isAdmin={isAdmin} taskActivity={taskActivity} />}
       {showFinalize && <CampaignFinalizeModal task={showFinalize} onFinalize={function(count) {
         var tid = showFinalize.id;
         setTasks(function(p) { return p.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: "Done", updatedAt: ts(), _finalized: true, _finalizedCount: count }) : x; }); });
@@ -1709,7 +1764,17 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
     var uOverdue = uTasks.filter(function(t) { return t.status !== "Done" && isOv(t); }).length;
     var uTarget = targets.find(function(tg) { return tg.userId === u && tg.active !== false; });
     var perf = getPerf(u);
-    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneWeek: uDoneWeek, doneToday: uDoneToday, active: uActive, overdue: uOverdue, target: uTarget, perf: perf, onLeave: isOnLeave(leaves, u, TD) };
+    // Feature 4: Negative streak - consecutive days with overdue tasks
+    var negStreak = 0;
+    if (uOverdue > 0) {
+      var oldestOverdue = null;
+      uTasks.filter(function(t) { return t.status !== "Done" && isOv(t); }).forEach(function(t) {
+        var dlDate = new Date(t.deadline).getTime();
+        if (!oldestOverdue || dlDate < oldestOverdue) oldestOverdue = dlDate;
+      });
+      if (oldestOverdue) negStreak = Math.floor((Date.now() - oldestOverdue) / 86400000);
+    }
+    return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", doneWeek: uDoneWeek, doneToday: uDoneToday, active: uActive, overdue: uOverdue, target: uTarget, perf: perf, onLeave: isOnLeave(leaves, u, TD), negStreak: negStreak };
   }).sort(function(a, b) { return b.doneWeek - a.doneWeek; });
   var maxUserPerf = Math.max.apply(null, userPerf.map(function(p) { return p.doneWeek; }).concat([1]));
 
@@ -1799,6 +1864,103 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
         </Card>
       </div>
 
+      {/* GRIJA DE ECHIPA - alerts section */}
+      {(function() {
+        var alerts = [];
+        // Members with overdue tasks, sorted by count
+        userPerf.forEach(function(up) {
+          if (up.onLeave) return;
+          if (up.overdue > 0) {
+            var ovTasks = teamTasks.filter(function(t2) { return t2.assignee === up.user && isOv(t2) && t2.status !== "Done"; });
+            var maxDays = 0;
+            ovTasks.forEach(function(ot) { var d = Math.floor((Date.now() - new Date(ot.deadline).getTime()) / 86400000); if (d > maxDays) maxDays = d; });
+            alerts.push({ type: "overdue", user: up.user, name: up.name, color: up.color, count: up.overdue, maxDays: maxDays, tasks: ovTasks, severity: maxDays >= 3 ? "critical" : maxDays >= 1 ? "warning" : "info" });
+          }
+          // Zero activity today but has active tasks
+          if (up.doneToday === 0 && up.active > 0) {
+            alerts.push({ type: "inactive", user: up.user, name: up.name, color: up.color, active: up.active, severity: "info" });
+          }
+        });
+        alerts.sort(function(a2, b2) { var sev = { critical: 0, warning: 1, info: 2 }; return (sev[a2.severity] || 2) - (sev[b2.severity] || 2); });
+        if (alerts.length === 0) return <Card style={{ marginBottom: 16, borderLeft: "3px solid " + GR, background: "#F0FDF4" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18 }}>✓</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: GR }}>Echipa e pe verde</div>
+              <div style={{ fontSize: 11, color: "#64748B" }}>Nicio problema detectata azi.</div>
+            </div>
+          </div>
+        </Card>;
+        return <Card style={{ marginBottom: 16, border: "1px solid #FECACA", background: "#FEF2F2" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#DC2626" }}>GRIJA DE ECHIPA</div>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "#DC2626", padding: "1px 7px", borderRadius: 8 }}>{alerts.length}</span>
+          </div>
+          {alerts.map(function(al, idx) {
+            var SEV_C = { critical: "#991B1B", warning: "#D97706", info: "#64748B" };
+            var SEV_BG = { critical: "#FEE2E2", warning: "#FEF3C7", info: "#F8FAFC" };
+            return <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, background: SEV_BG[al.severity], marginBottom: 4, borderLeft: "3px solid " + SEV_C[al.severity] }}>
+              <Av color={al.color} size={28} fs={11}>{al.name[0]}</Av>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B" }}>{al.name}</div>
+                {al.type === "overdue" && <div style={{ fontSize: 11, color: SEV_C[al.severity] }}>
+                  {al.count} {al.count === 1 ? "task intarziat" : "taskuri intarziate"}{al.maxDays >= 2 ? " (max " + al.maxDays + " zile)" : ""}
+                </div>}
+                {al.type === "inactive" && <div style={{ fontSize: 11, color: "#64748B" }}>0 taskuri finalizate azi, {al.active} active</div>}
+              </div>
+              {al.type === "overdue" && <button onClick={function() { setPmKpiModal({ title: "Intarziate - " + al.name, color: "#DC2626", tasks: al.tasks }); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 10, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Vezi</button>}
+            </div>;
+          })}
+        </Card>;
+      })()}
+
+      {/* Feature 5: PM Weekly Scorecard */}
+      {(function() {
+        var now = new Date();
+        var dayOfWeek = now.getDay();
+        var mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        // Last week range
+        var lastMonday = new Date(); lastMonday.setDate(lastMonday.getDate() - mondayOffset - 7);
+        var lastFriday = new Date(); lastFriday.setDate(lastFriday.getDate() - mondayOffset - 2);
+        var lastMondayStr = ds(lastMonday);
+        var lastFridayStr = ds(lastFriday);
+        // This week range (partial)
+        var thisMonday = new Date(); thisMonday.setDate(thisMonday.getDate() - mondayOffset);
+        var thisMondayStr = ds(thisMonday);
+
+        var lastWeekTasks = teamTasks.filter(function(t2) { return t2.status === "Done" && t2.updatedAt && ds(t2.updatedAt) >= lastMondayStr && ds(t2.updatedAt) <= lastFridayStr; });
+        var thisWeekTasks = teamTasks.filter(function(t2) { return t2.status === "Done" && t2.updatedAt && ds(t2.updatedAt) >= thisMondayStr; });
+        var lastWeekOverdue = teamTasks.filter(function(t2) { return t2.deadline >= lastMondayStr && t2.deadline <= lastFridayStr && t2.status !== "Done" && isOv(t2); }).length;
+        var lastWeekOnTime = lastWeekTasks.filter(function(t2) { return !t2.deadline || ds(t2.updatedAt) <= t2.deadline; }).length;
+        var onTimePct = lastWeekTasks.length > 0 ? Math.round((lastWeekOnTime / lastWeekTasks.length) * 100) : 0;
+        var weekDelta = lastWeekTasks.length > 0 ? Math.round(((thisWeekTasks.length - lastWeekTasks.length) / lastWeekTasks.length) * 100) : (thisWeekTasks.length > 0 ? 100 : 0);
+        var lastWeekPenalties = (penalties || []).filter(function(p) { return (me.team || []).includes(p.userId) && p.date >= lastMondayStr && p.date <= lastFridayStr; }).length;
+
+        return <Card style={{ marginBottom: 16, borderTop: "3px solid #7C3AED" }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#1E293B", marginBottom: 2 }}>Scorecard saptamanal</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 12 }}>Saptamana trecuta: {lastMonday.getDate()} - {lastFriday.getDate()} {MN[lastFriday.getMonth()]}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+            <div style={{ textAlign: "center", padding: "8px 4px", borderRadius: 6, background: "#F0FDF4" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: GR }}>{lastWeekTasks.length}</div>
+              <div style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>Done</div>
+            </div>
+            <div style={{ textAlign: "center", padding: "8px 4px", borderRadius: 6, background: onTimePct >= 80 ? "#F0FDF4" : "#FEF3C7" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: onTimePct >= 80 ? GR : "#D97706" }}>{onTimePct}%</div>
+              <div style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>On time</div>
+            </div>
+            <div style={{ textAlign: "center", padding: "8px 4px", borderRadius: 6, background: lastWeekPenalties > 0 ? "#FEF2F2" : "#F8FAFC" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: lastWeekPenalties > 0 ? "#DC2626" : "#94A3B8" }}>{lastWeekPenalties}</div>
+              <div style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>Penalizari</div>
+            </div>
+            <div style={{ textAlign: "center", padding: "8px 4px", borderRadius: 6, background: "#EFF6FF" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: weekDelta >= 0 ? GR : "#DC2626" }}>{weekDelta >= 0 ? "+" : ""}{weekDelta}%</div>
+              <div style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>vs sapt. asta</div>
+            </div>
+          </div>
+        </Card>;
+      })()}
+
       {/* Team target aggregate */}
       {teamTargetTotal > 0 && <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -1871,6 +2033,10 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
                   <div style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>Intarziate</div>
                 </div>
               </div>
+              {up.negStreak >= 3 && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: up.negStreak >= 7 ? "#FEE2E2" : "#FEF3C7", borderRadius: 6, marginBottom: 8, border: "1px solid " + (up.negStreak >= 7 ? "#FECACA" : "#FDE68A") }}>
+                <span style={{ fontSize: 14 }}>{up.negStreak >= 7 ? "🔥" : "⚠️"}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: up.negStreak >= 7 ? "#991B1B" : "#92400E" }}>{up.negStreak} zile consecutive cu intarzieri</span>
+              </div>}
 
               {/* Target */}
               {up.target && !up.onLeave && <div>
@@ -2186,6 +2352,39 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
         </div>
       </Card>
     </div>}
+
+    {/* Feature 3: Deadline approaching warning */}
+    {(function() {
+      var deadlineToday = activeTasks.filter(function(t) { return isTd(t.deadline) && t.status !== "Done"; });
+      var deadlineTomorrow = activeTasks.filter(function(t) { return isTm(t.deadline) && t.status !== "Done"; });
+      if (deadlineToday.length === 0 && deadlineTomorrow.length === 0) return null;
+      return <Card style={{ marginBottom: 12, border: "1px solid " + (deadlineToday.length > 0 ? "#FECACA" : "#FDE68A"), background: deadlineToday.length > 0 ? "#FEF2F2" : "#FEFCE8" }}>
+        {deadlineToday.length > 0 && <div style={{ marginBottom: deadlineTomorrow.length > 0 ? 10 : 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#DC2626" }}>DEADLINE AZI - {deadlineToday.length} {deadlineToday.length === 1 ? "task" : "taskuri"}</span>
+          </div>
+          {deadlineToday.map(function(t) {
+            return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderRadius: 4, background: "#fff", marginBottom: 2, fontSize: 12 }}>
+              <Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge>
+              <span style={{ fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
+              {t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}
+            </div>;
+          })}
+        </div>}
+        {deadlineTomorrow.length > 0 && <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#92400E" }}>DEADLINE MAINE - {deadlineTomorrow.length} {deadlineTomorrow.length === 1 ? "task" : "taskuri"}</span>
+          </div>
+          {deadlineTomorrow.map(function(t) {
+            return <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderRadius: 4, background: "#fff", marginBottom: 2, fontSize: 12 }}>
+              <Badge bg={SC[t.status] + "18"} color={SC[t.status]}>{t.status}</Badge>
+              <span style={{ fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
+            </div>;
+          })}
+        </div>}
+      </Card>;
+    })()}
 
     {/* Your tasks teaser */}
     {memLayout.tasks !== false && activeTasks.length > 0 && <Card>
@@ -2517,7 +2716,7 @@ function AdminInsights({ allTasks, team, visUsers, timers, isMob, setPage }) {
   </div>;
 }
 
-function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves, setPage, achievements, monthlyBonus, logs }) {
+function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPerf, isMob, onClickUser, targets, loginTrack, allTasks, slaBreaches, me, anomalies, dailyChallenge, announcements, user, setAnnouncements, leaves, setPage, achievements, monthlyBonus, logs, taskActivity, shops, departments }) {
   var [dashFrom, setDashFrom] = useState(TD);
   var [kpiModal, setKpiModal] = useState(null);
   var [dashTo, setDashTo] = useState(TD);
@@ -2528,7 +2727,7 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     try { var saved = localStorage.getItem("s7_dash_layout"); if (saved) {
       var parsed = JSON.parse(saved);
       // Migrate: add new blocks if missing
-      var allIds = ["kpiRow", "aziVsIeri", "live", "podium", "velocity", "taskFlow", "weekVsLast", "monthProgress", "platformSplit", "efficiency", "workloadMap", "slaCompliance", "activityFeed", "insights", "team"];
+      var allIds = ["kpiRow", "aziVsIeri", "live", "podium", "velocity", "taskFlow", "weekVsLast", "monthProgress", "platformSplit", "efficiency", "workloadMap", "slaCompliance", "activityFeed", "insights", "team", "brandAnalytics", "dailyOutputFeed", "shopHealth", "deptWorkload"];
       var existing = parsed.map(function(b) { return b.id; });
       var newBlocks = allIds.filter(function(id) { return !existing.includes(id); }).map(function(id) { return { id: id, visible: true }; });
       if (newBlocks.length > 0) return parsed.concat(newBlocks);
@@ -2549,7 +2748,8 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
       { id: "slaCompliance", visible: true },
       { id: "activityFeed", visible: true },
       { id: "insights", visible: true },
-      { id: "team", visible: true }
+      { id: "team", visible: true },
+      { id: "brandAnalytics", visible: true }
     ];
   });
   useEffect(function() { try { localStorage.setItem("s7_dash_layout", JSON.stringify(dashLayout)); } catch(e) {} }, [dashLayout]);
@@ -2588,7 +2788,8 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
       { id: "slaCompliance", visible: true },
       { id: "activityFeed", visible: true },
       { id: "insights", visible: true },
-      { id: "team", visible: true }
+      { id: "team", visible: true },
+      { id: "brandAnalytics", visible: true }
     ]);
   };
 
@@ -2607,7 +2808,11 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
     slaCompliance: "SLA per Magazin",
     activityFeed: "Activity Feed (live)",
     insights: "Admin Insights (grafice, alerts)",
-    team: "Cardurile Echipei"
+    team: "Cardurile Echipei",
+    brandAnalytics: "Brand & Product Analytics",
+    dailyOutputFeed: "Daily Output Feed",
+    shopHealth: "Shop Health Score",
+    deptWorkload: "Department Workload"
   };
 
   var setPreset = function(p) {
@@ -2913,6 +3118,256 @@ function DashPage({ stats, tasks, team, visUsers, sessions, timers, getTS, getPe
           </Card>;
         }
 
+        if (id === "shopHealth") {
+          var shList = (shops || DEF_SHOPS);
+          var shScores = shList.map(function(sh) {
+            var shTasks = allTasks.filter(function(t2) { return t2.shop === sh && !t2._campaignParent; });
+            if (shTasks.length === 0) return null;
+            var shDone = shTasks.filter(function(t2) { return t2.status === "Done"; });
+            var shActive = shTasks.filter(function(t2) { return t2.status !== "Done"; });
+            var shOverdue = shActive.filter(function(t2) { return isOv(t2); });
+            var onTime = shDone.filter(function(t2) { return !t2.deadline || (t2.updatedAt && ds(t2.updatedAt) <= t2.deadline); }).length;
+            var onTimePct = shDone.length > 0 ? Math.round((onTime / shDone.length) * 100) : 0;
+            // Avg days to complete
+            var completionDays = shDone.filter(function(t2) { return t2.createdAt && t2.updatedAt; }).map(function(t2) { return Math.max(0, Math.floor((new Date(t2.updatedAt).getTime() - new Date(t2.createdAt).getTime()) / 86400000)); });
+            var avgDays = completionDays.length > 0 ? (completionDays.reduce(function(a2, b2) { return a2 + b2; }, 0) / completionDays.length).toFixed(1) : "-";
+            // Last delivery
+            var lastDone = shDone.sort(function(a2, b2) { return new Date(b2.updatedAt || 0).getTime() - new Date(a2.updatedAt || 0).getTime(); })[0];
+            var lastDays = lastDone && lastDone.updatedAt ? Math.floor((Date.now() - new Date(lastDone.updatedAt).getTime()) / 86400000) : null;
+            // Health score: 40% on-time + 30% no-overdue + 30% recency
+            var overduePenalty = shActive.length > 0 ? Math.max(0, 100 - (shOverdue.length / shActive.length) * 100) : 100;
+            var recencyScore = lastDays !== null ? Math.max(0, 100 - lastDays * 15) : 50;
+            var health = Math.round(onTimePct * 0.4 + overduePenalty * 0.3 + recencyScore * 0.3);
+            return { shop: sh, health: health, total: shTasks.length, done: shDone.length, active: shActive.length, overdue: shOverdue.length, onTimePct: onTimePct, avgDays: avgDays, lastDays: lastDays };
+          }).filter(Boolean).sort(function(a2, b2) { return b2.health - a2.health; });
+
+          return <Card>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Shop Health Score</div>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 14 }}>Scor: 40% on-time + 30% no-overdue + 30% recency</div>
+            {shScores.map(function(sh) {
+              var hColor = sh.health >= 70 ? GR : sh.health >= 40 ? "#D97706" : "#DC2626";
+              return <div key={sh.shop} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, marginBottom: 6, background: "#F8FAFC", borderLeft: "3px solid " + hColor }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: hColor + "15", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 16, fontWeight: 900, color: hColor }}>{sh.health}</span>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{sh.shop}</div>
+                  <div style={{ display: "flex", gap: 8, fontSize: 10, color: "#64748B", marginTop: 2 }}>
+                    <span>{sh.done} done</span>
+                    <span>{sh.active} active</span>
+                    {sh.overdue > 0 && <span style={{ color: "#DC2626", fontWeight: 700 }}>{sh.overdue} overdue</span>}
+                    <span>On-time: {sh.onTimePct}%</span>
+                    <span>Avg: {sh.avgDays}z</span>
+                    {sh.lastDays !== null && <span>{sh.lastDays === 0 ? "Livrat azi" : "Ultima livrare: " + sh.lastDays + "z"}</span>}
+                  </div>
+                </div>
+              </div>;
+            })}
+            {shScores.length === 0 && <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Niciun shop cu taskuri.</div>}
+          </Card>;
+        }
+
+        if (id === "deptWorkload") {
+          var depts2 = departments || DEF_DEPARTMENTS;
+          var totalActive2 = allTasks.filter(function(t2) { return t2.status !== "Done" && !t2._campaignParent; }).length;
+          var deptData2 = depts2.map(function(dp) {
+            var dpTasks = allTasks.filter(function(t2) { return t2.department === dp && !t2._campaignParent; });
+            var dpActive = dpTasks.filter(function(t2) { return t2.status !== "Done"; }).length;
+            var dpDone = dpTasks.filter(function(t2) { return t2.status === "Done"; }).length;
+            var dpOverdue = dpTasks.filter(function(t2) { return isOv(t2); }).length;
+            var dpDoneToday = dpTasks.filter(function(t2) { return t2.status === "Done" && t2.updatedAt && ds(t2.updatedAt) === TD; }).length;
+            // Workers in this dept
+            var dpWorkers = {};
+            dpTasks.filter(function(t2) { return t2.status !== "Done"; }).forEach(function(t2) { if (t2.assignee && team[t2.assignee]) dpWorkers[t2.assignee] = (dpWorkers[t2.assignee] || 0) + 1; });
+            var pctCapacity = totalActive2 > 0 ? Math.round((dpActive / totalActive2) * 100) : 0;
+            return { dept: dp, active: dpActive, done: dpDone, overdue: dpOverdue, doneToday: dpDoneToday, workers: dpWorkers, pctCapacity: pctCapacity };
+          }).filter(function(d) { return d.active > 0 || d.done > 0; }).sort(function(a2, b2) { return b2.active - a2.active; });
+          var maxAct = Math.max.apply(null, deptData2.map(function(d) { return d.active; }).concat([1]));
+
+          return <Card>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Department Workload</div>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 14 }}>Distributie capacitate echipa pe departamente</div>
+            {deptData2.map(function(dp) {
+              var barColor = dp.overdue > 0 ? "#DC2626" : dp.active > 5 ? "#D97706" : GR;
+              return <div key={dp.dept} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B" }}>{dp.dept}</div>
+                  <div style={{ display: "flex", gap: 8, fontSize: 10 }}>
+                    <span style={{ color: "#2563EB", fontWeight: 600 }}>{dp.active} active</span>
+                    <span style={{ color: GR }}>{dp.doneToday} done azi</span>
+                    {dp.overdue > 0 && <span style={{ color: "#DC2626", fontWeight: 700 }}>{dp.overdue} ov</span>}
+                    <span style={{ color: "#94A3B8" }}>{dp.pctCapacity}% capacitate</span>
+                  </div>
+                </div>
+                <div style={{ height: 14, background: "#F1F5F9", borderRadius: 4, overflow: "hidden", position: "relative" }}>
+                  <div style={{ height: "100%", width: (dp.active / maxAct * 100) + "%", background: barColor + "30", borderRadius: 4 }} />
+                  {dp.overdue > 0 && <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: (dp.overdue / maxAct * 100) + "%", background: "#DC2626", borderRadius: 4, opacity: 0.6 }} />}
+                </div>
+                {Object.keys(dp.workers).length > 0 && <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                  {Object.keys(dp.workers).map(function(wk) { var wm = team[wk] || {}; return <span key={wk} style={{ fontSize: 9, padding: "1px 6px", borderRadius: 4, background: "#F1F5F9", color: "#475569" }}>{wm.name || wk}: {dp.workers[wk]}</span>; })}
+                </div>}
+              </div>;
+            })}
+          </Card>;
+        }
+
+        if (id === "dailyOutputFeed") {
+          // Show chronological feed of completed tasks with links for the range period
+          var feedDone = rangeTasks.filter(function(t2) { return t2.status === "Done" && t2.updatedAt && !t2._campaignParent; }).sort(function(a2, b2) { return new Date(b2.updatedAt).getTime() - new Date(a2.updatedAt).getTime(); }).slice(0, 40);
+          return <Card>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Daily Output Feed</div>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 14 }}>{feedDone.length} taskuri finalizate | Cronologic, cele mai recente sus</div>
+            {feedDone.length === 0 ? <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Niciun task finalizat in aceasta perioada.</div> : <div style={{ maxHeight: 500, overflowY: "auto" }}>
+              {feedDone.map(function(t2, fi) {
+                var fUser = team[t2.assignee] || {};
+                var fTime = t2.updatedAt ? new Date(t2.updatedAt) : null;
+                var fTimeStr = fTime ? fTime.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }) : "";
+                var fDateStr = fTime ? fTime.getDate() + " " + MN[fTime.getMonth()].substring(0, 3) : "";
+                var fLinks = (t2.links || []).filter(function(lk) { return lk && lk.trim(); });
+                return <div key={t2.id} style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: fi < feedDone.length - 1 ? "1px solid #F1F5F9" : "none" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 50, flexShrink: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#475569" }}>{fTimeStr}</div>
+                    <div style={{ fontSize: 9, color: "#CBD5E1" }}>{fDateStr}</div>
+                    <div style={{ width: 1, flex: 1, background: "#E2E8F0", marginTop: 4 }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                      <Av color={fUser.color || "#94A3B8"} size={20} fs={9} userId={t2.assignee}>{(fUser.name || "?")[0]}</Av>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#475569" }}>{fUser.name || "?"}</span>
+                      <span style={{ fontSize: 10, color: "#94A3B8" }}>a finalizat</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B", marginBottom: 3 }}>{t2.title}</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: fLinks.length > 0 ? 4 : 0 }}>
+                      {t2.shop && <Badge bg="#ECFDF5" color={GR}>{t2.shop}</Badge>}
+                      {t2.department && <Badge bg="#FFF7ED" color="#EA580C">{t2.department}</Badge>}
+                      {t2.productName && <Badge bg="#EFF6FF" color="#2563EB">{t2.productName}</Badge>}
+                    </div>
+                    {fLinks.length > 0 && <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {fLinks.map(function(lk, li) {
+                        return <a key={li} href={lk} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#2563EB", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{lk}</a>;
+                      })}
+                    </div>}
+                  </div>
+                </div>;
+              })}
+            </div>}
+          </Card>;
+        }
+
+        if (id === "brandAnalytics") {
+          var baShops = (shops || []).length > 0 ? shops : ["Grandia", "Bonhaus", "Casa Ofertelor", "Gento", "MagDeal", "Reduceri Bune", "Apreciat"];
+          var baDepts = departments || DEF_DEPARTMENTS;
+          var baRangeTasks = rangeTasks.filter(function(t) { return !t._campaignParent; });
+          var shopData = baShops.map(function(sh) {
+            var sTasks = baRangeTasks.filter(function(t) { return t.shop === sh; });
+            var done = sTasks.filter(function(t) { return t.status === "Done"; }).length;
+            var active = sTasks.filter(function(t) { return t.status !== "Done"; }).length;
+            var overdue = sTasks.filter(function(t) { return isOv(t); }).length;
+            var links = [];
+            sTasks.filter(function(t) { return t.status === "Done" && t.links && t.links.length > 0; }).forEach(function(t) {
+              t.links.forEach(function(lk) { if (lk && lk.trim()) links.push({ url: lk, task: t.title, dept: t.department || "-", assignee: (team[t.assignee] || {}).name || "?" }); });
+            });
+            var deptBreak = {};
+            baDepts.forEach(function(d) { var cnt = sTasks.filter(function(t) { return t.department === d && t.status === "Done"; }).length; if (cnt > 0) deptBreak[d] = cnt; });
+            return { shop: sh, total: sTasks.length, done: done, active: active, overdue: overdue, links: links, deptBreak: deptBreak };
+          }).filter(function(s) { return s.total > 0; }).sort(function(a2, b2) { return b2.total - a2.total; });
+          var productMap = {};
+          baRangeTasks.forEach(function(t) {
+            var pn = t.productName || ""; if (!pn) return;
+            var key = (t.shop || "") + "||" + pn;
+            if (!productMap[key]) productMap[key] = { name: pn, shop: t.shop || "-", tasks: [], links: [], depts: {} };
+            productMap[key].tasks.push(t);
+            if (t.status === "Done" && t.links) t.links.forEach(function(lk) { if (lk && lk.trim()) productMap[key].links.push({ url: lk, dept: t.department || "-", assignee: (team[t.assignee] || {}).name || "?" }); });
+            if (t.status === "Done" && t.department) productMap[key].depts[t.department] = (productMap[key].depts[t.department] || 0) + 1;
+          });
+          var productList = Object.values(productMap).sort(function(a2, b2) { return b2.tasks.length - a2.tasks.length; }).slice(0, 30);
+
+          return <Card>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#1E293B" }}>Brand & Product Analytics</div>
+                <div style={{ fontSize: 11, color: "#64748B" }}>{dashPreset === "today" ? "Azi" : dashPreset === "yesterday" ? "Ieri" : dashFrom + " - " + dashTo} | {baRangeTasks.length} taskuri</div>
+              </div>
+            </div>
+            {shopData.map(function(sd) {
+              return <div key={sd.shop} style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 10, background: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: GR }} />
+                    <span style={{ fontSize: 14, fontWeight: 800, color: "#1E293B" }}>{sd.shop}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, fontSize: 11 }}>
+                    <span style={{ color: GR, fontWeight: 700 }}>{sd.done} done</span>
+                    <span style={{ color: "#2563EB", fontWeight: 600 }}>{sd.active} active</span>
+                    {sd.overdue > 0 && <span style={{ color: "#DC2626", fontWeight: 700 }}>{sd.overdue} overdue</span>}
+                  </div>
+                </div>
+                {Object.keys(sd.deptBreak).length > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  {Object.keys(sd.deptBreak).map(function(d) { return <Badge key={d} bg="#FFF7ED" color="#EA580C">{d}: {sd.deptBreak[d]}</Badge>; })}
+                </div>}
+                {sd.links.length > 0 && <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#64748B", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Linkuri livrate ({sd.links.length})</div>
+                  <div style={{ maxHeight: 120, overflowY: "auto" }}>
+                    {sd.links.slice(0, 15).map(function(lk, li) {
+                      return <div key={li} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0", fontSize: 11, borderBottom: "1px solid #F1F5F9" }}>
+                        <a href={lk.url} target="_blank" rel="noopener noreferrer" style={{ color: "#2563EB", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 300 }}>{lk.url}</a>
+                        <Badge bg="#F5F3FF" color="#7C3AED">{lk.dept}</Badge>
+                        <span style={{ color: "#94A3B8", fontSize: 10 }}>{lk.assignee}</span>
+                      </div>;
+                    })}
+                    {sd.links.length > 15 && <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 4 }}>...si inca {sd.links.length - 15} linkuri</div>}
+                  </div>
+                </div>}
+                {sd.links.length === 0 && sd.done === 0 && <div style={{ fontSize: 11, color: "#94A3B8" }}>Niciun task finalizat.</div>}
+              </div>;
+            })}
+            {shopData.length === 0 && <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Niciun task in perioada selectata.</div>}
+            {productList.length > 0 && <div style={{ marginTop: 14, borderTop: "2px solid #E2E8F0", paddingTop: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Product Analytics ({productList.length})</div>
+              <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 10 }}>Pipeline per produs: fiecare patrat = un task (verde=done, rosu=overdue, gri=activ)</div>
+              <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                {productList.map(function(pr, pi) {
+                  var doneTasks = pr.tasks.filter(function(t) { return t.status === "Done"; }).length;
+                  var totalTasks = pr.tasks.length;
+                  var pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+                  // Group tasks by department for pipeline view
+                  var pipeStages = {};
+                  pr.tasks.forEach(function(t) { var dp = t.department || t.taskType || "Task"; if (!pipeStages[dp]) pipeStages[dp] = []; pipeStages[dp].push(t); });
+                  var workers = {};
+                  pr.tasks.forEach(function(t) { if (t.assignee && team[t.assignee]) workers[t.assignee] = team[t.assignee].name; });
+                  return <div key={pi} style={{ padding: "10px 12px", borderRadius: 8, background: pi % 2 === 0 ? "#F8FAFC" : "#fff", marginBottom: 4, borderLeft: "3px solid " + (pct === 100 ? GR : pct > 0 ? "#D97706" : "#94A3B8") }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pr.name}</div>
+                        <div style={{ fontSize: 10, color: "#94A3B8" }}>{pr.shop} | {Object.values(workers).join(", ")}</div>
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: pct === 100 ? GR : "#475569" }}>{doneTasks}/{totalTasks}</div>
+                      <div style={{ width: 50, height: 4, background: "#E2E8F0", borderRadius: 2 }}><div style={{ height: "100%", width: pct + "%", background: pct === 100 ? GR : pct >= 50 ? "#D97706" : "#DC2626", borderRadius: 2 }} /></div>
+                      {pr.links.length > 0 && <a href={pr.links[0].url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#2563EB", fontWeight: 600, flexShrink: 0 }}>{pr.links.length} link{pr.links.length > 1 ? "uri" : ""}</a>}
+                    </div>
+                    {/* Pipeline stages */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {Object.keys(pipeStages).map(function(stage) {
+                        var stageTasks = pipeStages[stage];
+                        var stageDone = stageTasks.filter(function(st) { return st.status === "Done"; }).length;
+                        var stageColor = stageDone === stageTasks.length ? GR : stageTasks.some(function(st) { return isOv(st); }) ? "#DC2626" : "#2563EB";
+                        return <div key={stage} style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 4, background: stageColor + "10", border: "1px solid " + stageColor + "30" }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: stageColor }}>{stage.substring(0, 8)}</span>
+                          {stageTasks.map(function(st) {
+                            var stDone = st.status === "Done";
+                            var stOv = isOv(st);
+                            return <span key={st.id} title={st.title + " (" + st.status + ")"} style={{ width: 8, height: 8, borderRadius: 2, background: stDone ? GR : stOv ? "#DC2626" : "#CBD5E1" }} />;
+                          })}
+                        </div>;
+                      })}
+                    </div>
+                  </div>;
+                })}
+              </div>
+            </div>}
+          </Card>;
+        }
+
         return null;
       };
 
@@ -3013,6 +3468,21 @@ function ProfileView({ pu, team, tasks, timers, getTS, logs, sessions, getPerf, 
   return <div style={{ minHeight: "100vh", background: "#FAFAFA", padding: isMob ? 16 : 32 }}>
     <button style={Object.assign({}, S.cancelBtn, { marginBottom: 20, display: "flex", alignItems: "center", gap: 6 })} onClick={onBack}><Ic d={Icons.back} size={16} color="#64748B" /> Inapoi</button>
     <Card style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}><div style={{ position: "relative" }}><Av color={m.color} size={56} fs={22} userId={pu}>{m.name[0]}</Av><div style={{ position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: "50%", background: on ? "#16A34A" : "#CBD5E1", border: "2.5px solid #fff" }} /></div><div style={{ flex: 1 }}><div style={{ fontSize: 20, fontWeight: 700 }}>{m.name}</div><div style={{ fontSize: 12, color: "#94A3B8" }}>{m.role === "pm" ? "PM" : m.role} | {on ? "Online" : "Offline - " + fr(lss)}</div></div><div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 700, color: perf.score >= 70 ? GR : perf.score >= 40 ? "#D97706" : "#DC2626" }}>{perf.score}%</div><div style={{ fontSize: 10, color: "#94A3B8" }}>Performance</div></div><div style={{ display: "flex", gap: 8 }}>{[{ l: "Done", v: perf.done, c: GR }, { l: "Active", v: perf.active, c: "#2563EB" }, { l: "Review", v: perf.review, c: "#D97706" }, { l: "Overdue", v: perf.overdue, c: "#DC2626" }].map(function(x) { return <div key={x.l} style={{ textAlign: "center", padding: "4px 12px", background: x.c + "12", borderRadius: 8 }}><div style={{ fontSize: 18, fontWeight: 700, color: x.c }}>{x.v}</div><div style={{ fontSize: 9, color: "#94A3B8" }}>{x.l}</div></div>; })}</div></Card>
+    {(function() {
+      var ovTasks = ut.filter(function(t) { return t.status !== "Done" && isOv(t); });
+      if (ovTasks.length === 0) return null;
+      var oldest = null;
+      ovTasks.forEach(function(t) { var d = new Date(t.deadline).getTime(); if (!oldest || d < oldest) oldest = d; });
+      var negDays = oldest ? Math.floor((Date.now() - oldest) / 86400000) : 0;
+      if (negDays < 3) return null;
+      return <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", marginBottom: 16, borderRadius: 8, background: negDays >= 7 ? "#FEE2E2" : "#FEF3C7", border: "1px solid " + (negDays >= 7 ? "#FECACA" : "#FDE68A") }}>
+        <span style={{ fontSize: 18 }}>{negDays >= 7 ? "🔥" : "⚠️"}</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: negDays >= 7 ? "#991B1B" : "#92400E" }}>{negDays} zile consecutive cu intarzieri</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{ovTasks.length} {ovTasks.length === 1 ? "task" : "taskuri"} intarziate activ</div>
+        </div>
+      </div>;
+    })()}
     {/* Achievements */}
     {userAch.length > 0 && <Card style={{ marginBottom: 16 }}><h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Achievements ({userAch.length}/{ACHIEVEMENTS.length})</h3><div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{userAch.map(function(a) { return <div key={a.id} title={a.desc} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 12px", background: "#F0FDF4", borderRadius: 10, border: "1px solid " + GR + "30" }}><span style={{ fontSize: 24 }}>{a.icon}</span><span style={{ fontSize: 10, fontWeight: 600, marginTop: 4, color: GR }}>{a.name}</span></div>; })}</div></Card>}
     {/* Login history */}
@@ -4774,8 +5244,8 @@ function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, tas
   </div></div>;
 }
 
-function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTimer, products, onClose, onEdit, statusHistory, isAdmin }) {
-  var [commentText, setCommentText] = useState(""); var t = tasks.find(function(x) { return x.id === task.id; }) || task; var a = team[t.assignee] || {}; var secs = getTS(t.id); var subtasks = t.subtasks || []; var comments = t.comments || []; var doneS = subtasks.filter(function(s) { return s.done; }).length;
+function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTimer, products, onClose, onEdit, statusHistory, isAdmin, taskActivity }) {
+  var [commentText, setCommentText] = useState(""); var [showHistory, setShowHistory] = useState(false); var t = tasks.find(function(x) { return x.id === task.id; }) || task; var a = team[t.assignee] || {}; var secs = getTS(t.id); var subtasks = t.subtasks || []; var comments = t.comments || []; var doneS = subtasks.filter(function(s) { return s.done; }).length;
   var addComment = function() { if (!commentText.trim()) return; setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, x, { comments: (x.comments || []).concat([{ id: gid(), userId: user, text: commentText.trim(), time: ts() }]) }) : x; }); }); setCommentText(""); };
   var toggleSub = function(stId) { setTasks(function(p) { return p.map(function(x) { if (x.id !== t.id) return x; return Object.assign({}, x, { subtasks: (x.subtasks || []).map(function(s) { return s.id === stId ? Object.assign({}, s, { done: !s.done }) : s; }) }); }); }); };
   var hist = (statusHistory || {})[t.id] || [];
@@ -4814,6 +5284,26 @@ function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTi
     {deps.length > 0 && <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>Depinde de:</div>{deps.map(function(d) { return <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 0" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: SC[d.status] }} /><span>{d.title}</span><Badge bg={(SC[d.status] || "#94A3B8") + "18"} color={SC[d.status] || "#94A3B8"}>{d.status}</Badge></div>; })}</div>}
     {subtasks.length > 0 && <div style={{ marginBottom: 12, borderTop: "1px solid #F1F5F9", paddingTop: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8 }}>Subtaskuri ({doneS}/{subtasks.length})</div><div style={Object.assign({}, S.progBg, { marginBottom: 8 })}><div style={S.progBar(doneS === subtasks.length ? GR : "#D97706", subtasks.length > 0 ? (doneS / subtasks.length) * 100 : 0)} /></div>{subtasks.map(function(st) { return <div key={st.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0", fontSize: 13, cursor: "pointer" }} onClick={function() { toggleSub(st.id); }}><span style={{ width: 18, height: 18, borderRadius: 4, border: "1.5px solid " + (st.done ? GR : "#CBD5E1"), background: st.done ? GR : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, flexShrink: 0 }}>{st.done ? "*" : ""}</span><span style={{ textDecoration: st.done ? "line-through" : "none", color: st.done ? "#94A3B8" : "#1E293B" }}>{st.text}</span></div>; })}</div>}
     <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 12 }}><div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}><Ic d={Icons.comment} size={14} color="#64748B" /> Comentarii ({comments.length})</div><div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 8 }}>{comments.map(function(c) { var cu = team[c.userId] || {}; var isMine = c.userId === user; return <div key={c.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", marginBottom: 6 }}><div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>{cu.name || "?"} | {fr(c.time)}</div><div style={{ padding: "6px 12px", borderRadius: 10, maxWidth: "80%", background: isMine ? GR : "#F1F5F9", color: isMine ? "#fff" : "#1E293B", fontSize: 13 }}>{c.text}</div></div>; })}</div><div style={{ display: "flex", gap: 6 }}><input style={Object.assign({}, S.input, { flex: 1 })} value={commentText} onChange={function(e) { setCommentText(e.target.value); }} onKeyDown={function(e) { if (e.key === "Enter") addComment(); }} placeholder="Comentariu..." /><button style={S.primBtn} onClick={addComment}>Trimite</button></div></div>
+    <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 12, marginTop: 12 }}>
+      <div onClick={function() { setShowHistory(!showHistory); }} style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "#64748B" }}><Ic d={Icons.work} size={14} color="#64748B" /> Istoric activitate <span style={{ fontSize: 10, marginLeft: "auto" }}>{showHistory ? "Ascunde ▲" : "Vezi ▼"}</span></div>
+      {showHistory && (function() {
+        var acts = (taskActivity || []).filter(function(a2) { return a2.taskId === t.id; }).slice(0, 50);
+        var ACT_COLORS = { CREATE: "#16A34A", EDIT: "#2563EB", STATUS: "#D97706", DELETE: "#DC2626", DUPLICATE: "#7C3AED" };
+        var ACT_LABELS = { CREATE: "Creat", EDIT: "Editat", STATUS: "Status", DELETE: "Sters", DUPLICATE: "Duplicat" };
+        if (acts.length === 0) return <div style={{ fontSize: 11, color: "#94A3B8", padding: "8px 0" }}>Niciun istoric disponibil.</div>;
+        return <div style={{ maxHeight: 250, overflowY: "auto" }}>{acts.map(function(ac) {
+          var col = ACT_COLORS[ac.action] || "#64748B";
+          return <div key={ac.id} style={{ display: "flex", gap: 8, padding: "6px 0", borderBottom: "1px solid #F8FAFC", fontSize: 11, alignItems: "flex-start" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: col, marginTop: 4, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div><span style={{ fontWeight: 700, color: col }}>{ACT_LABELS[ac.action] || ac.action}</span> <span style={{ color: "#64748B" }}>de</span> <span style={{ fontWeight: 600, color: "#1E293B" }}>{ac.userName}</span></div>
+              {ac.details && <div style={{ color: "#94A3B8", marginTop: 1, wordBreak: "break-word" }}>{ac.details}</div>}
+            </div>
+            <div style={{ fontSize: 10, color: "#CBD5E1", whiteSpace: "nowrap", flexShrink: 0 }}>{fr(ac.time)}</div>
+          </div>;
+        })}</div>;
+      })()}
+    </div>
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}><button style={S.cancelBtn} onClick={onEdit}>Editeaza</button><button style={S.primBtn} onClick={onClose}>Inchide</button></div>
   </div></div>;
 }
