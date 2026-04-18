@@ -959,7 +959,7 @@ export default function App() {
             localStorage.setItem(penKey, "1");
             var penEntry = { id: gid(), userId: u, userName: t.name, date: TD, overdueCount: overdueCount, time: ts() };
             setPenalties(function(p) { return [penEntry].concat(p).slice(0, 1000); });
-            addNotif("anomaly", "ABATERE: " + t.name + " are " + overdueCount + " taskuri intarziate", null, "admin");
+            addNotif("anomaly", "PENALIZARE: " + t.name + " are " + overdueCount + " taskuri intarziate", null, "admin");
             setShowPenaltyPopup({ user: u, name: t.name, count: overdueCount });
           }
         }
@@ -1404,16 +1404,40 @@ export default function App() {
         if (r.type === "penalty") addNotif("challenge", "Roata zilnica: " + r.label, null, dailyWheelResult.user);
       }} onClose={function() { setDailyWheelResult(null); }} />}
       {achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}
-      {showPenaltyPopup && <div style={{ position: "fixed", inset: 0, background: "rgba(127,29,29,0.85)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: "#fff", borderRadius: 20, padding: 30, maxWidth: 440, width: "90%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.4)", border: "4px solid #DC2626" }}>
-          <div style={{ fontSize: 64, marginBottom: 12 }}>⚠️</div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: "#DC2626", marginBottom: 8 }}>ABATERE INREGISTRATA</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>{showPenaltyPopup.name}, ai {showPenaltyPopup.count} {showPenaltyPopup.count === 1 ? "task intarziat" : "taskuri intarziate"}!</div>
-          <div style={{ fontSize: 13, color: "#64748B", marginBottom: 8 }}>Aceasta abatere a fost inregistrata automat. La acumularea mai multor abateri se aplica penalizari in salariu.</div>
-          <div style={{ fontSize: 12, color: "#DC2626", fontWeight: 700, padding: "8px 16px", background: "#FEF2F2", borderRadius: 8, marginBottom: 16 }}>Finalizeaza taskurile intarziate cat mai repede!</div>
-          <button onClick={function() { setShowPenaltyPopup(null); }} style={{ padding: "12px 40px", fontSize: 15, fontWeight: 700, background: "#DC2626", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer" }}>Am inteles</button>
+      {showPenaltyPopup && (function() {
+        var monthKey2 = TD.substring(0, 7);
+        var userPenCount = (penalties || []).filter(function(p) { return p.userId === showPenaltyPopup.user && p.date && p.date.startsWith(monthKey2); }).length;
+        var thresholds2 = ((penaltyConfig || {}).thresholds || []).sort(function(a, b) { return a.count - b.count; });
+        var currentPenalty = 0;
+        for (var ti2 = thresholds2.length - 1; ti2 >= 0; ti2--) { if (userPenCount >= thresholds2[ti2].count) { currentPenalty = thresholds2[ti2].amount; break; } }
+        return <div style={{ position: "fixed", inset: 0, background: "rgba(127,29,29,0.85)", zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ background: "#fff", borderRadius: 20, padding: 30, maxWidth: 460, width: "90%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.4)", border: "4px solid #DC2626" }}>
+          <div style={{ fontSize: 64, marginBottom: 8 }}>⚠️</div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#DC2626", marginBottom: 8 }}>PENALIZARE INREGISTRATA</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#1E293B", marginBottom: 16 }}>{showPenaltyPopup.name}, ai {showPenaltyPopup.count} {showPenaltyPopup.count === 1 ? "task intarziat" : "taskuri intarziate"}!</div>
+          <div style={{ padding: "14px 16px", background: "#1E293B", borderRadius: 10, marginBottom: 16 }}>
+            <div style={{ fontSize: 42, fontWeight: 900, color: "#DC2626" }}>{userPenCount}</div>
+            <div style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>penalizari luna aceasta</div>
+            {currentPenalty > 0 && <div style={{ fontSize: 18, fontWeight: 800, color: "#F87171", marginTop: 8 }}>Retinere curenta: -{currentPenalty} RON din salariu</div>}
+          </div>
+          <div style={{ textAlign: "left", padding: "12px 16px", background: "#FEF2F2", borderRadius: 10, marginBottom: 16, border: "1px solid #FECACA" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>Praguri penalizare salariu:</div>
+            {thresholds2.map(function(th, idx) {
+              var isActive = userPenCount >= th.count;
+              var isNext = !isActive && (idx === 0 || userPenCount >= thresholds2[idx - 1].count);
+              return <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 12 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: isActive ? "#DC2626" : "#CBD5E1", flexShrink: 0 }} />
+                <span style={{ fontWeight: isActive || isNext ? 700 : 400, color: isActive ? "#DC2626" : isNext ? "#92400E" : "#64748B", flex: 1 }}>{th.count} penalizari = -{th.amount} RON</span>
+                {isActive && <span style={{ fontSize: 10, fontWeight: 800, color: "#DC2626", background: "#FEE2E2", padding: "2px 6px", borderRadius: 4 }}>ACTIV</span>}
+                {isNext && <span style={{ fontSize: 10, fontWeight: 600, color: "#92400E", background: "#FEF3C7", padding: "2px 6px", borderRadius: 4 }}>URMATORUL</span>}
+              </div>;
+            })}
+          </div>
+          <div style={{ fontSize: 13, color: "#DC2626", fontWeight: 700, padding: "10px 16px", background: "#FEF2F2", borderRadius: 8, marginBottom: 16 }}>Finalizeaza taskurile intarziate pentru a evita penalizari suplimentare!</div>
+          <button onClick={function() { setShowPenaltyPopup(null); }} style={{ padding: "14px 44px", fontSize: 15, fontWeight: 700, background: "#DC2626", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer" }}>Am inteles</button>
         </div>
-      </div>}
+      </div>;
+      })()}
       {isMob && mobNav && <div style={S.overlay} onClick={function() { setMobNav(false); }} />}
       <aside style={Object.assign({}, S.sidebar, isMob ? { position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 200, transform: mobNav ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.2s" } : {})}>
         <div style={S.logoArea}>
@@ -4805,8 +4829,8 @@ function PenalizariPage({ penalties, setPenalties, penaltyConfig, setPenaltyConf
 
   return <div style={{ maxWidth: 900 }}>
     <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 20, fontWeight: 800, color: "#DC2626", marginBottom: 4 }}>Penalizari si Abateri</h2>
-      <div style={{ fontSize: 12, color: "#64748B" }}>Sistemul inregistreaza automat cate o abatere pe zi pentru fiecare persoana cu taskuri intarziate la login.</div>
+      <h2 style={{ fontSize: 20, fontWeight: 800, color: "#DC2626", marginBottom: 4 }}>Penalizari</h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Sistemul inregistreaza automat cate o penalizare pe zi pentru fiecare persoana cu taskuri intarziate la login.</div>
     </div>
 
     {/* Monthly summary */}
@@ -4817,14 +4841,14 @@ function PenalizariPage({ penalties, setPenalties, penaltyConfig, setPenaltyConf
           <Av color={u.color} size={32} fs={12} userId={u.userId}>{u.name[0]}</Av>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{u.name}</div>
-            <div style={{ fontSize: 11, color: "#64748B" }}>{u.count} abateri luna asta | {u.currentOverdue} intarziate acum</div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>{u.count} penalizari luna asta | {u.currentOverdue} intarziate acum</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: u.penaltyRON > 0 ? "#DC2626" : "#94A3B8" }}>{u.penaltyRON > 0 ? "-" + u.penaltyRON + " RON" : "OK"}</div>
             <div style={{ fontSize: 10, color: "#94A3B8" }}>{u.count} abateri</div>
           </div>
         </div>;
-      }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nicio abatere luna asta.</div>}
+      }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nicio penalizare luna asta.</div>}
       {totalPenalty > 0 && <div style={{ marginTop: 10, padding: "10px 14px", background: "#DC2626", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Total penalizari salariu:</span>
         <span style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>-{totalPenalty} RON</span>
@@ -4834,7 +4858,7 @@ function PenalizariPage({ penalties, setPenalties, penaltyConfig, setPenaltyConf
     {/* Threshold config */}
     <Card style={{ marginBottom: 16, borderLeft: "3px solid #7C3AED" }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Configurare praguri penalizare</div>
-      <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>Seteaza cate abateri intr-o luna duc la penalizare si cat.</div>
+      <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>Seteaza cate penalizari intr-o luna duc la penalizare si cat.</div>
       {configForm.map(function(t, idx) {
         return <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
           <span style={{ fontSize: 12, color: "#64748B", minWidth: 60 }}>De la</span>
@@ -4855,7 +4879,7 @@ function PenalizariPage({ penalties, setPenalties, penaltyConfig, setPenaltyConf
     {/* Full history with date filter */}
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Istoric abateri ({filtered.length})</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Istoric penalizari ({filtered.length})</div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontSize: 11, color: "#94A3B8" }}>De la:</span>
           <input type="date" style={Object.assign({}, S.fSel, { padding: "4px 8px", fontSize: 11 })} value={filterFrom} onChange={function(e) { setFilterFrom(e.target.value); }} />
@@ -4875,7 +4899,7 @@ function PenalizariPage({ penalties, setPenalties, penaltyConfig, setPenaltyConf
           </div>
           <div style={{ fontSize: 10, color: "#94A3B8" }}>{ff(p.time)}</div>
         </div>;
-      }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt abateri.</div>}
+      }) : <div style={{ textAlign: "center", padding: 20, color: "#94A3B8", fontSize: 12 }}>Nu sunt penalizari.</div>}
     </Card>
   </div>;
 }
