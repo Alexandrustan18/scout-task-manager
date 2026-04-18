@@ -1613,7 +1613,7 @@ export default function App() {
             </div>
           </Card>}
           {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
-          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
+          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} penalties={penalties} />}
           {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} monthlyBonus={monthlyBonus} logs={logs} taskActivity={taskActivity} shops={shops} departments={departments} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} visTasks={visTasks} />}
@@ -1696,7 +1696,7 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
   </div>;
 }
 
-function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers, setPage, monthlyBonus }) {
+function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers, setPage, monthlyBonus, penalties }) {
   var [tab, setTab] = useState("personal"); // personal | team
   var [pmKpiModal, setPmKpiModal] = useState(null);
   var [pmEditMode, setPmEditMode] = useState(false);
