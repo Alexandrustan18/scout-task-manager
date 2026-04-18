@@ -4879,6 +4879,15 @@ function PenalizariPage({ penalties, setPenalties, penaltyConfig, setPenaltyConf
       </div>
     </Card>
 
+    {/* Reset */}
+    <Card style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>Reset penalizari</div>
+        <div style={{ fontSize: 11, color: "#94A3B8" }}>Sterge toate penalizarile si reseteaza localStorage-ul ca sa apara din nou popup-ul la login.</div>
+      </div>
+      <button onClick={function() { if (!window.confirm("Stergi TOATE penalizarile? Aceasta actiune nu poate fi anulata.")) return; setPenalties([]); cloudSave("penalties", []); Object.keys(localStorage).forEach(function(k) { if (k.startsWith("s7_penalty_")) localStorage.removeItem(k); }); alert("Penalizari resetate! La urmatorul login vor primi din nou notificarea."); }} style={{ padding: "8px 20px", fontSize: 12, fontWeight: 700, background: "#DC2626", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}>Reset tot</button>
+    </Card>
+
     {/* Full history with date filter */}
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
