@@ -1849,6 +1849,13 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
 
 function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, hideHeader, visUsers, setPage, monthlyBonus }) {
   var [kpiModal, setKpiModal] = useState(null);
+  var [memEditMode, setMemEditMode] = useState(false);
+  var [memLayout, setMemLayout] = useState(function() {
+    try { var s = localStorage.getItem("s7_mem_layout_" + user); if (s) return JSON.parse(s); } catch(e) {}
+    return { kpis: true, podium: true, target: true, trend: true, stats: true, tasks: true };
+  });
+  useEffect(function() { try { localStorage.setItem("s7_mem_layout_" + user, JSON.stringify(memLayout)); } catch(e) {} }, [memLayout]);
+  var toggleMem = function(k) { setMemLayout(function(p) { var n = Object.assign({}, p); n[k] = !n[k]; return n; }); };
   var myTasks = allTasks.filter(function(t) { return t.assignee === user && !t._campaignParent; });
   var todayDone = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
   var activeTasks = myTasks.filter(function(t) { return t.status !== "Done"; });
@@ -1907,13 +1914,28 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
   var perf = getPerf(user);
 
   return <div>
-    {!hideHeader && <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>Salut, {me.name}!</h2>
-      <div style={{ fontSize: 12, color: "#64748B" }}>Uite cum merge ziua ta</div>
+    {!hideHeader && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+      <div>
+        <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, color: "#1E293B" }}>Salut, {me.name}!</h2>
+        <div style={{ fontSize: 12, color: "#64748B" }}>Uite cum merge ziua ta</div>
+      </div>
+      <button onClick={function() { if (!memEditMode) { var pw = prompt("Parola pentru editare dashboard:"); if (pw !== "hey") { alert("Parola gresita!"); return; } } setMemEditMode(!memEditMode); }} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid " + (memEditMode ? GR : "#CBD5E1"), background: memEditMode ? GR : "#fff", color: memEditMode ? "#fff" : "#475569", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+        {memEditMode ? "Gata" : "Customizeaza"}
+      </button>
     </div>}
+    {memEditMode && <Card style={{ marginBottom: 14, background: "#EFF6FF", borderLeft: "3px solid #2563EB" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#1E40AF", marginBottom: 8 }}>Bifeaza sectiunile vizibile:</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {[{ k: "kpis", l: "KPI-uri" }, { k: "podium", l: "Podium Liga" }, { k: "target", l: "Target" }, { k: "trend", l: "Trend 7 zile" }, { k: "stats", l: "Statistici" }, { k: "tasks", l: "Taskuri active" }].map(function(x) {
+          return <label key={x.k} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer" }}>
+            <input type="checkbox" checked={memLayout[x.k] !== false} onChange={function() { toggleMem(x.k); }} style={{ accentColor: "#2563EB" }} />{x.l}
+          </label>;
+        })}
+      </div>
+    </Card>}
 
     {/* Hero KPI row */}
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
+    {memLayout.kpis !== false && <div style={{ display: "grid", gridTemplateColumns: isMob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, marginBottom: 16 }}>
       <Card onClick={function() { setKpiModal({ title: "Taskuri finalizate azi", color: GR, tasks: myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }) }); }} style={{ borderLeft: "3px solid " + GR, padding: 14, cursor: "pointer", transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
         <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Done azi</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -1940,14 +1962,14 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
         </div>
         <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>zile consecutive cu target</div>
       </Card>
-    </div>
+    </div>}
     {kpiModal && <TaskDetailModal title={kpiModal.title} color={kpiModal.color} tasks={kpiModal.tasks} team={team} onClose={function() { setKpiModal(null); }} setPage={setPage} />}
 
-    {/* Podium - hidden when rendered as sub-tab of PM dashboard */}
-    {!hideHeader && <PodiumCompact leaderboard={calcMemberLeaderboard(allTasks, team, targets, Object.keys(team))} onNavigate={setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga Membrilor"} subtitle={"Taskuri finalizate luna aceasta"} leagueType="members" />}
+    {/* Podium */}
+    {!hideHeader && memLayout.podium !== false && <PodiumCompact leaderboard={calcMemberLeaderboard(allTasks, team, targets, Object.keys(team))} onNavigate={setPage ? function() { setPage("leagueMonthly"); } : null} monthlyBonus={monthlyBonus} title={"Liga Membrilor"} subtitle={"Taskuri finalizate luna aceasta"} leagueType="members" />}
 
     {/* Target progress */}
-    {myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
+    {memLayout.target !== false && myTargets.length > 0 && <Card style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Target-urile tale</div>
       {myTargets.map(function(tgt) {
         var normM = tgt.metric;
@@ -1977,7 +1999,7 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
     </Card>}
 
     {/* 7-day trend + Avg time */}
-    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "2fr 1fr", gap: 12, marginBottom: 16 }}>
+    {memLayout.trend !== false && <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "2fr 1fr", gap: 12, marginBottom: 16 }}>
       <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div>
@@ -2077,10 +2099,10 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
           })}
         </div>
       </Card>
-    </div>
+    </div>}
 
     {/* Your tasks teaser */}
-    {activeTasks.length > 0 && <Card>
+    {memLayout.tasks !== false && activeTasks.length > 0 && <Card>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Taskurile tale active ({activeTasks.length})</div>
       </div>
