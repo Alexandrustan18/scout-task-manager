@@ -535,7 +535,7 @@ export default function App() {
         setShowPenaltyPopup({ user: user, name: t.name, count: overdueCount });
       }
     }, 3000);
-  }, [loading, user, tasks.length > 0]);
+  }, [loading, user, tasks]);
 
   // Auto-saves
   useEffect(function() { if (!loading) debouncedSave("team", team, 1000); }, [team]);
@@ -3137,14 +3137,14 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
   var mineGroups = useMemo(function() { return groupBy(mine); }, [mine]);
   var teamGroups = useMemo(function() { return groupBy(teamOnly); }, [teamOnly]);
 
-  var renderPinnedOverdue = function(overdueTasks, label) {
+  var renderPinnedOverdue = function(overdueTasks) {
     if (!overdueTasks || overdueTasks.length === 0) return null;
     return <div style={{ marginBottom: 20, border: "2px solid #DC2626", borderRadius: 12, background: "#FEF2F2", padding: "12px 14px", boxShadow: "0 2px 12px rgba(220,38,38,0.15)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />
-        <span style={{ fontSize: 13, fontWeight: 800, color: "#DC2626", letterSpacing: 0.5, textTransform: "uppercase" }}>INTARZIATE - {label}</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: "#DC2626", letterSpacing: 0.5, textTransform: "uppercase" }}>INTARZIATE</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "#DC2626", padding: "1px 8px", borderRadius: 10 }}>{overdueTasks.length}</span>
-        <span style={{ fontSize: 10, color: "#991B1B", marginLeft: "auto", fontWeight: 600 }}>Nu au scapat!</span>
+
       </div>
       {overdueTasks.map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
     </div>;
@@ -3162,7 +3162,7 @@ function TasksPage({ fProps, grouped, filtered, user, team, onEdit, onView, onDe
           <div style={{ fontSize: 11, color: "#64748B" }}>{totalActive} taskuri active{groups["Done"] && groups["Done"].length > 0 ? " | " + groups["Done"].length + " finalizate" : ""}</div>
         </div>
       </div>
-      {renderPinnedOverdue(pinnedOvTasks, title.includes("echip") ? "echipa" : "ale tale")}
+      {renderPinnedOverdue(pinnedOvTasks)}
       {hasUrgent && <div style={{ marginBottom: 20 }}>
         <div style={Object.assign({}, S.groupHdr, { color: "#DC2626" })}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite" }} />URGENT</span><span style={S.countBadge}>{groups["Urgent"].length}</span></div>
         {groups["Urgent"].map(function(t) { return <TRow key={t.id} t={t} user={user} team={team} onEdit={onEdit} onView={onView} onDel={onDel} onDup={onDup} onChgSt={onChgSt} isMob={isMob} secs={getTS(t.id)} running={timers[t.id] && timers[t.id].running} togTimer={function() { togTimer(t.id); }} bulkMode={bulkMode} isSelected={selectedTasks && selectedTasks.includes(t.id)} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={onExplode} allTasks={tasks} />; })}
