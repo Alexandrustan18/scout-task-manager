@@ -949,21 +949,24 @@ export default function App() {
       }
     }
     if (t.role === "member") setPage("tasks");
-    // Penalty check - overdue tasks = abatere (once per day)
+    // Penalty check - overdue tasks (once per day, Mon-Fri only)
     if (t.role !== "admin") {
-      setTimeout(function() {
-        var penKey = "s7_penalty_" + u + "_" + TD;
-        if (!localStorage.getItem(penKey)) {
-          var overdueCount = tasks.filter(function(tk2) { return tk2.assignee === u && isOv(tk2) && !tk2._campaignParent; }).length;
-          if (overdueCount > 0) {
-            localStorage.setItem(penKey, "1");
-            var penEntry = { id: gid(), userId: u, userName: t.name, date: TD, overdueCount: overdueCount, time: ts() };
-            setPenalties(function(p) { return [penEntry].concat(p).slice(0, 1000); });
-            addNotif("anomaly", "PENALIZARE: " + t.name + " are " + overdueCount + " taskuri intarziate", null, "admin");
-            setShowPenaltyPopup({ user: u, name: t.name, count: overdueCount });
+      var todayDow = new Date().getDay();
+      if (todayDow >= 1 && todayDow <= 5) {
+        setTimeout(function() {
+          var penKey = "s7_penalty_" + u + "_" + TD;
+          if (!localStorage.getItem(penKey)) {
+            var overdueCount = tasks.filter(function(tk2) { return tk2.assignee === u && isOv(tk2) && !tk2._campaignParent; }).length;
+            if (overdueCount > 0) {
+              localStorage.setItem(penKey, "1");
+              var penEntry = { id: gid(), userId: u, userName: t.name, date: TD, overdueCount: overdueCount, time: ts() };
+              setPenalties(function(p) { return [penEntry].concat(p).slice(0, 1000); });
+              addNotif("anomaly", "PENALIZARE: " + t.name + " are " + overdueCount + " taskuri intarziate", null, "admin");
+              setShowPenaltyPopup({ user: u, name: t.name, count: overdueCount });
+            }
           }
-        }
-      }, t.role === "member" ? 6000 : 1500);
+        }, t.role === "member" ? 6000 : 1500);
+      }
     }
     return true;
   };
