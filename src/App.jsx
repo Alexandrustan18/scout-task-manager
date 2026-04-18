@@ -4628,6 +4628,50 @@ function WallOfFamePage({ tasks, team, timers, visUsers, isMob, userXP, achievem
 // ═══════════════════════════════════════════════════════════════
 // MONTHLY LEAGUE — Clasament lunar cu bonus, reset la 1 a lunii
 // ═══════════════════════════════════════════════════════════════
+function BonusConfig({ monthlyBonus, setMonthlyBonus }) {
+  var [form, setForm] = useState(Object.assign({ enabled: false, memberAmount: 0, memberCurrency: "RON", pmAmount: 0, pmCurrency: "RON" }, monthlyBonus || {}));
+  var [saved, setSaved] = useState(false);
+  var upd = function(field, val) { setForm(function(p) { var n = Object.assign({}, p); n[field] = val; return n; }); setSaved(false); };
+  var doSave = function() {
+    setMonthlyBonus(form);
+    cloudSave("monthlyBonus", form);
+    setSaved(true);
+    setTimeout(function() { setSaved(false); }, 3000);
+  };
+  return <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
+    <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premii Lunare (admin)</div>
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+        <input type="checkbox" checked={form.enabled} onChange={function(e) { upd("enabled", e.target.checked); }} style={{ accentColor: "#7C3AED" }} /> Activ
+      </label>
+    </div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+      <div style={{ padding: 12, background: "#EFF6FF", borderRadius: 8, border: "1px solid #BFDBFE" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#2563EB", marginBottom: 8 }}>Premiu Membri (implementare)</div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="number" min="0" step="10" value={form.memberAmount || 0} onChange={function(e) { upd("memberAmount", parseInt(e.target.value) || 0); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+          <select value={form.memberCurrency || "RON"} onChange={function(e) { upd("memberCurrency", e.target.value); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
+            <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ padding: 12, background: "#F5F3FF", borderRadius: 8, border: "1px solid #DDD6FE" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED", marginBottom: 8 }}>Premiu PM (coordonare)</div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="number" min="0" step="10" value={form.pmAmount || 0} onChange={function(e) { upd("pmAmount", parseInt(e.target.value) || 0); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
+          <select value={form.pmCurrency || "RON"} onChange={function(e) { upd("pmCurrency", e.target.value); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
+            <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button style={Object.assign({}, S.primBtn, { padding: "10px 28px", fontSize: 13, fontWeight: 700 })} onClick={doSave}>Salveaza Premii</button>
+      {saved && <span style={{ fontSize: 12, color: GR, fontWeight: 700 }}>Salvat!</span>}
+    </div>
+  </Card>;
+}
+
 function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, visUsers, isMob, monthlyBonus, setMonthlyBonus, userXP }) {
   var [leagueTab, setLeagueTab] = useState(me.role === "pm" ? "pm" : "members");
   var now = new Date();
@@ -4768,38 +4812,7 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
     </Card>
 
     {/* Admin bonus config */}
-    {me.role === "admin" && (function() {
-      var _s = monthlyBonus;
-      return <Card style={{ marginTop: 16, borderLeft: "3px solid #7C3AED" }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#7C3AED", marginBottom: 10 }}>Seteaza Premii Lunare (admin)</div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-          <input type="checkbox" checked={monthlyBonus.enabled} onChange={function(e) { var n = Object.assign({}, monthlyBonus, { enabled: e.target.checked }); setMonthlyBonus(n); cloudSave("monthlyBonus", n); }} style={{ accentColor: "#7C3AED" }} /> Activ
-        </label>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-        <div style={{ padding: 12, background: "#EFF6FF", borderRadius: 8, border: "1px solid #BFDBFE" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#2563EB", marginBottom: 8 }}>Premiu Membri (implementare)</div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <input type="number" min="0" step="10" value={monthlyBonus.memberAmount || 0} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { memberAmount: parseInt(e.target.value) || 0 })); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
-            <select value={monthlyBonus.memberCurrency || "RON"} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { memberCurrency: e.target.value })); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
-              <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
-            </select>
-          </div>
-        </div>
-        <div style={{ padding: 12, background: "#F5F3FF", borderRadius: 8, border: "1px solid #DDD6FE" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED", marginBottom: 8 }}>Premiu PM (coordonare)</div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <input type="number" min="0" step="10" value={monthlyBonus.pmAmount || 0} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { pmAmount: parseInt(e.target.value) || 0 })); }} style={Object.assign({}, S.input, { width: 90, padding: "6px 10px", fontSize: 14, fontWeight: 700, textAlign: "center" })} />
-            <select value={monthlyBonus.pmCurrency || "RON"} onChange={function(e) { setMonthlyBonus(Object.assign({}, monthlyBonus, { pmCurrency: e.target.value })); }} style={Object.assign({}, S.fSel, { padding: "6px 8px", fontSize: 12 })}>
-              <option value="RON">RON</option><option value="EUR">EUR</option><option value="USD">USD</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <button style={Object.assign({}, S.primBtn, { padding: "10px 28px", fontSize: 13, fontWeight: 700 })} onClick={function() { cloudSave("monthlyBonus", monthlyBonus); alert("Premii salvate!"); }}>Salveaza Premii</button>
-    </Card>;
-    })()}
+    {me.role === "admin" && <BonusConfig monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} />}
 
     {/* Scoring explanation */}
     <Card style={{ marginTop: 16, background: "#F8FAFC" }}>
