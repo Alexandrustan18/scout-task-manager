@@ -717,9 +717,6 @@ export default function App() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return function() { window.removeEventListener("beforeunload", handleBeforeUnload); };
   }, []);
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return function() { window.removeEventListener("beforeunload", handleBeforeUnload); };
-  }, []);
 
   // Auto-stop timers that are running on hidden/invalid tasks
   useEffect(function() {
