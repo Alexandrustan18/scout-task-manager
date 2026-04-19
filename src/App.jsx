@@ -45,9 +45,12 @@ async function immediateSave(key, value) {
   if (saveTimers[key]) { clearTimeout(saveTimers[key]); delete saveTimers[key]; }
   _saveVersions[key] = Date.now();
   _pendingKeys[key] = true;
+  // Safety timeout: force clear pending flag after 15s even if promise hangs
+  var safetyTimer = setTimeout(function() { _pendingKeys[key] = false; }, 15000);
   try {
     await cloudSave(key, value);
   } finally {
+    clearTimeout(safetyTimer);
     _pendingKeys[key] = false;
   }
 }
@@ -92,7 +95,8 @@ function debouncedSave(key, value, delay) {
     var valToSave = _latestValues[key];
     _saveVersions[key] = Date.now();
     _pendingKeys[key] = true;
-    cloudSave(key, valToSave).then(function() { _pendingKeys[key] = false; }).catch(function() { _pendingKeys[key] = false; });
+    var debSafety = setTimeout(function() { _pendingKeys[key] = false; }, 15000);
+    cloudSave(key, valToSave).then(function() { clearTimeout(debSafety); _pendingKeys[key] = false; }).catch(function() { clearTimeout(debSafety); _pendingKeys[key] = false; });
   }, delay || 800);
 }
 
@@ -637,6 +641,25 @@ export default function App() {
         }
       } catch(e) {}
     });
+  }, []);
+
+  // SAFETY NET: Every 3 seconds, force-flush any pending debounce for critical keys
+  // This catches cases where debounce is set but never fires (e.g., tab backgrounded)
+  useEffect(function() {
+    var criticalKeys = ["tasks", "statusHistory", "timers"];
+    var iv = setInterval(function() {
+      criticalKeys.forEach(function(key) {
+        if (saveTimers[key] && _latestValues[key] !== undefined) {
+          clearTimeout(saveTimers[key]);
+          delete saveTimers[key];
+          var val = _latestValues[key];
+          _saveVersions[key] = Date.now();
+          _pendingKeys[key] = true;
+          cloudSave(key, val).finally(function() { _pendingKeys[key] = false; });
+        }
+      });
+    }, 3000);
+    return function() { clearInterval(iv); };
   }, []);
 
   // Penalty check on auto-login (runs after loading completes when user was restored from localStorage)
@@ -1562,15 +1585,89 @@ export default function App() {
   };
 
   var handleDrop = function(st) { if (!dragId) return; chgSt(dragId, st); setDragId(null); };
-  var bulkChgSt = function(ns) { selectedTasks.forEach(function(tid) { chgSt(tid, ns); }); setSelectedTasks([]); setBulkMode(false); };
-  var bulkChgAssign = function(na) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { assignee: na, updatedAt: ts() }) : x; }); }); addLog("BULK", "Bulk assign " + selectedTasks.length); setSelectedTasks([]); setBulkMode(false); };
-  var bulkChgPrio = function(np) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { priority: np, updatedAt: ts() }) : x; }); }); setSelectedTasks([]); setBulkMode(false); };
-  var bulkChgDeadline = function(nd) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { deadline: nd, updatedAt: ts() }) : x; }); }); addLog("BULK", "Bulk deadline " + selectedTasks.length + " -> " + nd); setSelectedTasks([]); setBulkMode(false); };
-  var bulkChgShop = function(ns) { setTasks(function(p) { return p.map(function(x) { return selectedTasks.includes(x.id) ? Object.assign({}, x, { shop: ns, updatedAt: ts() }) : x; }); }); addLog("BULK", "Bulk shop " + selectedTasks.length + " -> " + ns); setSelectedTasks([]); setBulkMode(false); };
+
+  // CRITICAL: Bulk operations must be ATOMIC to avoid race conditions
+  // Each chgSt() in a loop races on the same stale `tasks` closure, causing data loss
+  var bulkChgSt = function(ns) {
+    var selected = selectedTasks.slice();
+    var newTasks = tasks.map(function(x) {
+      if (!selected.includes(x.id)) return x;
+      return Object.assign({}, x, { status: ns, updatedAt: ts() });
+    });
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk status save failed:", e); });
+
+    // Update statusHistory atomically too
+    var newStatusHistory = Object.assign({}, statusHistory);
+    selected.forEach(function(tid) {
+      if (!newStatusHistory[tid]) newStatusHistory[tid] = [];
+      newStatusHistory[tid] = newStatusHistory[tid].concat([{ status: ns, at: ts() }]);
+    });
+    setStatusHistory(newStatusHistory);
+    immediateSave("statusHistory", newStatusHistory).catch(function(e) { console.error("Bulk statusHistory save failed:", e); });
+
+    // Side effects: logs, notifications, XP
+    selected.forEach(function(tid) {
+      var prevTask = tasks.find(function(x) { return x.id === tid; });
+      if (!prevTask) return;
+      addLog("STATUS", "\"" + prevTask.title + "\" -> " + ns);
+      addActivity(tid, prevTask.title, "STATUS", prevTask.status + " -> " + ns);
+      if (prevTask.assignee && prevTask.assignee !== user) {
+        addNotif("status_change", "\"" + prevTask.title + "\" -> " + ns, tid, prevTask.assignee);
+      }
+      if (user !== "admin") {
+        addNotif("status_change", (team[user] ? team[user].name : "?") + ": \"" + prevTask.title + "\" -> " + ns, tid, "admin");
+      }
+      if (ns === "Done") {
+        var taskXP = XP_PER_TASK[prevTask.taskType] || XP_PER_TASK["General"] || 10;
+        awardXP(prevTask.assignee, taskXP, "Task Done: " + prevTask.title);
+        var assigneePM = (team[prevTask.assignee] || {}).pm;
+        if (assigneePM && team[assigneePM]) awardXP(assigneePM, 5, "Team Done: " + prevTask.title);
+      }
+    });
+    if (ns === "Done") { triggerCelebration("done"); setTimeout(function() { selected.forEach(function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) checkAchievements(t.assignee); }); }, 500); }
+    addLog("BULK", "Bulk status " + selected.length + " -> " + ns);
+    setSelectedTasks([]); setBulkMode(false);
+  };
+
+  var bulkChgAssign = function(na) {
+    var selected = selectedTasks.slice();
+    var newTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { assignee: na, updatedAt: ts() }) : x; });
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk assign save failed:", e); });
+    addLog("BULK", "Bulk assign " + selected.length);
+    setSelectedTasks([]); setBulkMode(false);
+  };
+  var bulkChgPrio = function(np) {
+    var selected = selectedTasks.slice();
+    var newTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { priority: np, updatedAt: ts() }) : x; });
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk prio save failed:", e); });
+    setSelectedTasks([]); setBulkMode(false);
+  };
+  var bulkChgDeadline = function(nd) {
+    var selected = selectedTasks.slice();
+    var newTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { deadline: nd, updatedAt: ts() }) : x; });
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk deadline save failed:", e); });
+    addLog("BULK", "Bulk deadline " + selected.length + " -> " + nd);
+    setSelectedTasks([]); setBulkMode(false);
+  };
+  var bulkChgShop = function(ns) {
+    var selected = selectedTasks.slice();
+    var newTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { shop: ns, updatedAt: ts() }) : x; });
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk shop save failed:", e); });
+    addLog("BULK", "Bulk shop " + selected.length + " -> " + ns);
+    setSelectedTasks([]); setBulkMode(false);
+  };
   var bulkDel = function() {
     if (!window.confirm("Sterge " + selectedTasks.length + " taskuri? Actiune ireversibila!")) return;
-    var n = selectedTasks.length;
-    setTasks(function(p) { return p.filter(function(x) { return !selectedTasks.includes(x.id); }); });
+    var selected = selectedTasks.slice();
+    var n = selected.length;
+    var newTasks = tasks.filter(function(x) { return !selected.includes(x.id); });
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk delete save failed:", e); });
     addLog("BULK_DELETE", "Sterse " + n + " taskuri in bulk");
     setSelectedTasks([]); setBulkMode(false);
   };
@@ -1766,13 +1863,15 @@ export default function App() {
           <h1 style={S.pageTitle}>{(accessibleNav.find(function(n) { return n.id === page; }) || {}).label || ""}</h1>
           <div style={{ flex: 1 }} />
           {page === "tasks" && canCreate && <button style={Object.assign({}, S.chip, { background: bulkMode ? "#DC2626" : "#F1F5F9", color: bulkMode ? "#fff" : "#475569", marginRight: 8 })} onClick={function() { setBulkMode(!bulkMode); setSelectedTasks([]); }}><Ic d={Icons.check} size={14} color={bulkMode ? "#fff" : "#475569"} /> {bulkMode ? "Exit Bulk" : "Bulk"}</button>}
-          {/* Live save status indicator */}
+          {/* Live save status indicator - uses tick to re-render every second */}
           {(function() {
-            var pendingCount = 0;
-            Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) pendingCount++; });
-            Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) pendingCount++; });
+            var _ignoreTick = tick; // reference tick to force re-render
+            var pendingKeys = {};
+            Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) pendingKeys[k] = true; });
+            Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) pendingKeys[k] = true; });
+            var pendingCount = Object.keys(pendingKeys).length;
             if (pendingCount > 0) {
-              return <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: "#FEF3C7", borderRadius: 6, marginRight: 8, fontSize: 11, fontWeight: 700, color: "#D97706" }} title="Datele se salveaza. Nu da refresh acum!">
+              return <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: "#FEF3C7", borderRadius: 6, marginRight: 8, fontSize: 11, fontWeight: 700, color: "#D97706" }} title={"Se salveaza: " + Object.keys(pendingKeys).join(", ")}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#D97706", animation: "pulse 1s infinite" }} />
                 Se salveaza... ({pendingCount})
               </div>;
@@ -1863,10 +1962,16 @@ export default function App() {
       {viewTask && <ViewTaskModal task={viewTask} team={team} user={user} tasks={tasks} setTasks={setTasks} timers={timers} getTS={getTS} togTimer={togTimer} products={products} onClose={function() { setViewTask(null); }} onEdit={function() { setEditTask(viewTask); setViewTask(null); setShowAdd(true); }} statusHistory={statusHistory} isAdmin={isAdmin} taskActivity={taskActivity} />}
       {showFinalize && <CampaignFinalizeModal task={showFinalize} onFinalize={function(count) {
         var tid = showFinalize.id;
-        setTasks(function(p) { return p.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: "Done", updatedAt: ts(), _finalized: true, _finalizedCount: count }) : x; }); });
+        var newTasks = tasks.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: "Done", updatedAt: ts(), _finalized: true, _finalizedCount: count }) : x; });
+        setTasks(newTasks);
+        immediateSave("tasks", newTasks).catch(function(e) { console.error("Campaign finalize save failed:", e); });
         addLog("CAMPAIGN", "\"" + showFinalize.title + "\" finalizat: " + count + " produse");
         addNotif("campaign", "Campaign \"" + showFinalize.title + "\" finalizat: " + count + " produse", tid);
-        setStatusHistory(function(prev) { var n = Object.assign({}, prev); if (!n[tid]) n[tid] = []; n[tid] = n[tid].concat([{ status: "Done", at: ts() }]); return n; });
+        var newSH = Object.assign({}, statusHistory);
+        if (!newSH[tid]) newSH[tid] = [];
+        newSH[tid] = newSH[tid].concat([{ status: "Done", at: ts() }]);
+        setStatusHistory(newSH);
+        immediateSave("statusHistory", newSH).catch(function(e) {});
         var tm = timers[tid]; if (tm && tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; setTimers(function(p2) { var n2 = Object.assign({}, p2); n2[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n2; }); }
         setShowFinalize(null);
       }} onClose={function() { setShowFinalize(null); }} />}
