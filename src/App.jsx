@@ -34,7 +34,23 @@ async function cloudLoad(key, fallback) {
   return fallback;
 }
 
-var _skipLocalStorage = { taskBackups: true, taskActivity: true }; // too large for localStorage
+var _skipLocalStorage = { taskBackups: true, taskActivity: true, cloud_taskBackups: true, productAudit: true, logs: true, loginHistory: true, statusHistory: true, wheelHistory: true, penalties: true }; // too large or not critical for localStorage
+
+// Keys that MUST be saved instantly (no debounce) - critical state changes
+var _instantSaveKeys = { tasks: false }; // not used yet - framework for future use
+
+// Force immediate save bypassing debounce - used for critical operations
+async function immediateSave(key, value) {
+  _latestValues[key] = value;
+  if (saveTimers[key]) { clearTimeout(saveTimers[key]); delete saveTimers[key]; }
+  _saveVersions[key] = Date.now();
+  _pendingKeys[key] = true;
+  try {
+    await cloudSave(key, value);
+  } finally {
+    _pendingKeys[key] = false;
+  }
+}
 
 async function cloudSave(key, value, _retryCount) {
   if (!_skipLocalStorage[key]) {
@@ -608,6 +624,21 @@ export default function App() {
     return function() { _errorLogListeners = _errorLogListeners.filter(function(fn) { return fn !== listener; }); };
   }, []);
 
+  // CRITICAL: Clean localStorage of large keys on every mount
+  // These keys should ONLY live in Supabase, not in browser storage
+  useEffect(function() {
+    var keysToClean = ["s7_taskBackups", "s7_cloud_taskBackups", "s7_productAudit", "s7_logs", "s7_loginHistory", "s7_statusHistory", "s7_wheelHistory", "s7_penalties", "s7_taskActivity"];
+    keysToClean.forEach(function(k) {
+      try {
+        var existing = localStorage.getItem(k);
+        if (existing) {
+          localStorage.removeItem(k);
+          console.log("Cleaned " + k + " from localStorage (" + Math.round(existing.length / 1024) + "KB freed)");
+        }
+      } catch(e) {}
+    });
+  }, []);
+
   // Penalty check on auto-login (runs after loading completes when user was restored from localStorage)
   useEffect(function() {
     if (loading || !user || tasks.length === 0) return;
@@ -640,28 +671,52 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("products", products, 1000); }, [products]);
   useEffect(function() { if (!loading) debouncedSave("timers", timers, 1000); }, [timers]);
 
-  // CRITICAL: Flush pending saves on page unload (refresh/close)
+  // CRITICAL: Warn user + flush pending saves on page unload (refresh/close)
   useEffect(function() {
-    var handleBeforeUnload = function() {
+    var handleBeforeUnload = function(e) {
+      var hasPending = false;
+      Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) hasPending = true; });
+      Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) hasPending = true; });
+
+      // Flush all pending saves
       Object.keys(_latestValues).forEach(function(key) {
         if (saveTimers[key]) {
           clearTimeout(saveTimers[key]);
           if (!_skipLocalStorage[key]) {
-            try { localStorage.setItem("s7_" + key, JSON.stringify(_latestValues[key])); } catch(e) {}
+            try { localStorage.setItem("s7_" + key, JSON.stringify(_latestValues[key])); } catch(e3) {}
           }
-          // Try sendBeacon for critical data
+          // sendBeacon WITH proper auth headers (Supabase needs apikey + Authorization)
           if (key === "tasks" || key === "timers" || key === "statusHistory") {
             try {
+              var SUPABASE_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
               var payload = JSON.stringify({ id: key, data: _latestValues[key], updated_at: new Date().toISOString() });
-              navigator.sendBeacon && navigator.sendBeacon(
-                "https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id",
-                new Blob([payload], { type: "application/json" })
-              );
+              // Use fetch with keepalive (better than sendBeacon for auth)
+              fetch("https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": "Bearer " + SUPABASE_KEY,
+                  "Prefer": "resolution=merge-duplicates"
+                },
+                body: payload,
+                keepalive: true
+              }).catch(function() {});
             } catch(e2) {}
           }
         }
       });
+
+      // If still pending, warn user
+      if (hasPending) {
+        e.preventDefault();
+        e.returnValue = "Ai schimbari care inca se salveaza. Asteapta 2-3 secunde inainte sa dai refresh!";
+        return e.returnValue;
+      }
     };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return function() { window.removeEventListener("beforeunload", handleBeforeUnload); };
+  }, []);
     window.addEventListener("beforeunload", handleBeforeUnload);
     return function() { window.removeEventListener("beforeunload", handleBeforeUnload); };
   }, []);
@@ -1235,7 +1290,10 @@ export default function App() {
       }
       // FEATURE 3: auto-priority on edit
       var autoPrio = autoPriority(t.deadline, t.priority);
-      setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, t, { priority: autoPrio, updatedAt: ts() }) : x; }); });
+      // CRITICAL: Build new tasks array and save IMMEDIATELY to Supabase
+      var updatedTasks = tasks.map(function(x) { return x.id === t.id ? Object.assign({}, t, { priority: autoPrio, updatedAt: ts() }) : x; });
+      setTasks(updatedTasks);
+      immediateSave("tasks", updatedTasks).catch(function(e) { console.error("Instant save failed on edit:", e); });
       addLog("EDIT", (team[user] ? team[user].name : "") + " a editat \"" + t.title + "\"");
       // Audit trail: track what changed
       if (existing) {
@@ -1349,8 +1407,20 @@ export default function App() {
     addLog("EXPLODE", "Split: " + t.title + " -> " + childTasks.length + " taskuri");
   };
 
-  var delTask = function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) { pushUndo("DELETE_TASK", Object.assign({}, t)); addLog("DELETE", "Sters \"" + t.title + "\""); addActivity(tid, t.title, "DELETE", "sters de " + ((team[user] || {}).name || user)); } setTasks(function(p) { return p.filter(function(x) { return x.id !== tid; }); }); };
-  var dupTask = function(t) { var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) }); setTasks(function(p) { return [nt].concat(p); }); addLog("DUPLICATE", "Duplicat \"" + t.title + "\""); addActivity(nt.id, nt.title, "DUPLICATE", "duplicat din \"" + t.title + "\""); };
+  var delTask = function(tid) {
+    var t = tasks.find(function(x) { return x.id === tid; });
+    if (t) { pushUndo("DELETE_TASK", Object.assign({}, t)); addLog("DELETE", "Sters \"" + t.title + "\""); addActivity(tid, t.title, "DELETE", "sters de " + ((team[user] || {}).name || user)); }
+    var newTasks = tasks.filter(function(x) { return x.id !== tid; });
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Instant save failed on delete:", e); });
+  };
+  var dupTask = function(t) {
+    var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) });
+    var newTasks = [nt].concat(tasks);
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Instant save failed on duplicate:", e); });
+    addLog("DUPLICATE", "Duplicat \"" + t.title + "\""); addActivity(nt.id, nt.title, "DUPLICATE", "duplicat din \"" + t.title + "\"");
+  };
 
   var canChgDeps = function(tid, newSt) {
     var t = tasks.find(function(x) { return x.id === tid; });
@@ -1367,9 +1437,19 @@ export default function App() {
     if (st === "Done" && prevTask && prevTask.campaignItems && prevTask.campaignItems.length > 0 && !prevTask._finalized) {
       setShowFinalize(prevTask); return;
     }
-    setTasks(function(p) { return p.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts() }) : x; }); });
+    // CRITICAL: Build new tasks array and save IMMEDIATELY to Supabase (no debounce)
+    // This prevents data loss when user refreshes quickly after marking Done
+    var newTasks = tasks.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts() }) : x; });
+    setTasks(newTasks);
+    immediateSave("tasks", newTasks).catch(function(e) { console.error("Instant save failed:", e); });
+
     if (prevTask) { pushUndo("STATUS_CHANGE", { taskId: tid, title: prevTask.title, oldStatus: prevTask.status }); addLog("STATUS", "\"" + prevTask.title + "\" -> " + st); addActivity(tid, prevTask.title, "STATUS", prevTask.status + " -> " + st); }
-    setStatusHistory(function(prev) { var n = Object.assign({}, prev); if (!n[tid]) n[tid] = []; n[tid] = n[tid].concat([{ status: st, at: ts() }]); return n; });
+    // Also save statusHistory immediately
+    var newStatusHistory = Object.assign({}, statusHistory);
+    if (!newStatusHistory[tid]) newStatusHistory[tid] = [];
+    newStatusHistory[tid] = newStatusHistory[tid].concat([{ status: st, at: ts() }]);
+    setStatusHistory(newStatusHistory);
+    immediateSave("statusHistory", newStatusHistory).catch(function(e) { console.error("statusHistory save failed:", e); });
 
     // FEATURE 1: Notify on status change - notify assignee
     if (prevTask && prevTask.assignee && prevTask.assignee !== user) {
@@ -1689,6 +1769,19 @@ export default function App() {
           <h1 style={S.pageTitle}>{(accessibleNav.find(function(n) { return n.id === page; }) || {}).label || ""}</h1>
           <div style={{ flex: 1 }} />
           {page === "tasks" && canCreate && <button style={Object.assign({}, S.chip, { background: bulkMode ? "#DC2626" : "#F1F5F9", color: bulkMode ? "#fff" : "#475569", marginRight: 8 })} onClick={function() { setBulkMode(!bulkMode); setSelectedTasks([]); }}><Ic d={Icons.check} size={14} color={bulkMode ? "#fff" : "#475569"} /> {bulkMode ? "Exit Bulk" : "Bulk"}</button>}
+          {/* Live save status indicator */}
+          {(function() {
+            var pendingCount = 0;
+            Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) pendingCount++; });
+            Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) pendingCount++; });
+            if (pendingCount > 0) {
+              return <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: "#FEF3C7", borderRadius: 6, marginRight: 8, fontSize: 11, fontWeight: 700, color: "#D97706" }} title="Datele se salveaza. Nu da refresh acum!">
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#D97706", animation: "pulse 1s infinite" }} />
+                Se salveaza... ({pendingCount})
+              </div>;
+            }
+            return null;
+          })()}
           {undoStack.length > 0 && <button style={Object.assign({}, S.iconBtn, { background: "#FEF3C7", borderRadius: 6, padding: "4px 10px", display: "flex", alignItems: "center", gap: 4 })} onClick={performUndo} title={"Undo: " + undoStack[0].action}><span style={{ fontSize: 14 }}>↩</span><span style={{ fontSize: 10, color: "#D97706", fontWeight: 600 }}>Undo</span></button>}
           <button style={Object.assign({}, S.iconBtn, { opacity: soundEnabled ? 1 : 0.4 })} onClick={function() { setSoundEnabled(!soundEnabled); if (!soundEnabled) playSound("done"); }} title={soundEnabled ? "Sunet ON" : "Sunet OFF"}><span style={{ fontSize: 16 }}>{soundEnabled ? "🔊" : "🔇"}</span></button>
           <div style={{ position: "relative" }}>
