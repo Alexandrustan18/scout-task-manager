@@ -45,13 +45,12 @@ async function immediateSave(key, value) {
   if (saveTimers[key]) { clearTimeout(saveTimers[key]); delete saveTimers[key]; }
   _saveVersions[key] = Date.now();
   _pendingKeys[key] = true;
-  // Safety timeout: force clear pending flag after 15s even if promise hangs
-  var safetyTimer = setTimeout(function() { _pendingKeys[key] = false; }, 15000);
+  var safetyTimer = setTimeout(function() { delete _pendingKeys[key]; }, 15000);
   try {
     await cloudSave(key, value);
   } finally {
     clearTimeout(safetyTimer);
-    _pendingKeys[key] = false;
+    delete _pendingKeys[key];
   }
 }
 
@@ -92,11 +91,12 @@ function debouncedSave(key, value, delay) {
   _latestValues[key] = value;
   if (saveTimers[key]) clearTimeout(saveTimers[key]);
   saveTimers[key] = setTimeout(function() {
+    delete saveTimers[key]; // timer fired, remove from pending timers
     var valToSave = _latestValues[key];
     _saveVersions[key] = Date.now();
     _pendingKeys[key] = true;
-    var debSafety = setTimeout(function() { _pendingKeys[key] = false; }, 15000);
-    cloudSave(key, valToSave).then(function() { clearTimeout(debSafety); _pendingKeys[key] = false; }).catch(function() { clearTimeout(debSafety); _pendingKeys[key] = false; });
+    var debSafety = setTimeout(function() { delete _pendingKeys[key]; }, 15000);
+    cloudSave(key, valToSave).then(function() { clearTimeout(debSafety); delete _pendingKeys[key]; }).catch(function() { clearTimeout(debSafety); delete _pendingKeys[key]; });
   }, delay || 800);
 }
 
@@ -130,17 +130,36 @@ var _globalUserXP = {}; // shared ref for Av component to read levels
 // ═══ ERROR LOG SYSTEM ═══
 var _errorLog = [];
 var _errorLogListeners = [];
+var _errorLogSaveTimer = null;
+function _flushErrorLogToSupabase() {
+  if (_errorLogSaveTimer) clearTimeout(_errorLogSaveTimer);
+  _errorLogSaveTimer = setTimeout(function() {
+    _errorLogSaveTimer = null;
+    try {
+      supabase.from("app_data").upsert({ id: "errorLog", data: _errorLog, updated_at: new Date().toISOString() }, { onConflict: "id" }).then(function() {});
+    } catch(e) {}
+  }, 2000);
+}
 function logError(category, message, details) {
   var entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), category: category, message: message, details: details || "", time: new Date().toISOString(), url: typeof window !== "undefined" ? window.location.href : "" };
   _errorLog = [entry].concat(_errorLog).slice(0, 200);
-  try { localStorage.setItem("s7_errorLog", JSON.stringify(_errorLog)); } catch(e) {}
   _errorLogListeners.forEach(function(fn) { try { fn(_errorLog); } catch(e) {} });
   console.warn("[S.C.O.U.T ERROR]", category, message, details);
+  // Save to Supabase (debounced 2s so we don't flood)
+  _flushErrorLogToSupabase();
 }
-// Load persisted errors on start
-try { var _stored = localStorage.getItem("s7_errorLog"); if (_stored) _errorLog = JSON.parse(_stored); } catch(e) {}
-// Global JS error catcher
+// Load persisted errors on start from Supabase (not localStorage)
+async function _loadErrorLogFromSupabase() {
+  try {
+    var { data } = await supabase.from("app_data").select("data").eq("id", "errorLog").maybeSingle();
+    if (data && data.data && Array.isArray(data.data)) {
+      _errorLog = data.data;
+      _errorLogListeners.forEach(function(fn) { try { fn(_errorLog); } catch(e) {} });
+    }
+  } catch(e) {}
+}
 if (typeof window !== "undefined") {
+  setTimeout(_loadErrorLogFromSupabase, 100);
   window.addEventListener("error", function(e) {
     logError("JS_ERROR", e.message || "Unknown error", (e.filename || "") + ":" + (e.lineno || "") + " | " + (e.error && e.error.stack ? e.error.stack.substring(0, 300) : ""));
   });
@@ -644,7 +663,6 @@ export default function App() {
   }, []);
 
   // SAFETY NET: Every 3 seconds, force-flush any pending debounce for critical keys
-  // This catches cases where debounce is set but never fires (e.g., tab backgrounded)
   useEffect(function() {
     var criticalKeys = ["tasks", "statusHistory", "timers"];
     var iv = setInterval(function() {
@@ -655,7 +673,7 @@ export default function App() {
           var val = _latestValues[key];
           _saveVersions[key] = Date.now();
           _pendingKeys[key] = true;
-          cloudSave(key, val).finally(function() { _pendingKeys[key] = false; });
+          cloudSave(key, val).finally(function() { delete _pendingKeys[key]; });
         }
       });
     }, 3000);
@@ -7233,6 +7251,8 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
     if (!window.confirm("Stergi toate erorile din log?")) return;
     _errorLog = [];
     try { localStorage.removeItem("s7_errorLog"); } catch(e) {}
+    // Also clear in Supabase
+    try { supabase.from("app_data").upsert({ id: "errorLog", data: [], updated_at: new Date().toISOString() }, { onConflict: "id" }).then(function() {}); } catch(e) {}
     setErrorLog([]);
     setCheckResults(null);
   };
