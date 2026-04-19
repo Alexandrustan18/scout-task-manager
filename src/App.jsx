@@ -9,41 +9,49 @@ var supabase = createClient(
 
 async function cloudLoad(key, fallback) {
   var lsData = null;
-  try { var ls = localStorage.getItem("s7_" + key); if (ls) lsData = JSON.parse(ls); } catch(e3) {}
+  try { var ls = localStorage.getItem("s7_" + key); if (ls) lsData = JSON.parse(ls); } catch(e3) {
+    logError("LOCALSTORAGE_LOAD", "Nu pot citi localStorage: " + key, e3.message || "");
+  }
   try {
     var { data, error } = await supabase.from("app_data").select("data").eq("id", key).single();
     if (!error && data && data.data) {
       try { localStorage.setItem("s7_" + key, JSON.stringify(data.data)); } catch(e2) {}
       return data.data;
     }
-    // Supabase returned nothing or error - use localStorage
+    if (error) {
+      logError("SUPABASE_LOAD", "Eroare incarcare \"" + key + "\" din Supabase, folosesc localStorage", error.message || "");
+    }
     if (lsData) return lsData;
   } catch (e) {
-    // Network error - use localStorage
+    logError("SUPABASE_LOAD_EXCEPTION", "Exceptie la incarcare \"" + key + "\", folosesc localStorage", e.message || "");
     if (lsData) return lsData;
   }
   return fallback;
 }
 
 async function cloudSave(key, value, _retryCount) {
-  try { localStorage.setItem("s7_" + key, JSON.stringify(value)); } catch(e2) {}
+  try { localStorage.setItem("s7_" + key, JSON.stringify(value)); } catch(e2) {
+    logError("LOCALSTORAGE", "Nu pot salva in localStorage: " + key, e2.message || "");
+  }
   try {
     var { error } = await supabase.from("app_data").upsert({ id: key, data: value, updated_at: new Date().toISOString() }, { onConflict: "id" });
     if (error) {
-      console.error("cloudSave error:", key, error);
       var retries = _retryCount || 0;
+      logError("SUPABASE_SAVE", "Eroare salvare \"" + key + "\" (retry " + retries + "/2)", error.message || JSON.stringify(error));
       if (retries < 2) {
         await new Promise(function(r) { setTimeout(r, 1000 * (retries + 1)); });
         return cloudSave(key, value, retries + 1);
       }
+      logError("SUPABASE_SAVE_FAIL", "FINAL FAIL salvare \"" + key + "\" dupa 3 incercari! Datele sunt DOAR in localStorage.", error.message || "");
     }
   } catch (e) {
-    console.error("cloudSave exception:", key, e);
     var retries2 = _retryCount || 0;
+    logError("SUPABASE_EXCEPTION", "Exceptie la salvare \"" + key + "\" (retry " + retries2 + "/2)", e.message || "");
     if (retries2 < 2) {
       await new Promise(function(r) { setTimeout(r, 1000 * (retries2 + 1)); });
       return cloudSave(key, value, retries2 + 1);
     }
+    logError("SUPABASE_SAVE_FAIL", "FINAL FAIL salvare \"" + key + "\" dupa 3 incercari!", e.message || "");
   }
 }
 
@@ -90,7 +98,28 @@ var SI = { "To Do": "o", "In Progress": "~", Review: "?", Done: "*" };
 var GR = "#0C7E3E";
 var _globalUserXP = {}; // shared ref for Av component to read levels
 
-// ═══ LEVEL SYSTEM GLOBALS ═══
+// ═══ ERROR LOG SYSTEM ═══
+var _errorLog = [];
+var _errorLogListeners = [];
+function logError(category, message, details) {
+  var entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), category: category, message: message, details: details || "", time: new Date().toISOString(), url: typeof window !== "undefined" ? window.location.href : "" };
+  _errorLog = [entry].concat(_errorLog).slice(0, 200);
+  try { localStorage.setItem("s7_errorLog", JSON.stringify(_errorLog)); } catch(e) {}
+  _errorLogListeners.forEach(function(fn) { try { fn(_errorLog); } catch(e) {} });
+  console.warn("[S.C.O.U.T ERROR]", category, message, details);
+}
+// Load persisted errors on start
+try { var _stored = localStorage.getItem("s7_errorLog"); if (_stored) _errorLog = JSON.parse(_stored); } catch(e) {}
+// Global JS error catcher
+if (typeof window !== "undefined") {
+  window.addEventListener("error", function(e) {
+    logError("JS_ERROR", e.message || "Unknown error", (e.filename || "") + ":" + (e.lineno || "") + " | " + (e.error && e.error.stack ? e.error.stack.substring(0, 300) : ""));
+  });
+  window.addEventListener("unhandledrejection", function(e) {
+    var msg = e.reason ? (e.reason.message || String(e.reason)) : "Unhandled promise rejection";
+    logError("PROMISE_ERROR", msg, e.reason && e.reason.stack ? e.reason.stack.substring(0, 300) : "");
+  });
+}
 var LEVEL_THRESHOLDS = [0, 50, 120, 210, 320, 450, 600, 780, 980, 1200, 1450, 1730, 2040, 2380, 2750, 3150, 3600, 4100, 4650, 5250, 5900, 6600, 7350, 8150, 9000, 9900, 10850, 11850, 12900, 14000, 15200, 16500, 17900, 19400, 21000, 22700, 24500, 26400, 28400, 30500, 32700, 35000, 37400, 39900, 42500, 45200, 48000, 50900, 53900, 57000];
 var LEVEL_TITLES = ["Recrut", "Incepator", "Novice", "Ucenic", "Apprentice", "Junior", "Cadet", "Operator", "Specialist", "Avansat", "Profesionist", "Expert", "Veteran", "Senior", "Elite", "Master", "Grandmaster", "Champion", "Hero", "Legend", "Mythic", "Immortal", "Titan", "Overlord", "Supreme", "Ascendant", "Celestial", "Transcendent", "Omniscient", "Apex", "Ethereal", "Quantum", "Cosmic", "Stellar", "Galactic", "Universal", "Infinite", "Eternal", "Divine", "Absolute", "Omega", "Alpha Supreme", "Ultra", "Mega", "Giga", "Tera", "Peta", "Exa", "Zetta", "GOAT"];
 function getLevel(xp) { var lvl = 0; for (var i = 0; i < LEVEL_THRESHOLDS.length; i++) { if (xp >= LEVEL_THRESHOLDS[i]) lvl = i + 1; else break; } return Math.min(lvl, 50); }
@@ -403,6 +432,8 @@ export default function App() {
   var [showPenaltyPopup, setShowPenaltyPopup] = useState(null);
   // Task Activity / Audit Trail
   var [taskActivity, setTaskActivity] = useState([]);
+  // Error Log for admin
+  var [errorLog, setErrorLog] = useState(_errorLog || []);
   // Undo stack - last 10 actions
   var [undoStack, setUndoStack] = useState([]);
   // User XP & Levels
@@ -560,6 +591,13 @@ export default function App() {
   }, []);
 
   useEffect(function() { var h = function() { setIsMob(window.innerWidth < 820); }; window.addEventListener("resize", h); return function() { window.removeEventListener("resize", h); }; }, []);
+
+  // Error log listener - keeps React state in sync with global error log
+  useEffect(function() {
+    var listener = function(newLog) { setErrorLog(newLog.slice()); };
+    _errorLogListeners.push(listener);
+    return function() { _errorLogListeners = _errorLogListeners.filter(function(fn) { return fn !== listener; }); };
+  }, []);
 
   // Penalty check on auto-login (runs after loading completes when user was restored from localStorage)
   useEffect(function() {
@@ -1513,6 +1551,7 @@ export default function App() {
     { id: "wheelSetup", label: "Roata Zilnica", icon: Icons.challenge },
     { id: "penalizari", label: "Penalizari", icon: Icons.del },
     { id: "pipeline", label: "Pipeline Builder", icon: Icons.dep },
+    { id: "errorlog", label: "Error Log", icon: Icons.anomaly },
   ];
 
   var navGroups = [
@@ -1520,7 +1559,7 @@ export default function App() {
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
     { label: "Echipa", items: ["workload", "performance", "league", "leagueMonthly", "digest", "achievements", "wallfame", "brandstats"] },
     { label: "Comunicare", items: ["announce"] },
-    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "penalizari", "backups"] },
+    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "penalizari", "backups", "errorlog"] },
   ];
 
   var accessibleNav = navItems.filter(function(n) {
@@ -1608,6 +1647,7 @@ export default function App() {
                 {n.id !== "tasks" && n.count != null && <span style={S.navBadge}>{n.count}</span>}
                 {n.id === "anomalies" && anomalies.length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626" }} />}
                 {n.id === "announce" && announcements.filter(function(a) { return !a.readBy || !a.readBy.includes(user); }).length > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB" }} />}
+                {n.id === "errorlog" && errorLog.length > 0 && <span style={{ fontSize: 10, background: "#DC2626", color: "#fff", padding: "2px 7px", borderRadius: 10, fontWeight: 800, minWidth: 18, textAlign: "center" }}>{errorLog.length}</span>}
               </div>;
             };
             if (g.solo) return <div key={gi}>{groupItems.map(renderItem)}</div>;
@@ -1717,6 +1757,7 @@ export default function App() {
           {page === "products" && <ProdsPage products={products} setProducts={setProducts} shops={shops} productAudit={productAudit} setProductAudit={setProductAudit} user={user} team={team} />}
           {page === "sheets" && <SheetsPage sheets={sheets} setSheets={setSheets} shops={shops} />}
           {page === "manage_users" && <UsersPage team={team} setTeam={setTeam} addLog={addLog} />}
+          {page === "errorlog" && <ErrorLogPage errorLog={errorLog} setErrorLog={setErrorLog} />}
         </div>
       </main>
       {showAdd && <TaskModal task={editTask} team={team} assUsers={assUsers} shops={shops} products={products} onSave={saveTask} onClose={function() { setShowAdd(false); setEditTask(null); localStorage.removeItem("scout_task_draft"); }} taskTypes={taskTypes} departments={departments} allTasks={tasks} allTags={allTags} taskEditors={taskEditors} user={user} setTaskEditors={setTaskEditors} leaves={leaves} platforms={platforms} />}
@@ -6787,6 +6828,209 @@ function ConfigPage({ taskTypes, setTaskTypes, platforms, setPlatforms, departme
     <div style={{ marginTop: 16, padding: "12px 16px", background: "#F0FDF4", borderRadius: 8, border: "1px solid #0C7E3E30", fontSize: 12, color: "#0C7E3E" }}>
       <span style={{ fontWeight: 700 }}>Unde se reflecta modificarile:</span> Formularul de creare task, filtrele din lista de taskuri, formularul de targets, recurring tasks, si toate raportarile din platforma.
     </div>
+  </div>;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ERROR LOG PAGE — Admin-only page showing all system errors
+// ═══════════════════════════════════════════════════════════════
+function ErrorLogPage({ errorLog, setErrorLog }) {
+  var [filterCat, setFilterCat] = useState("all");
+  var [expandedId, setExpandedId] = useState(null);
+  var cats = {};
+  errorLog.forEach(function(e) { cats[e.category] = (cats[e.category] || 0) + 1; });
+  var filtered = filterCat === "all" ? errorLog : errorLog.filter(function(e) { return e.category === filterCat; });
+
+  var catColors = {
+    JS_ERROR: "#DC2626", PROMISE_ERROR: "#EA580C",
+    SUPABASE_SAVE: "#D97706", SUPABASE_SAVE_FAIL: "#DC2626",
+    SUPABASE_EXCEPTION: "#DC2626", SUPABASE_LOAD: "#2563EB",
+    SUPABASE_LOAD_EXCEPTION: "#7C3AED", LOCALSTORAGE: "#94A3B8",
+    LOCALSTORAGE_LOAD: "#94A3B8", REALTIME_IGNORED: "#06B6D4"
+  };
+  var catLabels = {
+    JS_ERROR: "Eroare JavaScript", PROMISE_ERROR: "Promise neresolut",
+    SUPABASE_SAVE: "Salvare esuata (retry)", SUPABASE_SAVE_FAIL: "Salvare esuata FINAL",
+    SUPABASE_EXCEPTION: "Exceptie retea salvare", SUPABASE_LOAD: "Incarcare esuata",
+    SUPABASE_LOAD_EXCEPTION: "Exceptie retea incarcare", LOCALSTORAGE: "Eroare localStorage",
+    LOCALSTORAGE_LOAD: "Eroare citire localStorage"
+  };
+
+  var clearAll = function() {
+    if (!window.confirm("Stergi toate erorile din log?")) return;
+    _errorLog = [];
+    try { localStorage.removeItem("s7_errorLog"); } catch(e) {}
+    setErrorLog([]);
+  };
+
+  var copyAll = function() {
+    var text = "=== S.C.O.U.T ERROR LOG ===\n";
+    text += "Export: " + new Date().toISOString() + "\n";
+    text += "Total erori: " + filtered.length + "\n";
+    text += "Filter: " + (filterCat === "all" ? "Toate" : filterCat) + "\n";
+    text += "=============================\n\n";
+    filtered.forEach(function(e, i) {
+      text += "[" + (i + 1) + "] " + e.time + "\n";
+      text += "    Categorie: " + e.category + "\n";
+      text += "    Mesaj: " + e.message + "\n";
+      if (e.details) text += "    Detalii: " + e.details + "\n";
+      text += "\n";
+    });
+    navigator.clipboard.writeText(text).then(function() { alert("Copiat " + filtered.length + " erori in clipboard!"); });
+  };
+
+  var copySingle = function(e) {
+    var text = "[" + e.time + "] " + e.category + " | " + e.message;
+    if (e.details) text += " | " + e.details;
+    navigator.clipboard.writeText(text);
+  };
+
+  // Severity summary
+  var criticalCount = errorLog.filter(function(e) { return e.category === "SUPABASE_SAVE_FAIL" || e.category === "JS_ERROR"; }).length;
+  var warningCount = errorLog.filter(function(e) { return e.category === "SUPABASE_SAVE" || e.category === "SUPABASE_EXCEPTION" || e.category === "PROMISE_ERROR"; }).length;
+  var infoCount = errorLog.length - criticalCount - warningCount;
+
+  // Time grouping
+  var last1h = errorLog.filter(function(e) { return (Date.now() - new Date(e.time).getTime()) < 3600000; }).length;
+  var last24h = errorLog.filter(function(e) { return (Date.now() - new Date(e.time).getTime()) < 86400000; }).length;
+
+  return <div style={{ maxWidth: 900 }}>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 800, color: "#DC2626", marginBottom: 4, display: "flex", alignItems: "center", gap: 10 }}>
+        <Ic d={Icons.anomaly} size={22} color="#DC2626" /> Error Log
+      </h2>
+      <div style={{ fontSize: 12, color: "#64748B" }}>Toate erorile de salvare, incarcare si JavaScript. Cand ceva nu merge, copiaza erorile si trimite-le.</div>
+    </div>
+
+    {/* Severity summary cards */}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
+      <Card style={{ borderTop: "3px solid " + (errorLog.length === 0 ? GR : "#475569"), padding: 12, textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: errorLog.length === 0 ? GR : "#475569" }}>{errorLog.length}</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>TOTAL</div>
+      </Card>
+      <Card style={{ borderTop: "3px solid #DC2626", padding: 12, textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: criticalCount > 0 ? "#DC2626" : "#94A3B8" }}>{criticalCount}</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>CRITICE</div>
+      </Card>
+      <Card style={{ borderTop: "3px solid #D97706", padding: 12, textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: warningCount > 0 ? "#D97706" : "#94A3B8" }}>{warningCount}</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>AVERTIZARI</div>
+      </Card>
+      <Card style={{ borderTop: "3px solid #2563EB", padding: 12, textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: last1h > 0 ? "#2563EB" : "#94A3B8" }}>{last1h}</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>ULTIMA ORA</div>
+      </Card>
+      <Card style={{ borderTop: "3px solid #7C3AED", padding: 12, textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: last24h > 0 ? "#7C3AED" : "#94A3B8" }}>{last24h}</div>
+        <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>24H</div>
+      </Card>
+    </div>
+
+    {/* Category breakdown */}
+    {Object.keys(cats).length > 0 && <Card style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 10 }}>Per categorie</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {Object.keys(cats).map(function(cat) {
+          var c = catColors[cat] || "#64748B";
+          var isActive = filterCat === cat;
+          return <button key={cat} onClick={function() { setFilterCat(isActive ? "all" : cat); }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1.5px solid " + (isActive ? c : "#E2E8F0"), background: isActive ? c + "12" : "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, color: isActive ? c : "#475569" }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />
+            {catLabels[cat] || cat}
+            <span style={{ fontSize: 10, background: c + "18", color: c, padding: "1px 6px", borderRadius: 6, fontWeight: 800 }}>{cats[cat]}</span>
+          </button>;
+        })}
+      </div>
+    </Card>}
+
+    {/* Actions */}
+    <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <button style={Object.assign({}, S.primBtn, { background: "#2563EB", padding: "10px 20px" })} onClick={copyAll}>
+        <Ic d={Icons.copy} size={14} color="#fff" /> Copiaza toate ({filtered.length})
+      </button>
+      <button style={Object.assign({}, S.primBtn, { background: "#DC2626", padding: "10px 20px" })} onClick={clearAll}>
+        <Ic d={Icons.del} size={14} color="#fff" /> Sterge tot
+      </button>
+      {filterCat !== "all" && <button style={Object.assign({}, S.cancelBtn, { padding: "10px 20px" })} onClick={function() { setFilterCat("all"); }}>
+        Arata toate
+      </button>}
+      <span style={{ fontSize: 12, color: "#94A3B8", marginLeft: 8 }}>{filtered.length} erori afisate</span>
+    </div>
+
+    {/* Zero state */}
+    {errorLog.length === 0 && <Card style={{ textAlign: "center", padding: 50, background: "#F0FDF4", border: "1px solid " + GR + "30" }}>
+      <div style={{ fontSize: 48, marginBottom: 12 }}>✓</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: GR, marginBottom: 4 }}>Zero erori!</div>
+      <div style={{ fontSize: 13, color: "#64748B" }}>Platforma functioneaza normal. Erorile apar automat cand ceva nu merge.</div>
+    </Card>}
+
+    {/* Critical alert banner */}
+    {criticalCount > 0 && <Card style={{ marginBottom: 12, borderLeft: "4px solid #DC2626", background: "#FEF2F2", padding: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#DC2626", animation: "pulse 2s infinite", flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#DC2626" }}>{criticalCount} erori critice detectate</div>
+          <div style={{ fontSize: 12, color: "#64748B" }}>Salvari esuate sau erori JavaScript. Copiaza si trimite la Stan ASAP.</div>
+        </div>
+        <button style={Object.assign({}, S.primBtn, { background: "#DC2626", padding: "8px 16px", fontSize: 12 })} onClick={function() {
+          setFilterCat("all");
+          var criticals = errorLog.filter(function(e) { return e.category === "SUPABASE_SAVE_FAIL" || e.category === "JS_ERROR"; });
+          var text = "ERORI CRITICE S.C.O.U.T (" + new Date().toISOString() + ")\n\n";
+          criticals.forEach(function(e, i) { text += "[" + (i + 1) + "] " + e.time + " | " + e.category + " | " + e.message + (e.details ? " | " + e.details : "") + "\n"; });
+          navigator.clipboard.writeText(text).then(function() { alert("Copiat " + criticals.length + " erori critice!"); });
+        }}>Copiaza critice</button>
+      </div>
+    </Card>}
+
+    {/* Error list */}
+    {filtered.map(function(e) {
+      var c = catColors[e.category] || "#64748B";
+      var isCritical = e.category === "SUPABASE_SAVE_FAIL" || e.category === "JS_ERROR";
+      var isExpanded = expandedId === e.id;
+      var timeAgo = Date.now() - new Date(e.time).getTime();
+      var timeLabel = timeAgo < 60000 ? "Acum" : timeAgo < 3600000 ? Math.floor(timeAgo / 60000) + "m" : timeAgo < 86400000 ? Math.floor(timeAgo / 3600000) + "h" : Math.floor(timeAgo / 86400000) + "z";
+
+      return <Card key={e.id} style={{ marginBottom: 6, borderLeft: "3px solid " + c, padding: "10px 14px", background: isCritical ? "#FEF2F2" : "#fff", cursor: "pointer" }} onClick={function() { setExpandedId(isExpanded ? null : e.id); }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: c, flexShrink: 0, animation: isCritical && timeAgo < 3600000 ? "pulse 2s infinite" : "none" }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
+              <Badge bg={c + "18"} color={c}>{catLabels[e.category] || e.category}</Badge>
+              <span style={{ fontSize: 10, color: "#94A3B8" }}>{timeLabel}</span>
+              {isCritical && <Badge bg="#DC2626" color="#fff">CRITIC</Badge>}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: isExpanded ? "normal" : "nowrap" }}>{e.message}</div>
+          </div>
+          <button style={S.iconBtn} onClick={function(ev) { ev.stopPropagation(); copySingle(e); }} title="Copiaza"><Ic d={Icons.copy} size={14} color="#94A3B8" /></button>
+          <span style={{ fontSize: 10, color: "#CBD5E1" }}>{isExpanded ? "▲" : "▼"}</span>
+        </div>
+        {isExpanded && <div style={{ marginTop: 10, borderTop: "1px solid #F1F5F9", paddingTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginBottom: 8 }}>
+            <div><span style={{ color: "#94A3B8", fontWeight: 600 }}>Categorie:</span> <span style={{ color: c, fontWeight: 700 }}>{e.category}</span></div>
+            <div><span style={{ color: "#94A3B8", fontWeight: 600 }}>Timp:</span> {ff(e.time)}</div>
+          </div>
+          <div style={{ fontSize: 12, marginBottom: 6 }}><span style={{ color: "#94A3B8", fontWeight: 600 }}>Mesaj:</span> <span style={{ color: "#1E293B" }}>{e.message}</span></div>
+          {e.details && <div>
+            <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 4 }}>Detalii tehnice:</div>
+            <div style={{ fontSize: 11, color: "#64748B", background: "#1E293B", color: "#E2E8F0", padding: "10px 14px", borderRadius: 8, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 200, overflow: "auto", lineHeight: 1.5 }}>{e.details}</div>
+          </div>}
+        </div>}
+      </Card>;
+    })}
+
+    {/* Info box */}
+    <Card style={{ marginTop: 16, background: "#F8FAFC", padding: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 6 }}>Ce se logheaza automat:</div>
+      <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.8 }}>
+        <span style={{ display: "block" }}><span style={{ color: "#DC2626", fontWeight: 700 }}>SUPABASE_SAVE_FAIL</span> - Salvare esuata dupa 3 incercari (datele sunt DOAR in browser)</span>
+        <span style={{ display: "block" }}><span style={{ color: "#D97706", fontWeight: 700 }}>SUPABASE_SAVE</span> - Salvare esuata dar se reincearca automat</span>
+        <span style={{ display: "block" }}><span style={{ color: "#DC2626", fontWeight: 700 }}>JS_ERROR</span> - Eroare JavaScript in cod (aplicatia poate functiona gresit)</span>
+        <span style={{ display: "block" }}><span style={{ color: "#EA580C", fontWeight: 700 }}>PROMISE_ERROR</span> - Operatie asincrona esuata</span>
+        <span style={{ display: "block" }}><span style={{ color: "#2563EB", fontWeight: 700 }}>SUPABASE_LOAD</span> - Incarcare date esuata (se foloseste localStorage ca backup)</span>
+        <span style={{ display: "block" }}><span style={{ color: "#94A3B8", fontWeight: 700 }}>LOCALSTORAGE</span> - Browser storage plin sau blocat</span>
+      </div>
+      <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 10 }}>Erorile se pastreaza in browser si supravietuiesc refresh. Max 200 erori pastrate.</div>
+    </Card>
   </div>;
 }
 
