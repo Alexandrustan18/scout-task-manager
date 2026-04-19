@@ -8,29 +8,59 @@ var supabase = createClient(
 );
 
 async function cloudLoad(key, fallback) {
+  var lsData = null;
+  try { var ls = localStorage.getItem("s7_" + key); if (ls) lsData = JSON.parse(ls); } catch(e3) {}
   try {
     var { data, error } = await supabase.from("app_data").select("data").eq("id", key).single();
     if (!error && data && data.data) {
       try { localStorage.setItem("s7_" + key, JSON.stringify(data.data)); } catch(e2) {}
       return data.data;
     }
-  } catch (e) {}
-  try { var ls = localStorage.getItem("s7_" + key); if (ls) return JSON.parse(ls); } catch(e3) {}
+    // Supabase returned nothing or error - use localStorage
+    if (lsData) return lsData;
+  } catch (e) {
+    // Network error - use localStorage
+    if (lsData) return lsData;
+  }
   return fallback;
 }
 
-async function cloudSave(key, value) {
+async function cloudSave(key, value, _retryCount) {
   try { localStorage.setItem("s7_" + key, JSON.stringify(value)); } catch(e2) {}
   try {
     var { error } = await supabase.from("app_data").upsert({ id: key, data: value, updated_at: new Date().toISOString() }, { onConflict: "id" });
-    if (error) console.error("cloudSave error:", key, error);
-  } catch (e) { console.error("cloudSave exception:", key, e); }
+    if (error) {
+      console.error("cloudSave error:", key, error);
+      var retries = _retryCount || 0;
+      if (retries < 2) {
+        await new Promise(function(r) { setTimeout(r, 1000 * (retries + 1)); });
+        return cloudSave(key, value, retries + 1);
+      }
+    }
+  } catch (e) {
+    console.error("cloudSave exception:", key, e);
+    var retries2 = _retryCount || 0;
+    if (retries2 < 2) {
+      await new Promise(function(r) { setTimeout(r, 1000 * (retries2 + 1)); });
+      return cloudSave(key, value, retries2 + 1);
+    }
+  }
 }
 
 var saveTimers = {};
+var _latestValues = {};
+var _saveVersions = {};
+var _pendingKeys = {};
+
 function debouncedSave(key, value, delay) {
+  _latestValues[key] = value;
   if (saveTimers[key]) clearTimeout(saveTimers[key]);
-  saveTimers[key] = setTimeout(function() { cloudSave(key, value); }, delay || 800);
+  saveTimers[key] = setTimeout(function() {
+    var valToSave = _latestValues[key];
+    _saveVersions[key] = Date.now();
+    _pendingKeys[key] = true;
+    cloudSave(key, valToSave).then(function() { _pendingKeys[key] = false; }).catch(function() { _pendingKeys[key] = false; });
+  }, delay || 800);
 }
 
 var DEF_TEAM = {
@@ -496,10 +526,23 @@ export default function App() {
   // Realtime subscription
   useEffect(function() {
     var channel = supabase.channel("app_data_changes").on("postgres_changes", { event: "*", schema: "public", table: "app_data" }, function(payload) {
-      if (payload.new && payload.new.id === "tasks" && payload.new.data) setTasks(payload.new.data);
-      if (payload.new && payload.new.id === "taskEditors" && payload.new.data) setTaskEditors(payload.new.data);
-      if (payload.new && payload.new.id === "announcements" && payload.new.data) setAnnouncements(payload.new.data);
-      if (payload.new && payload.new.id === "notifs" && payload.new.data) {
+      if (!payload.new || !payload.new.id || !payload.new.data) return;
+      var key = payload.new.id;
+      // CRITICAL: Ignore echoes from our own saves (within 3 seconds)
+      // This prevents the realtime subscription from overwriting local state
+      // with stale data that WE just saved
+      var lastSaveTime = _saveVersions[key] || 0;
+      var timeSinceOurSave = Date.now() - lastSaveTime;
+      if (timeSinceOurSave < 3000) return; // ignore our own echo
+      // Also ignore if we have a pending save for this key
+      if (_pendingKeys[key]) return;
+      // Also ignore if we have a debounce timer pending for this key
+      if (saveTimers[key]) return;
+
+      if (key === "tasks") setTasks(payload.new.data);
+      if (key === "taskEditors") setTaskEditors(payload.new.data);
+      if (key === "announcements") setAnnouncements(payload.new.data);
+      if (key === "notifs") {
         setNotifications(function(prev) {
           var incoming = payload.new.data || [];
           if (incoming.length > prev.length) {
@@ -543,12 +586,38 @@ export default function App() {
 
   // Auto-saves
   useEffect(function() { if (!loading) debouncedSave("team", team, 1000); }, [team]);
-  useEffect(function() { if (!loading && tasks.length > 0) debouncedSave("tasks", tasks, 500); }, [tasks]);
+  useEffect(function() { if (!loading) debouncedSave("tasks", tasks, 500); }, [tasks]);
   useEffect(function() { if (!loading) debouncedSave("logs", logs, 2000); }, [logs]);
   useEffect(function() { if (!loading) debouncedSave("sessions", sessions, 5000); }, [sessions]);
   useEffect(function() { if (!loading) debouncedSave("shops", shops, 1000); }, [shops]);
   useEffect(function() { if (!loading) debouncedSave("products", products, 1000); }, [products]);
   useEffect(function() { if (!loading) debouncedSave("timers", timers, 1000); }, [timers]);
+
+  // CRITICAL: Flush pending saves on page unload (refresh/close)
+  useEffect(function() {
+    var handleBeforeUnload = function() {
+      // Cancel all debounce timers and save immediately via localStorage
+      // (Supabase fetch won't complete during unload, but localStorage will)
+      Object.keys(_latestValues).forEach(function(key) {
+        if (saveTimers[key]) {
+          clearTimeout(saveTimers[key]);
+          try { localStorage.setItem("s7_" + key, JSON.stringify(_latestValues[key])); } catch(e) {}
+          // Try sendBeacon for critical data
+          if (key === "tasks" || key === "timers" || key === "statusHistory") {
+            try {
+              var payload = JSON.stringify({ id: key, data: _latestValues[key], updated_at: new Date().toISOString() });
+              navigator.sendBeacon && navigator.sendBeacon(
+                "https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id",
+                new Blob([payload], { type: "application/json" })
+              );
+            } catch(e2) {}
+          }
+        }
+      });
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return function() { window.removeEventListener("beforeunload", handleBeforeUnload); };
+  }, []);
 
   // Auto-stop timers that are running on hidden/invalid tasks
   useEffect(function() {
@@ -576,7 +645,7 @@ export default function App() {
   useEffect(function() { if (!loading) debouncedSave("departments", departments, 1000); }, [departments]);
   useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
   useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
-  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && userXP && Object.keys(userXP).length > 0) cloudSave("userXP", userXP); }, [userXP]);
+  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && userXP && Object.keys(userXP).length > 0) debouncedSave("userXP", userXP, 1500); }, [userXP]);
   // monthlyBonus auto-save backup
   useEffect(function() { if (!loading) debouncedSave("monthlyBonus", monthlyBonus, 2000); }, [monthlyBonus]);
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
