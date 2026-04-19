@@ -9,16 +9,21 @@ var supabase = createClient(
 
 async function cloudLoad(key, fallback) {
   var lsData = null;
-  try { var ls = localStorage.getItem("s7_" + key); if (ls) lsData = JSON.parse(ls); } catch(e3) {
-    logError("LOCALSTORAGE_LOAD", "Nu pot citi localStorage: " + key, e3.message || "");
+  if (!_skipLocalStorage[key]) {
+    try { var ls = localStorage.getItem("s7_" + key); if (ls) lsData = JSON.parse(ls); } catch(e3) {
+      logError("LOCALSTORAGE_LOAD", "Nu pot citi localStorage: " + key, e3.message || "");
+    }
   }
   try {
-    var { data, error } = await supabase.from("app_data").select("data").eq("id", key).single();
+    var { data, error } = await supabase.from("app_data").select("data").eq("id", key).maybeSingle();
     if (!error && data && data.data) {
-      try { localStorage.setItem("s7_" + key, JSON.stringify(data.data)); } catch(e2) {}
+      if (!_skipLocalStorage[key]) {
+        try { localStorage.setItem("s7_" + key, JSON.stringify(data.data)); } catch(e2) {}
+      }
       return data.data;
     }
-    if (error) {
+    // No row found is NOT an error - it just means first time use
+    if (error && error.code !== "PGRST116") {
       logError("SUPABASE_LOAD", "Eroare incarcare \"" + key + "\" din Supabase, folosesc localStorage", error.message || "");
     }
     if (lsData) return lsData;
@@ -29,9 +34,13 @@ async function cloudLoad(key, fallback) {
   return fallback;
 }
 
+var _skipLocalStorage = { taskBackups: true, taskActivity: true }; // too large for localStorage
+
 async function cloudSave(key, value, _retryCount) {
-  try { localStorage.setItem("s7_" + key, JSON.stringify(value)); } catch(e2) {
-    logError("LOCALSTORAGE", "Nu pot salva in localStorage: " + key, e2.message || "");
+  if (!_skipLocalStorage[key]) {
+    try { localStorage.setItem("s7_" + key, JSON.stringify(value)); } catch(e2) {
+      logError("LOCALSTORAGE", "Nu pot salva in localStorage: " + key, e2.message || "");
+    }
   }
   try {
     var { error } = await supabase.from("app_data").upsert({ id: key, data: value, updated_at: new Date().toISOString() }, { onConflict: "id" });
@@ -634,12 +643,12 @@ export default function App() {
   // CRITICAL: Flush pending saves on page unload (refresh/close)
   useEffect(function() {
     var handleBeforeUnload = function() {
-      // Cancel all debounce timers and save immediately via localStorage
-      // (Supabase fetch won't complete during unload, but localStorage will)
       Object.keys(_latestValues).forEach(function(key) {
         if (saveTimers[key]) {
           clearTimeout(saveTimers[key]);
-          try { localStorage.setItem("s7_" + key, JSON.stringify(_latestValues[key])); } catch(e) {}
+          if (!_skipLocalStorage[key]) {
+            try { localStorage.setItem("s7_" + key, JSON.stringify(_latestValues[key])); } catch(e) {}
+          }
           // Try sendBeacon for critical data
           if (key === "tasks" || key === "timers" || key === "statusHistory") {
             try {
@@ -6838,6 +6847,8 @@ function ConfigPage({ taskTypes, setTaskTypes, platforms, setPlatforms, departme
 function ErrorLogPage({ errorLog, setErrorLog }) {
   var [filterCat, setFilterCat] = useState("all");
   var [expandedId, setExpandedId] = useState(null);
+  var [checkResults, setCheckResults] = useState(null);
+  var [checking, setChecking] = useState(false);
   var cats = {};
   errorLog.forEach(function(e) { cats[e.category] = (cats[e.category] || 0) + 1; });
   var filtered = filterCat === "all" ? errorLog : errorLog.filter(function(e) { return e.category === filterCat; });
@@ -6857,11 +6868,178 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
     LOCALSTORAGE_LOAD: "Eroare citire localStorage"
   };
 
+  // ═══ HEALTH CHECK / VERIFY ═══
+  var runHealthCheck = async function() {
+    setChecking(true);
+    var results = [];
+
+    // 1. Check Supabase connection
+    try {
+      var { data, error } = await supabase.from("app_data").select("id").limit(1);
+      if (error) {
+        results.push({ id: "supabase_conn", label: "Conexiune Supabase", status: "fail", detail: error.message });
+      } else {
+        results.push({ id: "supabase_conn", label: "Conexiune Supabase", status: "ok", detail: "Conectat OK" });
+      }
+    } catch(e) {
+      results.push({ id: "supabase_conn", label: "Conexiune Supabase", status: "fail", detail: e.message });
+    }
+
+    // 2. Check tasks exist in Supabase
+    try {
+      var { data: tasksData, error: tasksErr } = await supabase.from("app_data").select("data").eq("id", "tasks").maybeSingle();
+      if (tasksErr) {
+        results.push({ id: "tasks_db", label: "Tasks in Supabase", status: "fail", detail: tasksErr.message });
+      } else if (!tasksData || !tasksData.data) {
+        results.push({ id: "tasks_db", label: "Tasks in Supabase", status: "warn", detail: "Niciun task gasit in baza de date" });
+      } else {
+        var dbCount = Array.isArray(tasksData.data) ? tasksData.data.length : 0;
+        results.push({ id: "tasks_db", label: "Tasks in Supabase", status: "ok", detail: dbCount + " taskuri in baza de date" });
+      }
+    } catch(e) {
+      results.push({ id: "tasks_db", label: "Tasks in Supabase", status: "fail", detail: e.message });
+    }
+
+    // 3. Check tasks in localStorage
+    try {
+      var lsTasks = localStorage.getItem("s7_tasks");
+      if (lsTasks) {
+        var parsed = JSON.parse(lsTasks);
+        var lsCount = Array.isArray(parsed) ? parsed.length : 0;
+        results.push({ id: "tasks_ls", label: "Tasks in localStorage", status: "ok", detail: lsCount + " taskuri in browser" });
+      } else {
+        results.push({ id: "tasks_ls", label: "Tasks in localStorage", status: "warn", detail: "Nu exista in localStorage (normal daca tocmai s-a incarcat)" });
+      }
+    } catch(e) {
+      results.push({ id: "tasks_ls", label: "Tasks in localStorage", status: "fail", detail: e.message });
+    }
+
+    // 4. Check localStorage quota
+    try {
+      var totalSize = 0;
+      var keyDetails = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.startsWith("s7_")) {
+          var sz = (localStorage.getItem(k) || "").length;
+          totalSize += sz;
+          if (sz > 100000) keyDetails.push(k.replace("s7_", "") + ": " + Math.round(sz / 1024) + "KB");
+        }
+      }
+      var totalKB = Math.round(totalSize / 1024);
+      var pct = Math.round((totalSize / (5 * 1024 * 1024)) * 100);
+      if (pct > 80) {
+        results.push({ id: "ls_quota", label: "localStorage spatiu", status: "warn", detail: totalKB + "KB folosit (~" + pct + "% din 5MB)." + (keyDetails.length > 0 ? " Mari: " + keyDetails.join(", ") : "") });
+      } else {
+        results.push({ id: "ls_quota", label: "localStorage spatiu", status: "ok", detail: totalKB + "KB folosit (~" + pct + "% din 5MB)" });
+      }
+    } catch(e) {
+      results.push({ id: "ls_quota", label: "localStorage spatiu", status: "fail", detail: e.message });
+    }
+
+    // 5. Check timers saved
+    try {
+      var { data: timersData, error: timersErr } = await supabase.from("app_data").select("data").eq("id", "timers").maybeSingle();
+      if (timersErr) {
+        results.push({ id: "timers_db", label: "Timers in Supabase", status: "fail", detail: timersErr.message });
+      } else if (timersData && timersData.data) {
+        var timerCount = Object.keys(timersData.data).length;
+        results.push({ id: "timers_db", label: "Timers in Supabase", status: "ok", detail: timerCount + " timere salvate" });
+      } else {
+        results.push({ id: "timers_db", label: "Timers in Supabase", status: "ok", detail: "Niciun timer (OK)" });
+      }
+    } catch(e) {
+      results.push({ id: "timers_db", label: "Timers in Supabase", status: "fail", detail: e.message });
+    }
+
+    // 6. Check if there are pending saves right now
+    var pendingCount = 0;
+    Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) pendingCount++; });
+    Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) pendingCount++; });
+    if (pendingCount > 0) {
+      results.push({ id: "pending", label: "Salvari in asteptare", status: "warn", detail: pendingCount + " salvari inca in curs. Asteapta cateva secunde si reverifica." });
+    } else {
+      results.push({ id: "pending", label: "Salvari in asteptare", status: "ok", detail: "Nicio salvare pendinta. Totul sincronizat." });
+    }
+
+    // 7. Check DB vs local sync for tasks
+    try {
+      var { data: dbTasks2 } = await supabase.from("app_data").select("data").eq("id", "tasks").maybeSingle();
+      var lsRaw = localStorage.getItem("s7_tasks");
+      var lsTasks2 = lsRaw ? JSON.parse(lsRaw) : null;
+      if (dbTasks2 && dbTasks2.data && lsTasks2) {
+        var dbLen = Array.isArray(dbTasks2.data) ? dbTasks2.data.length : 0;
+        var lsLen = Array.isArray(lsTasks2) ? lsTasks2.length : 0;
+        var diff = Math.abs(dbLen - lsLen);
+        if (diff === 0) {
+          results.push({ id: "sync", label: "Sync DB vs Browser", status: "ok", detail: "Sincronizate: " + dbLen + " taskuri in ambele" });
+        } else if (diff <= 3) {
+          results.push({ id: "sync", label: "Sync DB vs Browser", status: "warn", detail: "Mica diferenta: DB=" + dbLen + " vs Browser=" + lsLen + " (diferenta " + diff + ", probabil debounce in curs)" });
+        } else {
+          results.push({ id: "sync", label: "Sync DB vs Browser", status: "fail", detail: "DESINCRONIZAT: DB=" + dbLen + " vs Browser=" + lsLen + " (diferenta " + diff + "!)" });
+        }
+      }
+    } catch(e) {}
+
+    // 8. Verify each logged error type if still happening
+    var uniqueErrors = {};
+    errorLog.forEach(function(e) { if (!uniqueErrors[e.category]) uniqueErrors[e.category] = e; });
+
+    if (uniqueErrors["LOCALSTORAGE"]) {
+      // Check if localStorage write still fails
+      try {
+        localStorage.setItem("s7_healthcheck_test", "ok");
+        localStorage.removeItem("s7_healthcheck_test");
+        results.push({ id: "err_ls", label: "Eroare localStorage", status: "resolved", detail: "REZOLVAT - localStorage functioneaza acum. Eroarea anterioara nu se mai reproduce." });
+      } catch(e) {
+        results.push({ id: "err_ls", label: "Eroare localStorage", status: "fail", detail: "INCA ACTIVA - localStorage inca plin: " + e.message });
+      }
+    }
+
+    if (uniqueErrors["SUPABASE_LOAD"] || uniqueErrors["SUPABASE_LOAD_EXCEPTION"]) {
+      try {
+        var { error: testErr } = await supabase.from("app_data").select("id").limit(1);
+        if (!testErr) {
+          results.push({ id: "err_load", label: "Eroare incarcare Supabase", status: "resolved", detail: "REZOLVAT - Supabase raspunde OK acum." });
+        } else {
+          results.push({ id: "err_load", label: "Eroare incarcare Supabase", status: "fail", detail: "INCA ACTIVA - " + testErr.message });
+        }
+      } catch(e) {
+        results.push({ id: "err_load", label: "Eroare incarcare Supabase", status: "fail", detail: "INCA ACTIVA - " + e.message });
+      }
+    }
+
+    if (uniqueErrors["SUPABASE_SAVE"] || uniqueErrors["SUPABASE_SAVE_FAIL"] || uniqueErrors["SUPABASE_EXCEPTION"]) {
+      try {
+        var testVal = { _healthcheck: true, at: new Date().toISOString() };
+        var { error: writeErr } = await supabase.from("app_data").upsert({ id: "_healthcheck", data: testVal, updated_at: new Date().toISOString() }, { onConflict: "id" });
+        if (!writeErr) {
+          results.push({ id: "err_save", label: "Eroare salvare Supabase", status: "resolved", detail: "REZOLVAT - Scrierea in Supabase functioneaza OK." });
+          // cleanup
+          supabase.from("app_data").delete().eq("id", "_healthcheck").then(function() {});
+        } else {
+          results.push({ id: "err_save", label: "Eroare salvare Supabase", status: "fail", detail: "INCA ACTIVA - " + writeErr.message });
+        }
+      } catch(e) {
+        results.push({ id: "err_save", label: "Eroare salvare Supabase", status: "fail", detail: "INCA ACTIVA - " + e.message });
+      }
+    }
+
+    if (uniqueErrors["JS_ERROR"]) {
+      // Can't auto-verify JS errors - just flag them
+      results.push({ id: "err_js", label: "Eroare JavaScript", status: "manual", detail: "Nu se poate verifica automat. Daca aplicatia functioneaza normal, probabil e rezolvata. Daca nu, trimite log-ul." });
+    }
+
+    setCheckResults(results);
+    setChecking(false);
+  };
+
   var clearAll = function() {
     if (!window.confirm("Stergi toate erorile din log?")) return;
     _errorLog = [];
     try { localStorage.removeItem("s7_errorLog"); } catch(e) {}
     setErrorLog([]);
+    setCheckResults(null);
   };
 
   var copyAll = function() {
@@ -6877,6 +7055,12 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
       if (e.details) text += "    Detalii: " + e.details + "\n";
       text += "\n";
     });
+    if (checkResults) {
+      text += "\n=== HEALTH CHECK RESULTS ===\n";
+      checkResults.forEach(function(r) {
+        text += "[" + r.status.toUpperCase() + "] " + r.label + " - " + r.detail + "\n";
+      });
+    }
     navigator.clipboard.writeText(text).then(function() { alert("Copiat " + filtered.length + " erori in clipboard!"); });
   };
 
@@ -6886,14 +7070,14 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
     navigator.clipboard.writeText(text);
   };
 
-  // Severity summary
   var criticalCount = errorLog.filter(function(e) { return e.category === "SUPABASE_SAVE_FAIL" || e.category === "JS_ERROR"; }).length;
   var warningCount = errorLog.filter(function(e) { return e.category === "SUPABASE_SAVE" || e.category === "SUPABASE_EXCEPTION" || e.category === "PROMISE_ERROR"; }).length;
-  var infoCount = errorLog.length - criticalCount - warningCount;
-
-  // Time grouping
   var last1h = errorLog.filter(function(e) { return (Date.now() - new Date(e.time).getTime()) < 3600000; }).length;
   var last24h = errorLog.filter(function(e) { return (Date.now() - new Date(e.time).getTime()) < 86400000; }).length;
+
+  var statusIcon = { ok: "✅", fail: "❌", warn: "⚠️", resolved: "✅", manual: "🔍" };
+  var statusColor = { ok: GR, fail: "#DC2626", warn: "#D97706", resolved: GR, manual: "#2563EB" };
+  var statusLabel = { ok: "OK", fail: "PROBLEMA", warn: "ATENTIE", resolved: "REZOLVAT", manual: "VERIFICARE MANUALA" };
 
   return <div style={{ maxWidth: 900 }}>
     <div style={{ marginBottom: 20 }}>
@@ -6903,7 +7087,54 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
       <div style={{ fontSize: 12, color: "#64748B" }}>Toate erorile de salvare, incarcare si JavaScript. Cand ceva nu merge, copiaza erorile si trimite-le.</div>
     </div>
 
-    {/* Severity summary cards */}
+    {/* HEALTH CHECK BUTTON - prominent */}
+    <Card style={{ marginBottom: 16, borderLeft: "4px solid #7C3AED", background: "linear-gradient(135deg, #F5F3FF, #fff)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ fontSize: 36 }}>{checking ? "🔄" : checkResults ? (checkResults.every(function(r) { return r.status === "ok" || r.status === "resolved"; }) ? "✅" : "⚠️") : "🔍"}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#1E293B" }}>Diagnostic platforma</div>
+          <div style={{ fontSize: 12, color: "#64748B" }}>Verifica conexiunea, sincronizarea si daca erorile anterioare s-au rezolvat.</div>
+        </div>
+        <button style={Object.assign({}, S.primBtn, { background: "#7C3AED", padding: "12px 24px", fontSize: 14, fontWeight: 700 })} onClick={runHealthCheck} disabled={checking}>
+          {checking ? "Se verifica..." : "Verifica acum"}
+        </button>
+      </div>
+    </Card>
+
+    {/* HEALTH CHECK RESULTS */}
+    {checkResults && <Card style={{ marginBottom: 16, border: "1px solid " + (checkResults.every(function(r) { return r.status === "ok" || r.status === "resolved"; }) ? GR + "40" : "#D9770640") }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "#1E293B" }}>Rezultate diagnostic</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Badge bg={GR + "18"} color={GR}>{checkResults.filter(function(r) { return r.status === "ok" || r.status === "resolved"; }).length} OK</Badge>
+          {checkResults.filter(function(r) { return r.status === "fail"; }).length > 0 && <Badge bg="#DC262618" color="#DC2626">{checkResults.filter(function(r) { return r.status === "fail"; }).length} Probleme</Badge>}
+          {checkResults.filter(function(r) { return r.status === "warn"; }).length > 0 && <Badge bg="#D9770618" color="#D97706">{checkResults.filter(function(r) { return r.status === "warn"; }).length} Atentie</Badge>}
+        </div>
+      </div>
+      {checkResults.map(function(r) {
+        var c = statusColor[r.status] || "#64748B";
+        var isResolved = r.status === "resolved";
+        return <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 14px", marginBottom: 4, borderRadius: 8, background: isResolved ? "#F0FDF4" : r.status === "fail" ? "#FEF2F2" : r.status === "warn" ? "#FFFBEB" : "#F8FAFC", border: "1px solid " + c + "25" }}>
+          <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{statusIcon[r.status]}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{r.label}</span>
+              <Badge bg={c + "18"} color={c}>{statusLabel[r.status]}</Badge>
+            </div>
+            <div style={{ fontSize: 12, color: "#475569" }}>{r.detail}</div>
+          </div>
+        </div>;
+      })}
+      {checkResults.every(function(r) { return r.status === "ok" || r.status === "resolved"; }) && <div style={{ marginTop: 12, padding: "12px 16px", background: "#F0FDF4", borderRadius: 8, border: "1px solid " + GR + "30", textAlign: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: GR }}>Totul e in regula! Platforma functioneaza normal.</div>
+        <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>Poti sterge erorile vechi din log.</div>
+      </div>}
+      {checkResults.some(function(r) { return r.status === "fail"; }) && <div style={{ marginTop: 12, padding: "12px 16px", background: "#FEF2F2", borderRadius: 8, border: "1px solid #FECACA", textAlign: "center" }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "#DC2626" }}>Sunt probleme active! Copiaza tot si trimite la Stan.</div>
+      </div>}
+    </Card>}
+
+    {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
       <Card style={{ borderTop: "3px solid " + (errorLog.length === 0 ? GR : "#475569"), padding: 12, textAlign: "center" }}>
         <div style={{ fontSize: 28, fontWeight: 800, color: errorLog.length === 0 ? GR : "#475569" }}>{errorLog.length}</div>
@@ -6990,16 +7221,25 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
       var timeAgo = Date.now() - new Date(e.time).getTime();
       var timeLabel = timeAgo < 60000 ? "Acum" : timeAgo < 3600000 ? Math.floor(timeAgo / 60000) + "m" : timeAgo < 86400000 ? Math.floor(timeAgo / 3600000) + "h" : Math.floor(timeAgo / 86400000) + "z";
 
-      return <Card key={e.id} style={{ marginBottom: 6, borderLeft: "3px solid " + c, padding: "10px 14px", background: isCritical ? "#FEF2F2" : "#fff", cursor: "pointer" }} onClick={function() { setExpandedId(isExpanded ? null : e.id); }}>
+      // Check if this error type was verified as resolved
+      var isVerifiedResolved = checkResults && checkResults.some(function(r) {
+        if (r.status !== "resolved") return false;
+        if (e.category === "LOCALSTORAGE" && r.id === "err_ls") return true;
+        if ((e.category === "SUPABASE_LOAD" || e.category === "SUPABASE_LOAD_EXCEPTION") && r.id === "err_load") return true;
+        if ((e.category === "SUPABASE_SAVE" || e.category === "SUPABASE_SAVE_FAIL" || e.category === "SUPABASE_EXCEPTION") && r.id === "err_save") return true;
+        return false;
+      });
+
+      return <Card key={e.id} style={{ marginBottom: 6, borderLeft: "3px solid " + (isVerifiedResolved ? GR : c), padding: "10px 14px", background: isVerifiedResolved ? "#F0FDF4" : isCritical ? "#FEF2F2" : "#fff", cursor: "pointer", opacity: isVerifiedResolved ? 0.75 : 1 }} onClick={function() { setExpandedId(isExpanded ? null : e.id); }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: c, flexShrink: 0, animation: isCritical && timeAgo < 3600000 ? "pulse 2s infinite" : "none" }} />
+          {isVerifiedResolved ? <span style={{ fontSize: 16, flexShrink: 0 }}>✅</span> : <div style={{ width: 8, height: 8, borderRadius: "50%", background: c, flexShrink: 0, animation: isCritical && timeAgo < 3600000 ? "pulse 2s infinite" : "none" }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
-              <Badge bg={c + "18"} color={c}>{catLabels[e.category] || e.category}</Badge>
+              <Badge bg={isVerifiedResolved ? GR + "18" : c + "18"} color={isVerifiedResolved ? GR : c}>{isVerifiedResolved ? "REZOLVAT" : (catLabels[e.category] || e.category)}</Badge>
               <span style={{ fontSize: 10, color: "#94A3B8" }}>{timeLabel}</span>
-              {isCritical && <Badge bg="#DC2626" color="#fff">CRITIC</Badge>}
+              {isCritical && !isVerifiedResolved && <Badge bg="#DC2626" color="#fff">CRITIC</Badge>}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: isExpanded ? "normal" : "nowrap" }}>{e.message}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: isVerifiedResolved ? "#64748B" : "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: isExpanded ? "normal" : "nowrap", textDecoration: isVerifiedResolved ? "line-through" : "none" }}>{e.message}</div>
           </div>
           <button style={S.iconBtn} onClick={function(ev) { ev.stopPropagation(); copySingle(e); }} title="Copiaza"><Ic d={Icons.copy} size={14} color="#94A3B8" /></button>
           <span style={{ fontSize: 10, color: "#CBD5E1" }}>{isExpanded ? "▲" : "▼"}</span>
@@ -7012,8 +7252,9 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
           <div style={{ fontSize: 12, marginBottom: 6 }}><span style={{ color: "#94A3B8", fontWeight: 600 }}>Mesaj:</span> <span style={{ color: "#1E293B" }}>{e.message}</span></div>
           {e.details && <div>
             <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 4 }}>Detalii tehnice:</div>
-            <div style={{ fontSize: 11, color: "#64748B", background: "#1E293B", color: "#E2E8F0", padding: "10px 14px", borderRadius: 8, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 200, overflow: "auto", lineHeight: 1.5 }}>{e.details}</div>
+            <div style={{ fontSize: 11, background: "#1E293B", color: "#E2E8F0", padding: "10px 14px", borderRadius: 8, fontFamily: "monospace", whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 200, overflow: "auto", lineHeight: 1.5 }}>{e.details}</div>
           </div>}
+          {isVerifiedResolved && <div style={{ marginTop: 8, padding: "6px 10px", background: GR + "12", borderRadius: 6, fontSize: 12, color: GR, fontWeight: 600 }}>✅ Aceasta eroare a fost verificata si este REZOLVATA.</div>}
         </div>}
       </Card>;
     })}
