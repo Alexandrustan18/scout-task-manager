@@ -703,14 +703,22 @@ export default function App() {
     }, 3000);
   }, [loading, user, tasks]);
 
-  // Auto-saves
-  useEffect(function() { if (!loading) debouncedSave("team", team, 1000); }, [team]);
-  useEffect(function() { if (!loading) debouncedSave("tasks", tasks, 500); }, [tasks]);
-  useEffect(function() { if (!loading) debouncedSave("logs", logs, 2000); }, [logs]);
-  useEffect(function() { if (!loading) debouncedSave("sessions", sessions, 5000); }, [sessions]);
-  useEffect(function() { if (!loading) debouncedSave("shops", shops, 1000); }, [shops]);
-  useEffect(function() { if (!loading) debouncedSave("products", products, 1000); }, [products]);
-  useEffect(function() { if (!loading) debouncedSave("timers", timers, 1000); }, [timers]);
+  // Auto-saves (skip the initial render after load to avoid 30+ noise saves)
+  var _firstRenderDone = useRef(false);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("team", team, 1000); }, [team]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("tasks", tasks, 500); }, [tasks]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("logs", logs, 2000); }, [logs]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("sessions", sessions, 5000); }, [sessions]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("shops", shops, 1000); }, [shops]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("products", products, 1000); }, [products]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("timers", timers, 1000); }, [timers]);
+  // Mark first render as done AFTER all state has settled from initial load
+  useEffect(function() {
+    if (!loading) {
+      var t = setTimeout(function() { _firstRenderDone.current = true; }, 500);
+      return function() { clearTimeout(t); };
+    }
+  }, [loading]);
 
   // CRITICAL: Warn user + flush pending saves on page unload (refresh/close)
   useEffect(function() {
@@ -777,35 +785,35 @@ export default function App() {
     });
     if (needsUpdate) setTimers(newTimers);
   }, [tasks, loading]);
-  useEffect(function() { if (!loading) debouncedSave("templates", templates, 1000); }, [templates]);
-  useEffect(function() { if (!loading) debouncedSave("targets", targets, 1000); }, [targets]);
-  useEffect(function() { if (!loading) debouncedSave("sheets", sheets, 1000); }, [sheets]);
-  useEffect(function() { if (!loading) debouncedSave("notifs", notifications, 2000); }, [notifications]);
-  useEffect(function() { if (!loading) debouncedSave("taskTypes", taskTypes, 1000); }, [taskTypes]);
-  useEffect(function() { if (!loading) debouncedSave("departments", departments, 1000); }, [departments]);
-  useEffect(function() { if (!loading) debouncedSave("platforms", platforms, 1000); }, [platforms]);
-  useEffect(function() { if (!loading) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
-  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && userXP && Object.keys(userXP).length > 0) debouncedSave("userXP", userXP, 1500); }, [userXP]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("templates", templates, 1000); }, [templates]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("targets", targets, 1000); }, [targets]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("sheets", sheets, 1000); }, [sheets]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("notifs", notifications, 2000); }, [notifications]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("taskTypes", taskTypes, 1000); }, [taskTypes]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("departments", departments, 1000); }, [departments]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("platforms", platforms, 1000); }, [platforms]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
+  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && _firstRenderDone.current && userXP && Object.keys(userXP).length > 0) debouncedSave("userXP", userXP, 1500); }, [userXP]);
   // monthlyBonus auto-save backup
-  useEffect(function() { if (!loading) debouncedSave("monthlyBonus", monthlyBonus, 2000); }, [monthlyBonus]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("monthlyBonus", monthlyBonus, 2000); }, [monthlyBonus]);
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
-  useEffect(function() { if (!loading) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
-  useEffect(function() { if (!loading) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
-  useEffect(function() { if (!loading) debouncedSave("statusHistory", statusHistory, 1000); }, [statusHistory]);
-  useEffect(function() { if (!loading) debouncedSave("productAudit", productAudit, 1000); }, [productAudit]);
-  useEffect(function() { if (!loading) debouncedSave("allTags", allTags, 1000); }, [allTags]);
-  useEffect(function() { if (!loading) debouncedSave("achievements", achievements, 1000); }, [achievements]);
-  useEffect(function() { if (!loading) debouncedSave("dailyChallenge", dailyChallenge, 1000); }, [dailyChallenge]);
-  useEffect(function() { if (!loading) debouncedSave("loginHistory", loginHistory, 2000); }, [loginHistory]);
-  useEffect(function() { if (!loading) debouncedSave("announcements", announcements, 1000); }, [announcements]);
-  useEffect(function() { if (!loading) debouncedSave("slas", slas, 1000); }, [slas]);
-  useEffect(function() { if (!loading) debouncedSave("leaves", leaves, 1000); }, [leaves]);
-  useEffect(function() { if (!loading) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("statusHistory", statusHistory, 1000); }, [statusHistory]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("productAudit", productAudit, 1000); }, [productAudit]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("allTags", allTags, 1000); }, [allTags]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("achievements", achievements, 1000); }, [achievements]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("dailyChallenge", dailyChallenge, 1000); }, [dailyChallenge]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("loginHistory", loginHistory, 2000); }, [loginHistory]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("announcements", announcements, 1000); }, [announcements]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("slas", slas, 1000); }, [slas]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("leaves", leaves, 1000); }, [leaves]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
   // branding auto-save backup
-  useEffect(function() { if (!loading) debouncedSave("branding", branding, 2000); }, [branding]);
-  useEffect(function() { if (!loading && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
-  useEffect(function() { if (!loading && penalties.length > 0) debouncedSave("penalties", penalties, 1000); }, [penalties]);
-  useEffect(function() { if (!loading && taskActivity.length > 0) debouncedSave("taskActivity", taskActivity, 1500); }, [taskActivity]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("branding", branding, 2000); }, [branding]);
+  useEffect(function() { if (!loading && _firstRenderDone.current && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
+  useEffect(function() { if (!loading && _firstRenderDone.current && penalties.length > 0) debouncedSave("penalties", penalties, 1000); }, [penalties]);
+  useEffect(function() { if (!loading && _firstRenderDone.current && taskActivity.length > 0) debouncedSave("taskActivity", taskActivity, 1500); }, [taskActivity]);
 
   // Feature 6: Auto-escalare admin - tasks overdue 5+ days
   useEffect(function() {
@@ -850,7 +858,7 @@ export default function App() {
   useEffect(function() {
     cloudLoad("taskBackups", []).then(function(d) { setTaskBackups(d || []); });
   }, []);
-  useEffect(function() { if (!loading) debouncedSave("taskBackups", taskBackups, 3000); }, [taskBackups]);
+  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("taskBackups", taskBackups, 3000); }, [taskBackups]);
   // Auto snapshot every 30 min when tasks change, keeping max 50 snapshots
   var lastBackupRef = useRef(0);
   useEffect(function() {
@@ -1752,13 +1760,14 @@ export default function App() {
     { id: "wheelSetup", label: "Roata Zilnica", icon: Icons.challenge },
     { id: "penalizari", label: "Penalizari", icon: Icons.del },
     { id: "pipeline", label: "Pipeline Builder", icon: Icons.dep },
+    { id: "teamReport", label: "Raport Echipa", icon: Icons.usrs },
     { id: "errorlog", label: "Error Log", icon: Icons.anomaly },
   ];
 
   var navGroups = [
     { solo: true, items: ["dashboard", "tasks", "kanban"] },
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
-    { label: "Echipa", items: ["workload", "performance", "league", "leagueMonthly", "digest", "achievements", "wallfame", "brandstats"] },
+    { label: "Echipa", items: ["workload", "performance", "teamReport", "league", "leagueMonthly", "digest", "achievements", "wallfame", "brandstats"] },
     { label: "Comunicare", items: ["announce"] },
     { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "penalizari", "backups", "errorlog"] },
   ];
@@ -1766,7 +1775,7 @@ export default function App() {
   var accessibleNav = navItems.filter(function(n) {
     if (me.role === "admin") return true;
     if (me.access && me.access.length > 0) return me.access.includes(n.id);
-    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "backups", "branding"].includes(n.id);
+    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "backups", "branding", "teamReport"].includes(n.id);
     if (me.role === "member") return ["tasks", "kanban", "achievements", "announce"].includes(n.id);
     return false;
   });
@@ -1973,6 +1982,7 @@ export default function App() {
           {page === "products" && <ProdsPage products={products} setProducts={setProducts} shops={shops} productAudit={productAudit} setProductAudit={setProductAudit} user={user} team={team} />}
           {page === "sheets" && <SheetsPage sheets={sheets} setSheets={setSheets} shops={shops} />}
           {page === "manage_users" && <UsersPage team={team} setTeam={setTeam} addLog={addLog} />}
+          {page === "teamReport" && <TeamReportPage tasks={tasks} team={team} timers={timers} statusHistory={statusHistory} taskActivity={taskActivity} isMob={isMob} />}
           {page === "errorlog" && <ErrorLogPage errorLog={errorLog} setErrorLog={setErrorLog} />}
         </div>
       </main>
@@ -7487,6 +7497,352 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
       </div>
       <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 10 }}>Erorile se pastreaza in browser si supravietuiesc refresh. Max 200 erori pastrate.</div>
     </Card>
+  </div>;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// TEAM REPORT PAGE — Admin view with per-person click-through report
+// ═══════════════════════════════════════════════════════════════
+function TeamReportPage({ tasks, team, timers, statusHistory, taskActivity, isMob }) {
+  var [selectedUser, setSelectedUser] = useState(null);
+  var [dateRange, setDateRange] = useState("today");
+  var [customStart, setCustomStart] = useState("");
+  var [customEnd, setCustomEnd] = useState("");
+
+  // Calculate date range bounds
+  var getDateBounds = function() {
+    var now = new Date();
+    var end = new Date(now); end.setHours(23, 59, 59, 999);
+    var start = new Date(now);
+    if (dateRange === "today") {
+      start.setHours(0, 0, 0, 0);
+    } else if (dateRange === "yesterday") {
+      start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
+      end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999);
+    } else if (dateRange === "week") {
+      start.setDate(start.getDate() - 7); start.setHours(0, 0, 0, 0);
+    } else if (dateRange === "month") {
+      start.setDate(start.getDate() - 30); start.setHours(0, 0, 0, 0);
+    } else if (dateRange === "custom") {
+      if (customStart) { start = new Date(customStart); start.setHours(0, 0, 0, 0); }
+      else start.setFullYear(2020);
+      if (customEnd) { end = new Date(customEnd); end.setHours(23, 59, 59, 999); }
+    }
+    return { start: start, end: end };
+  };
+
+  var bounds = getDateBounds();
+  var inRange = function(dateStr) {
+    if (!dateStr) return false;
+    var d = new Date(dateStr);
+    return d >= bounds.start && d <= bounds.end;
+  };
+
+  // Compute per-user stats
+  var userStats = {};
+  Object.keys(team).forEach(function(uid) {
+    if (team[uid].role === "admin") return;
+    var userTasks = tasks.filter(function(t) { return t.assignee === uid && !t._campaignParent; });
+    var activeTasks = userTasks.filter(function(t) { return t.status !== "Done"; });
+    var doneInRange = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && inRange(t.updatedAt); });
+    var createdInRange = userTasks.filter(function(t) { return t.createdAt && inRange(t.createdAt); });
+    var overdue = userTasks.filter(function(t) {
+      if (t.status === "Done" || !t.deadline) return false;
+      return new Date(t.deadline) < new Date();
+    });
+    var inProgress = userTasks.filter(function(t) { return t.status === "In Progress"; });
+    var review = userTasks.filter(function(t) { return t.status === "Review"; });
+    var todo = userTasks.filter(function(t) { return t.status === "To Do"; });
+
+    // Time tracking
+    var totalTime = 0;
+    userTasks.forEach(function(t) { var tm = timers[t.id]; if (tm && tm.total) totalTime += tm.total; });
+    var timeInRangeDone = 0;
+    doneInRange.forEach(function(t) { var tm = timers[t.id]; if (tm && tm.total) timeInRangeDone += tm.total; });
+
+    // Avg time per done task
+    var doneWithTime = doneInRange.filter(function(t) { var tm = timers[t.id]; return tm && tm.total > 0; });
+    var avgTime = doneWithTime.length > 0 ? Math.round(timeInRangeDone / doneWithTime.length) : 0;
+
+    // Completion rate
+    var totalInRange = createdInRange.length + doneInRange.length;
+    var completionRate = totalInRange > 0 ? Math.round((doneInRange.length / totalInRange) * 100) : 0;
+
+    // Done per day (in range)
+    var daysInRange = Math.max(1, Math.ceil((bounds.end - bounds.start) / (1000 * 60 * 60 * 24)));
+    var donePerDay = (doneInRange.length / daysInRange).toFixed(1);
+
+    userStats[uid] = {
+      user: team[uid],
+      userId: uid,
+      total: userTasks.length,
+      active: activeTasks.length,
+      done: doneInRange.length,
+      created: createdInRange.length,
+      overdue: overdue.length,
+      inProgress: inProgress.length,
+      review: review.length,
+      todo: todo.length,
+      totalTime: totalTime,
+      timeInRangeDone: timeInRangeDone,
+      avgTime: avgTime,
+      completionRate: completionRate,
+      donePerDay: donePerDay,
+      tasks: userTasks,
+      activeTasks: activeTasks,
+      doneTasks: doneInRange,
+      overdueTasks: overdue,
+      inProgressTasks: inProgress,
+      reviewTasks: review,
+      todoTasks: todo
+    };
+  });
+
+  var fmtTime = function(secs) {
+    if (!secs || secs < 60) return (secs || 0) + "s";
+    var h = Math.floor(secs / 3600);
+    var m = Math.floor((secs % 3600) / 60);
+    if (h > 0) return h + "h " + m + "m";
+    return m + "m";
+  };
+
+  // Date range buttons
+  var rangeBtn = function(key, label) {
+    var isActive = dateRange === key;
+    return <button key={key} onClick={function() { setDateRange(key); }} style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid " + (isActive ? GR : "#E2E8F0"), background: isActive ? GR : "#fff", color: isActive ? "#fff" : "#475569", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{label}</button>;
+  };
+
+  // =============== DETAIL VIEW ===============
+  if (selectedUser) {
+    var stats = userStats[selectedUser];
+    if (!stats) return <div>User inexistent</div>;
+    var u = stats.user;
+
+    return <div style={{ maxWidth: 1000 }}>
+      <button onClick={function() { setSelectedUser(null); }} style={Object.assign({}, S.cancelBtn, { marginBottom: 16 })}>← Inapoi la echipa</button>
+
+      {/* User header */}
+      <Card style={{ marginBottom: 16, padding: 20, background: "linear-gradient(135deg, " + u.color + "15, #fff)", borderLeft: "4px solid " + u.color }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ width: 60, height: 60, borderRadius: "50%", background: u.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800 }}>{(u.name || "?").charAt(0)}</div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "#1E293B" }}>{u.name}</h2>
+            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>{u.role} {u.pm ? " · PM: " + ((team[u.pm] || {}).name || u.pm) : ""}</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Date range filter */}
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 10 }}>PERIOADA</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {rangeBtn("today", "Azi")}
+          {rangeBtn("yesterday", "Ieri")}
+          {rangeBtn("week", "Saptamana")}
+          {rangeBtn("month", "Luna")}
+          {rangeBtn("custom", "Custom")}
+          {dateRange === "custom" && <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 8 }}>
+            <input type="date" value={customStart} onChange={function(e) { setCustomStart(e.target.value); }} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #E2E8F0", fontSize: 12 }} />
+            <span style={{ fontSize: 12, color: "#94A3B8" }}>—</span>
+            <input type="date" value={customEnd} onChange={function(e) { setCustomEnd(e.target.value); }} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #E2E8F0", fontSize: 12 }} />
+          </div>}
+        </div>
+      </Card>
+
+      {/* Key stats cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 16 }}>
+        <Card style={{ borderTop: "3px solid " + GR, padding: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: GR }}>{stats.done}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 700 }}>DONE IN PERIOADA</div>
+        </Card>
+        <Card style={{ borderTop: "3px solid #2563EB", padding: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#2563EB" }}>{stats.active}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 700 }}>ACTIVE</div>
+        </Card>
+        <Card style={{ borderTop: "3px solid #DC2626", padding: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: stats.overdue > 0 ? "#DC2626" : "#94A3B8" }}>{stats.overdue}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 700 }}>INTARZIATE</div>
+        </Card>
+        <Card style={{ borderTop: "3px solid #7C3AED", padding: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#7C3AED" }}>{stats.completionRate}%</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 700 }}>COMPLETION</div>
+        </Card>
+        <Card style={{ borderTop: "3px solid #D97706", padding: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#D97706" }}>{stats.donePerDay}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 700 }}>DONE / ZI</div>
+        </Card>
+        <Card style={{ borderTop: "3px solid #0891B2", padding: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#0891B2" }}>{fmtTime(stats.avgTime)}</div>
+          <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 700 }}>TIMP MEDIU / TASK</div>
+        </Card>
+      </div>
+
+      {/* Breakdown: status */}
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 10 }}>Distributie status (toate taskurile active)</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ padding: "8px 14px", borderRadius: 8, background: "#F8FAFC", borderLeft: "3px solid #94A3B8" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#475569" }}>{stats.todo}</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>TO DO</div>
+          </div>
+          <div style={{ padding: "8px 14px", borderRadius: 8, background: "#EFF6FF", borderLeft: "3px solid #2563EB" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#2563EB" }}>{stats.inProgress}</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>IN PROGRESS</div>
+          </div>
+          <div style={{ padding: "8px 14px", borderRadius: 8, background: "#FFFBEB", borderLeft: "3px solid #D97706" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#D97706" }}>{stats.review}</div>
+            <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>REVIEW</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* TASK LISTS */}
+      {/* In Progress */}
+      {stats.inProgressTasks.length > 0 && <Card style={{ marginBottom: 12, borderLeft: "3px solid #2563EB" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#2563EB", marginBottom: 10 }}>La ce lucreaza acum ({stats.inProgressTasks.length})</div>
+        {stats.inProgressTasks.map(function(t) {
+          var tm = timers[t.id];
+          return <div key={t.id} style={{ padding: "10px 12px", marginBottom: 4, background: "#F8FAFC", borderRadius: 6, display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{t.title}</div>
+              <div style={{ fontSize: 11, color: "#64748B" }}>{t.shop || "-"} · {t.taskType || "-"} · Deadline: {t.deadline || "fara"}</div>
+            </div>
+            {tm && tm.total > 0 && <Badge bg="#EFF6FF" color="#2563EB">{fmtTime(tm.total)}</Badge>}
+            {tm && tm.running && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#16A34A", animation: "pulse 1s infinite" }} />}
+          </div>;
+        })}
+      </Card>}
+
+      {/* Overdue */}
+      {stats.overdueTasks.length > 0 && <Card style={{ marginBottom: 12, borderLeft: "3px solid #DC2626", background: "#FEF2F2" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#DC2626", marginBottom: 10 }}>Intarziate ({stats.overdueTasks.length})</div>
+        {stats.overdueTasks.slice(0, 30).map(function(t) {
+          var daysOver = Math.floor((Date.now() - new Date(t.deadline).getTime()) / 86400000);
+          return <div key={t.id} style={{ padding: "10px 12px", marginBottom: 4, background: "#fff", borderRadius: 6 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{t.title}</div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>
+              <Badge bg="#DC262618" color="#DC2626">{daysOver}z intarzire</Badge>
+              <span style={{ marginLeft: 8 }}>Deadline: {t.deadline} · Status: {t.status}</span>
+            </div>
+          </div>;
+        })}
+        {stats.overdueTasks.length > 30 && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 6 }}>...si inca {stats.overdueTasks.length - 30} intarziate</div>}
+      </Card>}
+
+      {/* Review */}
+      {stats.reviewTasks.length > 0 && <Card style={{ marginBottom: 12, borderLeft: "3px solid #D97706" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#D97706", marginBottom: 10 }}>In Review ({stats.reviewTasks.length})</div>
+        {stats.reviewTasks.map(function(t) {
+          return <div key={t.id} style={{ padding: "10px 12px", marginBottom: 4, background: "#FFFBEB", borderRadius: 6 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{t.title}</div>
+            <div style={{ fontSize: 11, color: "#64748B" }}>{t.shop || "-"} · Deadline: {t.deadline || "fara"}</div>
+          </div>;
+        })}
+      </Card>}
+
+      {/* To Do */}
+      {stats.todoTasks.length > 0 && <Card style={{ marginBottom: 12, borderLeft: "3px solid #94A3B8" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#475569", marginBottom: 10 }}>To Do ({stats.todoTasks.length})</div>
+        {stats.todoTasks.slice(0, 30).map(function(t) {
+          return <div key={t.id} style={{ padding: "8px 12px", marginBottom: 3, background: "#F8FAFC", borderRadius: 6, fontSize: 12 }}>
+            <span style={{ fontWeight: 600, color: "#1E293B" }}>{t.title}</span>
+            <span style={{ fontSize: 10, color: "#94A3B8", marginLeft: 8 }}>{t.shop || "-"} · Deadline: {t.deadline || "fara"}</span>
+          </div>;
+        })}
+        {stats.todoTasks.length > 30 && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 6 }}>...si inca {stats.todoTasks.length - 30} in To Do</div>}
+      </Card>}
+
+      {/* Done in range */}
+      {stats.doneTasks.length > 0 && <Card style={{ marginBottom: 12, borderLeft: "3px solid " + GR }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: GR, marginBottom: 10 }}>Finalizate in perioada ({stats.doneTasks.length})</div>
+        {stats.doneTasks.slice(0, 50).map(function(t) {
+          var tm = timers[t.id];
+          return <div key={t.id} style={{ padding: "10px 12px", marginBottom: 4, background: "#F0FDF4", borderRadius: 6, display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{t.title}</div>
+              <div style={{ fontSize: 11, color: "#64748B" }}>{t.shop || "-"} · {t.taskType || "-"} · Done: {ff(t.updatedAt)}</div>
+            </div>
+            {tm && tm.total > 0 && <Badge bg={GR + "18"} color={GR}>{fmtTime(tm.total)}</Badge>}
+          </div>;
+        })}
+        {stats.doneTasks.length > 50 && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 6 }}>...si inca {stats.doneTasks.length - 50} finalizate</div>}
+      </Card>}
+
+      {stats.tasks.length === 0 && <Card style={{ padding: 40, textAlign: "center", color: "#94A3B8" }}>Niciun task asignat acestei persoane.</Card>}
+    </div>;
+  }
+
+  // =============== LIST VIEW ===============
+  var sortedUsers = Object.keys(userStats).sort(function(a, b) {
+    return userStats[b].done - userStats[a].done;
+  });
+
+  return <div style={{ maxWidth: 1200 }}>
+    <div style={{ marginBottom: 20 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", margin: 0 }}>Raport Echipa</h2>
+      <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Click pe o persoana pentru raport detaliat</div>
+    </div>
+
+    {/* Date range filter */}
+    <Card style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 10 }}>PERIOADA</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {rangeBtn("today", "Azi")}
+        {rangeBtn("yesterday", "Ieri")}
+        {rangeBtn("week", "Saptamana")}
+        {rangeBtn("month", "Luna")}
+        {rangeBtn("custom", "Custom")}
+        {dateRange === "custom" && <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 8 }}>
+          <input type="date" value={customStart} onChange={function(e) { setCustomStart(e.target.value); }} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #E2E8F0", fontSize: 12 }} />
+          <span style={{ fontSize: 12, color: "#94A3B8" }}>—</span>
+          <input type="date" value={customEnd} onChange={function(e) { setCustomEnd(e.target.value); }} style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #E2E8F0", fontSize: 12 }} />
+        </div>}
+      </div>
+    </Card>
+
+    {/* Team cards grid */}
+    <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+      {sortedUsers.map(function(uid) {
+        var s = userStats[uid];
+        var u = s.user;
+        return <Card key={uid} style={{ padding: 16, cursor: "pointer", borderLeft: "3px solid " + u.color, transition: "all 0.2s" }} onClick={function() { setSelectedUser(uid); }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: "50%", background: u.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, flexShrink: 0 }}>{(u.name || "?").charAt(0)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.name}</div>
+              <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>{u.role}{u.pm ? " · " + ((team[u.pm] || {}).name || u.pm) : ""}</div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <div style={{ padding: "8px 10px", background: GR + "10", borderRadius: 6, textAlign: "center" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: GR }}>{s.done}</div>
+              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 700 }}>DONE</div>
+            </div>
+            <div style={{ padding: "8px 10px", background: "#EFF6FF", borderRadius: 6, textAlign: "center" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#2563EB" }}>{s.active}</div>
+              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 700 }}>ACTIVE</div>
+            </div>
+            <div style={{ padding: "8px 10px", background: s.overdue > 0 ? "#FEF2F2" : "#F8FAFC", borderRadius: 6, textAlign: "center" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: s.overdue > 0 ? "#DC2626" : "#94A3B8" }}>{s.overdue}</div>
+              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 700 }}>OVERDUE</div>
+            </div>
+            <div style={{ padding: "8px 10px", background: "#F5F3FF", borderRadius: 6, textAlign: "center" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#7C3AED" }}>{s.completionRate}%</div>
+              <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 700 }}>RATA</div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTop: "1px solid #F1F5F9", fontSize: 11, color: "#64748B" }}>
+            <span>{s.donePerDay}/zi · {fmtTime(s.avgTime)} avg</span>
+            <span style={{ color: u.color, fontWeight: 700 }}>Vezi →</span>
+          </div>
+        </Card>;
+      })}
+    </div>
+
+    {sortedUsers.length === 0 && <Card style={{ padding: 40, textAlign: "center", color: "#94A3B8" }}>Niciun membru in echipa</Card>}
   </div>;
 }
 
