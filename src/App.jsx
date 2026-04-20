@@ -721,6 +721,48 @@ export default function App() {
     var channel = supabase.channel("app_data_changes").on("postgres_changes", { event: "*", schema: "public", table: "app_data" }, function(payload) {
       if (!payload.new || !payload.new.id || !payload.new.data) return;
       var key = payload.new.id;
+
+      // ═══ FORCE REFRESH SIGNAL ═══
+      // Admin can trigger a forced reload for all users via Error Log page
+      if (key === "_forceRefresh") {
+        var signalTime = payload.new.data && payload.new.data.at;
+        if (!signalTime) return;
+        // Store the time so we don't re-fire on page reload
+        var lastSeen = localStorage.getItem("s7_lastForceRefresh");
+        if (lastSeen === signalTime) return;
+        localStorage.setItem("s7_lastForceRefresh", signalTime);
+        console.log("[FORCE REFRESH] Admin a trimis semnal de refresh. Reload in 5s...");
+        setToasts(function(prev) {
+          return prev.concat([{
+            id: "force_refresh_" + Date.now(),
+            type: "update",
+            title: "🔄 Actualizare platforma",
+            message: "Aplicatia se actualizeaza in 5 secunde..."
+          }]);
+        });
+        // Flush pending saves before reload
+        setTimeout(function() {
+          var keysToFlush = Object.keys(_latestValues || {});
+          keysToFlush.forEach(function(k) {
+            if (saveTimers[k]) {
+              clearTimeout(saveTimers[k]);
+              delete saveTimers[k];
+              try {
+                var SUPABASE_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+                fetch("https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY, "Prefer": "resolution=merge-duplicates" },
+                  body: JSON.stringify({ id: k, data: _latestValues[k], updated_at: new Date().toISOString() }),
+                  keepalive: true
+                }).catch(function(){});
+              } catch(e){}
+            }
+          });
+          window.location.reload();
+        }, 5000);
+        return;
+      }
+
       // CRITICAL: Ignore echoes from our own saves (within 3 seconds)
       // This prevents the realtime subscription from overwriting local state
       // with stale data that WE just saved
@@ -7543,6 +7585,31 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
         </div>
         <button style={Object.assign({}, S.primBtn, { background: "#7C3AED", padding: "12px 24px", fontSize: 14, fontWeight: 700 })} onClick={runHealthCheck} disabled={checking}>
           {checking ? "Se verifica..." : "Verifica acum"}
+        </button>
+      </div>
+    </Card>
+
+    {/* FORCE REFRESH ALL USERS - admin only */}
+    <Card style={{ marginBottom: 16, borderLeft: "4px solid #DC2626", background: "linear-gradient(135deg, #FEF2F2, #fff)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ fontSize: 36 }}>🔄</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#1E293B" }}>Force refresh toata echipa</div>
+          <div style={{ fontSize: 12, color: "#64748B" }}>Forteaza reload la toti userii logati. Util dupa deploy cand echipa ruleaza cod vechi.</div>
+        </div>
+        <button
+          style={Object.assign({}, S.primBtn, { background: "#DC2626", padding: "12px 24px", fontSize: 14, fontWeight: 700 })}
+          onClick={async function() {
+            if (!window.confirm("Sigur vrei sa forțezi refresh la TOATA echipa? Toti userii vor fi deconectati si trebuie sa se re-logheze.")) return;
+            try {
+              var timestamp = new Date().toISOString();
+              await supabase.from("app_data").upsert({ id: "_forceRefresh", data: { at: timestamp, by: "admin" }, updated_at: timestamp }, { onConflict: "id" });
+              window.alert("Semnal trimis! Toata echipa va fi refresh-ata automat in 30 de secunde (cand verifica update-uri).");
+            } catch(e) {
+              window.alert("Eroare: " + (e.message || "necunoscuta"));
+            }
+          }}>
+          Force refresh ALL
         </button>
       </div>
     </Card>
