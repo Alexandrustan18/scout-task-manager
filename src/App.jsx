@@ -7614,6 +7614,134 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
       </div>
     </Card>
 
+    {/* BACKUP MANUAL - Export / Import */}
+    <Card style={{ marginBottom: 16, borderLeft: "4px solid " + GR, background: "linear-gradient(135deg, #F0FDF4, #fff)" }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>💾 Backup Manual</div>
+        <div style={{ fontSize: 12, color: "#64748B" }}>Salveaza un backup local cu toate taskurile si datele platformei. In caz de urgenta, le poti re-importa.</div>
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {/* EXPORT BUTTON */}
+        <button
+          style={Object.assign({}, S.primBtn, { background: GR, padding: "12px 20px", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 })}
+          onClick={async function() {
+            try {
+              var keysToBackup = [
+                "tasks", "statusHistory", "taskActivity", "timers", "sessions",
+                "team", "shops", "products", "templates", "targets", "sheets",
+                "notifs", "taskTypes", "departments", "platforms", "pipelineRules",
+                "userXP", "monthlyBonus", "wheelConfig", "wheelHistory",
+                "penalties", "penaltyConfig", "loginHistory", "announcements",
+                "slas", "leaves", "leaveRequests", "branding", "achievements",
+                "allTags", "recurringTasks", "productAudit", "logs"
+              ];
+              var backup = {
+                _meta: {
+                  exportedAt: new Date().toISOString(),
+                  exportedBy: "admin",
+                  version: "scout_v7"
+                }
+              };
+              // Fetch all in parallel
+              var results = await Promise.all(keysToBackup.map(async function(k) {
+                try {
+                  var { data } = await supabase.from("app_data").select("data").eq("id", k).maybeSingle();
+                  return { key: k, data: data && data.data };
+                } catch(e) { return { key: k, data: null }; }
+              }));
+              results.forEach(function(r) { if (r.data !== null && r.data !== undefined) backup[r.key] = r.data; });
+
+              // Create downloadable file
+              var json = JSON.stringify(backup, null, 2);
+              var blob = new Blob([json], { type: "application/json" });
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement("a");
+              var dateStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+              a.href = url;
+              a.download = "scout_backup_" + dateStr + ".json";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+
+              var taskCount = Array.isArray(backup.tasks) ? backup.tasks.length : 0;
+              var sizeKB = Math.round(json.length / 1024);
+              window.alert("Backup descarcat!\n\n" + taskCount + " taskuri\n" + Object.keys(backup).filter(function(k) { return k !== "_meta"; }).length + " categorii de date\n" + sizeKB + " KB total");
+            } catch(e) {
+              window.alert("Eroare la export: " + (e.message || "necunoscuta"));
+            }
+          }}>
+          📥 Export backup (descarca)
+        </button>
+
+        {/* IMPORT BUTTON */}
+        <label style={Object.assign({}, S.primBtn, { background: "#2563EB", padding: "12px 20px", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" })}>
+          📤 Import backup (din fisier)
+          <input
+            type="file"
+            accept=".json,application/json"
+            style={{ display: "none" }}
+            onChange={async function(e) {
+              var file = e.target.files && e.target.files[0];
+              if (!file) return;
+              try {
+                var text = await file.text();
+                var backup;
+                try { backup = JSON.parse(text); } catch(parseErr) {
+                  window.alert("Fisier invalid - nu e JSON valid.");
+                  e.target.value = "";
+                  return;
+                }
+                if (!backup || typeof backup !== "object") {
+                  window.alert("Fisier invalid - nu contine date valide.");
+                  e.target.value = "";
+                  return;
+                }
+
+                var keys = Object.keys(backup).filter(function(k) { return k !== "_meta"; });
+                var taskCount = Array.isArray(backup.tasks) ? backup.tasks.length : 0;
+                var exportInfo = backup._meta ? ("Creat: " + backup._meta.exportedAt + "\n") : "";
+
+                var confirmMsg = "SUPRASCRIE datele curente cu backup-ul?\n\n" +
+                  exportInfo +
+                  keys.length + " categorii\n" +
+                  taskCount + " taskuri\n\n" +
+                  "!!! ACTIUNE IREVERSIBILA !!!\n" +
+                  "Datele curente vor fi PIERDUTE.\n\n" +
+                  "Continui?";
+                if (!window.confirm(confirmMsg)) { e.target.value = ""; return; }
+
+                // Upload each key to Supabase
+                var failed = [];
+                var succeeded = 0;
+                for (var i = 0; i < keys.length; i++) {
+                  var k = keys[i];
+                  try {
+                    var { error } = await supabase.from("app_data").upsert({ id: k, data: backup[k], updated_at: new Date().toISOString() }, { onConflict: "id" });
+                    if (error) failed.push(k + ": " + error.message);
+                    else succeeded++;
+                  } catch(err) {
+                    failed.push(k + ": " + (err.message || "exceptie"));
+                  }
+                }
+
+                if (failed.length === 0) {
+                  window.alert("Import reusit!\n" + succeeded + " categorii restaurate.\n\nPagina se reincarca in 3 secunde...");
+                  setTimeout(function() { window.location.reload(); }, 3000);
+                } else {
+                  window.alert("Import partial:\n" + succeeded + " OK / " + failed.length + " esuate\n\nErori:\n" + failed.slice(0, 5).join("\n"));
+                }
+                e.target.value = "";
+              } catch(err) {
+                window.alert("Eroare la import: " + (err.message || "necunoscuta"));
+                e.target.value = "";
+              }
+            }}
+          />
+        </label>
+      </div>
+    </Card>
+
     {/* HEALTH CHECK RESULTS */}
     {checkResults && <Card style={{ marginBottom: 16, border: "1px solid " + (checkResults.every(function(r) { return r.status === "ok" || r.status === "resolved"; }) ? GR + "40" : "#D9770640") }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
