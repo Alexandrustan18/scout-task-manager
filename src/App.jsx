@@ -451,6 +451,13 @@ function ToastBanner({ toasts, onDismiss }) {
   if (!toasts || toasts.length === 0) return null;
   return <div style={{ position: "fixed", top: 12, right: 12, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, maxWidth: 380 }}>
     {toasts.map(function(t) {
+      // Special display for update notifications
+      if (t.type === "update") {
+        return <div key={t.id} style={{ background: "linear-gradient(135deg, #0C7E3E, #16A34A)", borderRadius: 10, padding: "14px 18px", boxShadow: "0 8px 30px rgba(12,126,62,0.3)", animation: "toastIn 0.3s ease", color: "#fff" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{t.title}</div>
+          <div style={{ fontSize: 13, opacity: 0.95 }}>{t.message}</div>
+        </div>;
+      }
       return <div key={t.id} style={{ background: "#fff", border: "2px solid " + GR, borderRadius: 10, padding: "12px 16px", boxShadow: "0 8px 30px rgba(0,0,0,0.15)", animation: "toastIn 0.3s ease", display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 8, height: 8, borderRadius: "50%", background: GR, animation: "pulse 2s infinite", flexShrink: 0 }} />
         <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{t.message}</div><div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{fr(t.time)}</div></div>
@@ -748,6 +755,94 @@ export default function App() {
   }, []);
 
   useEffect(function() { var h = function() { setIsMob(window.innerWidth < 820); }; window.addEventListener("resize", h); return function() { window.removeEventListener("resize", h); }; }, []);
+
+  // AUTO-UPDATE MECHANISM: Detects when a new version is deployed on Vercel
+  // and auto-refreshes the page so users never run stale code.
+  // How it works:
+  // - On load, fetches /index.html and extracts the JS bundle filename (e.g. "index-abc123.js")
+  //   Vite creates a new hash for each build, so this changes on every deploy.
+  // - Stores it as the "initial" version.
+  // - Every 2 minutes, re-fetches /index.html and compares bundles.
+  // - If different = new deploy detected = show toast + auto-reload after 5 seconds.
+  useEffect(function() {
+    if (!user) return; // only check after login
+    var initialBundle = null;
+
+    function extractBundleHash(html) {
+      // Match: <script type="module" crossorigin src="/assets/index-XXXXXX.js">
+      var m = html.match(/\/assets\/index-[A-Za-z0-9_-]+\.js/);
+      return m ? m[0] : null;
+    }
+
+    async function checkForUpdate() {
+      try {
+        // Fetch index.html with cache-busting to get the TRUE latest version
+        var r = await fetch("/?_v=" + Date.now(), { cache: "no-store" });
+        if (!r.ok) return;
+        var html = await r.text();
+        var currentBundle = extractBundleHash(html);
+        if (!currentBundle) return;
+        if (initialBundle === null) {
+          initialBundle = currentBundle;
+          return;
+        }
+        if (currentBundle !== initialBundle) {
+          // New version detected!
+          console.log("[AUTO-UPDATE] New version detected. Was:", initialBundle, "Now:", currentBundle);
+          // Show toast notification
+          setToasts(function(prev) {
+            return prev.concat([{
+              id: "auto_update_" + Date.now(),
+              type: "update",
+              title: "🚀 Versiune noua disponibila",
+              message: "Platforma se va actualiza automat in 5 secunde..."
+            }]);
+          });
+          // Flush any pending saves before reloading
+          setTimeout(function() {
+            // Try to flush tasks and other critical data first
+            var keysToFlush = Object.keys(_latestValues || {});
+            keysToFlush.forEach(function(k) {
+              if (saveTimers[k]) {
+                clearTimeout(saveTimers[k]);
+                delete saveTimers[k];
+                try {
+                  var SUPABASE_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+                  fetch("https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "apikey": SUPABASE_KEY,
+                      "Authorization": "Bearer " + SUPABASE_KEY,
+                      "Prefer": "resolution=merge-duplicates"
+                    },
+                    body: JSON.stringify({ id: k, data: _latestValues[k], updated_at: new Date().toISOString() }),
+                    keepalive: true
+                  }).catch(function(){});
+                } catch(e){}
+              }
+            });
+            // Force hard reload (bypass cache) - equivalent to Cmd+Shift+R
+            window.location.reload();
+          }, 5000);
+        }
+      } catch(e) {
+        // Silent fail - not critical
+      }
+    }
+
+    // Initial check (establishes baseline)
+    checkForUpdate();
+    // Check every 2 minutes
+    var interval = setInterval(checkForUpdate, 2 * 60 * 1000);
+    // Also check when tab becomes visible again
+    var onVisibilityChange = function() { if (!document.hidden) checkForUpdate(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return function() {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [user]);
 
   // Error log listener - keeps React state in sync with global error log
   useEffect(function() {
