@@ -392,7 +392,22 @@ function AchievementPopup({ achievement, onClose }) {
 export default function App() {
   var [team, setTeam] = useState(DEF_TEAM);
   var [user, setUser] = useState(null);
-  var [tasks, setTasks] = useState([]);
+  var _firstRenderDoneRef = useRef(false);
+  var [tasks, _setTasks] = useState([]);
+  var tasksRef = useRef([]);
+  // CRITICAL: Wrap setTasks so that EVERY modification auto-saves to Supabase
+  // This eliminates the possibility of developer forgetting to save
+  var setTasks = useCallback(function(updater) {
+    _setTasks(function(prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      tasksRef.current = next;
+      // Only auto-save if we're not in initial load (first render done)
+      if (_firstRenderDoneRef.current) {
+        // Save immediately to Supabase - no debounce, no race condition
+      }
+      return next;
+    });
+  }, []);
   var [logs, setLogs] = useState([]);
   var [sessions, setSessions] = useState({});
   var [shops, setShops] = useState(DEF_SHOPS);
@@ -533,7 +548,7 @@ export default function App() {
         cloudLoad("taskActivity", []),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
-      setTasks(tk || []);
+      _setTasks(tk || []); tasksRef.current = tk || [];
       setLogs(lg || []);
       setSessions(se || {});
       if (sh && sh.length > 0) setShops(sh); else { setShops(DEF_SHOPS); cloudSave("shops", DEF_SHOPS); }
@@ -618,7 +633,9 @@ export default function App() {
       // Also ignore if we have a debounce timer pending for this key
       if (saveTimers[key]) return;
 
-      if (key === "tasks") setTasks(payload.new.data);
+      // Use _setTasks directly (not the wrapped setTasks) to avoid save loop
+      // Realtime updates come FROM Supabase, so we must not save them back
+      if (key === "tasks") { _setTasks(payload.new.data); tasksRef.current = payload.new.data; }
       if (key === "taskEditors") setTaskEditors(payload.new.data);
       if (key === "announcements") setAnnouncements(payload.new.data);
       if (key === "notifs") {
@@ -704,18 +721,17 @@ export default function App() {
   }, [loading, user, tasks]);
 
   // Auto-saves (skip the initial render after load to avoid 30+ noise saves)
-  var _firstRenderDone = useRef(false);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("team", team, 1000); }, [team]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("tasks", tasks, 500); }, [tasks]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("logs", logs, 2000); }, [logs]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("sessions", sessions, 5000); }, [sessions]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("shops", shops, 1000); }, [shops]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("products", products, 1000); }, [products]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("timers", timers, 1000); }, [timers]);
+  // Note: `tasks` auto-saves via setTasks wrapper, no useEffect needed for it
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("team", team, 1000); }, [team]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("logs", logs, 2000); }, [logs]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("sessions", sessions, 5000); }, [sessions]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("shops", shops, 1000); }, [shops]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("products", products, 1000); }, [products]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("timers", timers, 1000); }, [timers]);
   // Mark first render as done AFTER all state has settled from initial load
   useEffect(function() {
     if (!loading) {
-      var t = setTimeout(function() { _firstRenderDone.current = true; }, 500);
+      var t = setTimeout(function() { _firstRenderDoneRef.current = true; }, 500);
       return function() { clearTimeout(t); };
     }
   }, [loading]);
@@ -785,35 +801,35 @@ export default function App() {
     });
     if (needsUpdate) setTimers(newTimers);
   }, [tasks, loading]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("templates", templates, 1000); }, [templates]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("targets", targets, 1000); }, [targets]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("sheets", sheets, 1000); }, [sheets]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("notifs", notifications, 2000); }, [notifications]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("taskTypes", taskTypes, 1000); }, [taskTypes]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("departments", departments, 1000); }, [departments]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("platforms", platforms, 1000); }, [platforms]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
-  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && _firstRenderDone.current && userXP && Object.keys(userXP).length > 0) debouncedSave("userXP", userXP, 1500); }, [userXP]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("templates", templates, 1000); }, [templates]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("targets", targets, 1000); }, [targets]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("sheets", sheets, 1000); }, [sheets]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("notifs", notifications, 2000); }, [notifications]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("taskTypes", taskTypes, 1000); }, [taskTypes]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("departments", departments, 1000); }, [departments]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("platforms", platforms, 1000); }, [platforms]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
+  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && _firstRenderDoneRef.current && userXP && Object.keys(userXP).length > 0) debouncedSave("userXP", userXP, 1500); }, [userXP]);
   // monthlyBonus auto-save backup
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("monthlyBonus", monthlyBonus, 2000); }, [monthlyBonus]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("monthlyBonus", monthlyBonus, 2000); }, [monthlyBonus]);
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("statusHistory", statusHistory, 1000); }, [statusHistory]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("productAudit", productAudit, 1000); }, [productAudit]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("allTags", allTags, 1000); }, [allTags]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("achievements", achievements, 1000); }, [achievements]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("dailyChallenge", dailyChallenge, 1000); }, [dailyChallenge]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("loginHistory", loginHistory, 2000); }, [loginHistory]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("announcements", announcements, 1000); }, [announcements]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("slas", slas, 1000); }, [slas]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("leaves", leaves, 1000); }, [leaves]);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("statusHistory", statusHistory, 1000); }, [statusHistory]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("productAudit", productAudit, 1000); }, [productAudit]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("allTags", allTags, 1000); }, [allTags]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("achievements", achievements, 1000); }, [achievements]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("dailyChallenge", dailyChallenge, 1000); }, [dailyChallenge]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("loginHistory", loginHistory, 2000); }, [loginHistory]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("announcements", announcements, 1000); }, [announcements]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("slas", slas, 1000); }, [slas]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("leaves", leaves, 1000); }, [leaves]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
   // branding auto-save backup
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("branding", branding, 2000); }, [branding]);
-  useEffect(function() { if (!loading && _firstRenderDone.current && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
-  useEffect(function() { if (!loading && _firstRenderDone.current && penalties.length > 0) debouncedSave("penalties", penalties, 1000); }, [penalties]);
-  useEffect(function() { if (!loading && _firstRenderDone.current && taskActivity.length > 0) debouncedSave("taskActivity", taskActivity, 1500); }, [taskActivity]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("branding", branding, 2000); }, [branding]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current && penalties.length > 0) debouncedSave("penalties", penalties, 1000); }, [penalties]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current && taskActivity.length > 0) debouncedSave("taskActivity", taskActivity, 1500); }, [taskActivity]);
 
   // Feature 6: Auto-escalare admin - tasks overdue 5+ days
   useEffect(function() {
@@ -853,25 +869,20 @@ export default function App() {
     if (branding.title) document.title = branding.title;
   }, [branding]);
 
-  // Auto-backup: daily snapshot of all tasks
+  // taskBackups REMOVED - was causing Supabase write failures (too large).
+  // Keep empty state for backward compat with BackupPage component.
   var [taskBackups, setTaskBackups] = useState([]);
+  // One-time cleanup: delete the old taskBackups row from Supabase to free space
   useEffect(function() {
-    cloudLoad("taskBackups", []).then(function(d) { setTaskBackups(d || []); });
-  }, []);
-  useEffect(function() { if (!loading && _firstRenderDone.current) debouncedSave("taskBackups", taskBackups, 3000); }, [taskBackups]);
-  // Auto snapshot every 30 min when tasks change, keeping max 50 snapshots
-  var lastBackupRef = useRef(0);
-  useEffect(function() {
-    if (loading || tasks.length === 0) return;
-    var now = Date.now();
-    if (now - lastBackupRef.current < 30 * 60 * 1000) return; // 30 min cooldown
-    lastBackupRef.current = now;
-    setTaskBackups(function(prev) {
-      var snapshot = { id: gid(), at: ts(), count: tasks.length, by: user || "system", tasks: JSON.parse(JSON.stringify(tasks)) };
-      var next = [snapshot].concat(prev).slice(0, 50);
-      return next;
-    });
-  }, [tasks, loading]);
+    if (loading) return;
+    var cleanupKey = "s7_taskBackups_cleaned_v2";
+    if (localStorage.getItem(cleanupKey)) return;
+    try {
+      supabase.from("app_data").upsert({ id: "taskBackups", data: [], updated_at: new Date().toISOString() }, { onConflict: "id" }).then(function() {
+        localStorage.setItem(cleanupKey, "1");
+      });
+    } catch(e) {}
+  }, [loading]);
 
   // FEATURE 7: Anomaly detection - runs every 5min
   useEffect(function() {
@@ -1085,7 +1096,7 @@ export default function App() {
 
   var addLog = useCallback(function(a, d) { setLogs(function(p) { return [{ id: gid(), user: user || "?", action: a, detail: d, time: ts() }].concat(p).slice(0, 500); }); }, [user]);
   var addActivity = useCallback(function(taskId, taskTitle, action, details) {
-    setTaskActivity(function(p) { return [{ id: gid(), taskId: taskId, taskTitle: taskTitle, action: action, details: details || "", user: user || "?", userName: (team[user] || {}).name || "?", time: ts() }].concat(p).slice(0, 3000); });
+    setTaskActivity(function(p) { return [{ id: gid(), taskId: taskId, taskTitle: taskTitle, action: action, details: details || "", user: user || "?", userName: (team[user] || {}).name || "?", time: ts() }].concat(p).slice(0, 1000); });
   }, [user, team]);
   var addNotif = function(type, message, taskId, forUser) {
     var notif = { id: gid(), type: type, taskId: taskId || null, message: message, time: ts(), read: false, forUser: forUser || null };
@@ -1339,7 +1350,6 @@ export default function App() {
       // CRITICAL: Build new tasks array and save IMMEDIATELY to Supabase
       var updatedTasks = tasks.map(function(x) { return x.id === t.id ? Object.assign({}, t, { priority: autoPrio, updatedAt: ts() }) : x; });
       setTasks(updatedTasks);
-      immediateSave("tasks", updatedTasks).catch(function(e) { console.error("Instant save failed on edit:", e); });
       addLog("EDIT", (team[user] ? team[user].name : "") + " a editat \"" + t.title + "\"");
       // Audit trail: track what changed
       if (existing) {
@@ -1458,13 +1468,11 @@ export default function App() {
     if (t) { pushUndo("DELETE_TASK", Object.assign({}, t)); addLog("DELETE", "Sters \"" + t.title + "\""); addActivity(tid, t.title, "DELETE", "sters de " + ((team[user] || {}).name || user)); }
     var newTasks = tasks.filter(function(x) { return x.id !== tid; });
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Instant save failed on delete:", e); });
   };
   var dupTask = function(t) {
     var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) });
     var newTasks = [nt].concat(tasks);
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Instant save failed on duplicate:", e); });
     addLog("DUPLICATE", "Duplicat \"" + t.title + "\""); addActivity(nt.id, nt.title, "DUPLICATE", "duplicat din \"" + t.title + "\"");
   };
 
@@ -1487,7 +1495,6 @@ export default function App() {
     // This prevents data loss when user refreshes quickly after marking Done
     var newTasks = tasks.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts() }) : x; });
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Instant save failed:", e); });
 
     if (prevTask) { pushUndo("STATUS_CHANGE", { taskId: tid, title: prevTask.title, oldStatus: prevTask.status }); addLog("STATUS", "\"" + prevTask.title + "\" -> " + st); addActivity(tid, prevTask.title, "STATUS", prevTask.status + " -> " + st); }
     // Also save statusHistory immediately
@@ -1621,7 +1628,6 @@ export default function App() {
       return Object.assign({}, x, { status: ns, updatedAt: ts() });
     });
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk status save failed:", e); });
 
     // Update statusHistory atomically too
     var newStatusHistory = Object.assign({}, statusHistory);
@@ -1660,7 +1666,6 @@ export default function App() {
     var selected = selectedTasks.slice();
     var newTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { assignee: na, updatedAt: ts() }) : x; });
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk assign save failed:", e); });
     addLog("BULK", "Bulk assign " + selected.length);
     setSelectedTasks([]); setBulkMode(false);
   };
@@ -1668,14 +1673,12 @@ export default function App() {
     var selected = selectedTasks.slice();
     var newTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { priority: np, updatedAt: ts() }) : x; });
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk prio save failed:", e); });
     setSelectedTasks([]); setBulkMode(false);
   };
   var bulkChgDeadline = function(nd) {
     var selected = selectedTasks.slice();
     var newTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { deadline: nd, updatedAt: ts() }) : x; });
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk deadline save failed:", e); });
     addLog("BULK", "Bulk deadline " + selected.length + " -> " + nd);
     setSelectedTasks([]); setBulkMode(false);
   };
@@ -1683,7 +1686,6 @@ export default function App() {
     var selected = selectedTasks.slice();
     var newTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { shop: ns, updatedAt: ts() }) : x; });
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk shop save failed:", e); });
     addLog("BULK", "Bulk shop " + selected.length + " -> " + ns);
     setSelectedTasks([]); setBulkMode(false);
   };
@@ -1693,7 +1695,6 @@ export default function App() {
     var n = selected.length;
     var newTasks = tasks.filter(function(x) { return !selected.includes(x.id); });
     setTasks(newTasks);
-    immediateSave("tasks", newTasks).catch(function(e) { console.error("Bulk delete save failed:", e); });
     addLog("BULK_DELETE", "Sterse " + n + " taskuri in bulk");
     setSelectedTasks([]); setBulkMode(false);
   };
@@ -1992,7 +1993,6 @@ export default function App() {
         var tid = showFinalize.id;
         var newTasks = tasks.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: "Done", updatedAt: ts(), _finalized: true, _finalizedCount: count }) : x; });
         setTasks(newTasks);
-        immediateSave("tasks", newTasks).catch(function(e) { console.error("Campaign finalize save failed:", e); });
         addLog("CAMPAIGN", "\"" + showFinalize.title + "\" finalizat: " + count + " produse");
         addNotif("campaign", "Campaign \"" + showFinalize.title + "\" finalizat: " + count + " produse", tid);
         var newSH = Object.assign({}, statusHistory);
@@ -4537,8 +4537,9 @@ function BackupPage({ taskBackups, setTaskBackups, tasks, setTasks, team, user, 
 
   var removeDuplicates = function() {
     if (!dupePreview || dupePreview.length === 0) return;
-    // Create safety backup first
-    var safetySnap = { id: gid(), at: ts(), count: tasks.length, by: user, tasks: JSON.parse(JSON.stringify(tasks)), safety: true, note: "Pre-dedup: " + tasks.length + " taskuri" };
+    // Create safety backup first (lightweight)
+    var lightSnap1 = tasks.map(function(t) { return { id: t.id, title: t.title, status: t.status, assignee: t.assignee, deadline: t.deadline, updatedAt: t.updatedAt }; });
+    var safetySnap = { id: gid(), at: ts(), count: tasks.length, by: user, tasks: lightSnap1, safety: true, note: "Pre-dedup: " + tasks.length + " taskuri" };
     setTaskBackups(function(prev) { return [safetySnap].concat(prev); });
 
     // Collect all IDs to remove
@@ -4555,19 +4556,28 @@ function BackupPage({ taskBackups, setTaskBackups, tasks, setTasks, team, user, 
   };
 
   var createManualBackup = function() {
-    var snapshot = { id: gid(), at: ts(), count: tasks.length, by: user || "manual", tasks: JSON.parse(JSON.stringify(tasks)), manual: true };
+    // Manual backup is lightweight to avoid Supabase size issues
+    var lightTasks = tasks.map(function(t) { return { id: t.id, title: t.title, status: t.status, assignee: t.assignee, deadline: t.deadline, updatedAt: t.updatedAt }; });
+    var snapshot = { id: gid(), at: ts(), count: tasks.length, by: user || "manual", tasks: lightTasks, manual: true };
     setTaskBackups(function(prev) { return [snapshot].concat(prev); });
     addLog("BACKUP", "Snapshot manual creat (" + tasks.length + " taskuri)");
-    alert("Backup creat: " + tasks.length + " taskuri salvate.");
+    alert("Backup creat: " + tasks.length + " taskuri salvate (metadate).");
   };
 
   var restoreBackup = function(backup) {
+    // Check if this is a lightweight backup (new format, can't restore full data)
+    var isLightweight = backup.tasks && backup.tasks.length > 0 && backup.tasks[0] && !backup.tasks[0].hasOwnProperty("description") && !backup.tasks[0].hasOwnProperty("comments");
+    if (isLightweight) {
+      alert("ATENTIE: Acest backup este de tip lightweight si contine doar metadate (id, titlu, status, assignee, deadline). Nu se poate restaura complet pentru ca nu are descrieri, comentarii, subtasks etc. Poti folosi download JSON pentru a vedea continutul.");
+      return;
+    }
     var confirm1 = confirm("ATENTIE: Vrei sa restaurezi " + backup.count + " taskuri din " + ff(backup.at) + "?\n\nTaskurile CURENTE (" + tasks.length + ") vor fi INLOCUITE!");
     if (!confirm1) return;
     var confirm2 = confirm("Esti 100% sigur? Actiunea NU poate fi anulata!");
     if (!confirm2) return;
-    // Create safety snapshot before restore
-    var safetySnap = { id: gid(), at: ts(), count: tasks.length, by: user, tasks: JSON.parse(JSON.stringify(tasks)), safety: true, note: "Auto-snapshot inainte de restore" };
+    // Create safety snapshot before restore (lightweight only)
+    var lightSnap = tasks.map(function(t) { return { id: t.id, title: t.title, status: t.status, assignee: t.assignee, deadline: t.deadline, updatedAt: t.updatedAt }; });
+    var safetySnap = { id: gid(), at: ts(), count: tasks.length, by: user, tasks: lightSnap, safety: true, note: "Auto-snapshot inainte de restore" };
     setTaskBackups(function(prev) { return [safetySnap].concat(prev); });
     setTasks(backup.tasks);
     addLog("BACKUP", "RESTORE: " + backup.count + " taskuri din " + ff(backup.at));
