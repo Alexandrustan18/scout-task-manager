@@ -47,6 +47,14 @@ async function immediateSave(key, value) {
   _pendingKeys[key] = true;
   var safetyTimer = setTimeout(function() { delete _pendingKeys[key]; }, 15000);
   try {
+    // CRITICAL: For tasks, use merge-save to prevent concurrent overwrites
+    // When 2 users save at the same time, we need to merge, not overwrite
+    if (key === "tasks") {
+      var merged = await cloudSaveTasksMerge(value);
+      // Update _latestValues with the merged version so future saves have the right base
+      if (merged) _latestValues[key] = merged;
+      return merged;
+    }
     await cloudSave(key, value);
   } finally {
     clearTimeout(safetyTimer);
@@ -84,6 +92,73 @@ async function cloudSave(key, value, _retryCount) {
       }
       logError("SUPABASE_SAVE_FAIL", "FINAL FAIL salvare \"" + key + "\" dupa 3 incercari!", e.message || "");
     }
+    throw e;
+  }
+}
+
+// CRITICAL: Merge-save for tasks to prevent concurrent overwrites
+// When 2 users save simultaneously, one would overwrite the other's changes.
+// This function reads the current state from Supabase first, merges intelligently,
+// then saves. This way, if Carla creates 5 tasks and Mara updates 1 at the same time,
+// BOTH changes are preserved.
+async function cloudSaveTasksMerge(localTasks, _retryCount) {
+  try { localStorage.setItem("s7_tasks", JSON.stringify(localTasks)); } catch(e) {}
+  try {
+    // Read what's currently in Supabase
+    var { data: remoteRow, error: readErr } = await supabase.from("app_data").select("data").eq("id", "tasks").maybeSingle();
+    var remoteTasks = (remoteRow && Array.isArray(remoteRow.data)) ? remoteRow.data : [];
+
+    // Build merged array: for each task, use the most recently updated version
+    var mergedMap = {};
+
+    // First, add all remote tasks
+    remoteTasks.forEach(function(t) { if (t && t.id) mergedMap[t.id] = t; });
+
+    // Then overlay local tasks (if local is newer OR if local task doesn't exist remotely, take local)
+    localTasks.forEach(function(localT) {
+      if (!localT || !localT.id) return;
+      var remoteT = mergedMap[localT.id];
+      if (!remoteT) {
+        // Task exists only locally - new task created by this user
+        mergedMap[localT.id] = localT;
+      } else {
+        // Task exists in both - use the one with newer updatedAt
+        var localTime = localT.updatedAt ? new Date(localT.updatedAt).getTime() : 0;
+        var remoteTime = remoteT.updatedAt ? new Date(remoteT.updatedAt).getTime() : 0;
+        if (localTime >= remoteTime) {
+          mergedMap[localT.id] = localT;
+        }
+        // else: keep remote (it's newer)
+      }
+    });
+
+    // DELETE detection: if a task is in remote but NOT in local AND was recently seen locally,
+    // it might have been deleted. But to be safe, we keep it. Deletion must use explicit flag.
+    // (Tasks you delete should set _deleted: true + have updatedAt newer than remote)
+    // For now: if local had it before and doesn't now, we keep it (safer than losing data).
+    // Handle explicit deletions via _deleted flag:
+    Object.keys(mergedMap).forEach(function(id) {
+      if (mergedMap[id]._deleted === true) delete mergedMap[id];
+    });
+
+    var merged = Object.values(mergedMap);
+
+    // Save the merged array
+    var { error: writeErr } = await supabase.from("app_data").upsert({ id: "tasks", data: merged, updated_at: new Date().toISOString() }, { onConflict: "id" });
+    if (writeErr) {
+      var retries = _retryCount || 0;
+      logError("SUPABASE_SAVE", "Eroare merge-save tasks (retry " + retries + "/2)", writeErr.message || JSON.stringify(writeErr));
+      if (retries < 2) {
+        await new Promise(function(r) { setTimeout(r, 1000 * (retries + 1)); });
+        return cloudSaveTasksMerge(localTasks, retries + 1);
+      }
+      logError("SUPABASE_SAVE_FAIL", "FINAL FAIL merge-save tasks dupa 3 incercari!", writeErr.message || "");
+      throw new Error("Supabase merge-save failed: " + (writeErr.message || ""));
+    }
+
+    return merged; // return the merged version so UI can update
+  } catch (e) {
+    logError("SUPABASE_EXCEPTION", "Exceptie la merge-save tasks", e.message || "");
     throw e;
   }
 }
@@ -402,15 +477,22 @@ export default function App() {
   var [tasks, _setTasks] = useState([]);
   var tasksRef = useRef([]);
   // CRITICAL: Wrap setTasks so that EVERY modification auto-saves to Supabase
-  // This eliminates the possibility of developer forgetting to save
+  // Uses MERGE-SAVE to prevent concurrent user overwrites
   var setTasks = useCallback(function(updater) {
     _setTasks(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
       tasksRef.current = next;
       // Only auto-save if we're not in initial load (first render done)
       if (_firstRenderDoneRef.current) {
-        // Save immediately to Supabase - no debounce, no race condition
-        immediateSave("tasks", next).catch(function(err) {
+        // Save immediately with MERGE to prevent concurrent user overwrites
+        immediateSave("tasks", next).then(function(merged) {
+          // If server had changes we didn't know about, merged may differ from next
+          // Update local state to reflect the true merged state
+          if (merged && Array.isArray(merged) && merged.length !== next.length) {
+            _setTasks(merged);
+            tasksRef.current = merged;
+          }
+        }).catch(function(err) {
           console.error("[CRITICAL] Auto-save tasks failed:", err);
           logError("SUPABASE_SAVE_FAIL", "Auto-save tasks fail in setTasks wrapper", err && err.message ? err.message : String(err));
         });
@@ -1278,6 +1360,8 @@ export default function App() {
   var visTasks = useMemo(function() {
     if (!user) return [];
     return tasks.filter(function(t) {
+      // Hide tasks marked for deletion (will be cleaned up after next save)
+      if (t._deleted === true) return false;
       // Only hide tasks explicitly marked as campaign parents
       if (t._campaignParent === true) return false;
       // For pipeline tasks, only check assignee (not createdBy) so previous assignee doesn't see them
@@ -1482,8 +1566,18 @@ export default function App() {
   var delTask = function(tid) {
     var t = tasks.find(function(x) { return x.id === tid; });
     if (t) { pushUndo("DELETE_TASK", Object.assign({}, t)); addLog("DELETE", "Sters \"" + t.title + "\""); addActivity(tid, t.title, "DELETE", "sters de " + ((team[user] || {}).name || user)); }
-    var newTasks = tasks.filter(function(x) { return x.id !== tid; });
-    setTasks(newTasks);
+    // Mark as _deleted with new updatedAt so merge-save will remove it from Supabase
+    // Then filter out locally
+    var markedTasks = tasks.map(function(x) { return x.id === tid ? Object.assign({}, x, { _deleted: true, updatedAt: ts() }) : x; });
+    setTasks(markedTasks);
+    // Local cleanup after save completes - filter out deleted ones
+    setTimeout(function() {
+      _setTasks(function(prev) {
+        var cleaned = prev.filter(function(x) { return !x._deleted; });
+        tasksRef.current = cleaned;
+        return cleaned;
+      });
+    }, 2000);
   };
   var dupTask = function(t) {
     var nt = Object.assign({}, t, { id: gid(), title: t.title + " (copie)", status: "To Do", createdBy: user, createdAt: ts(), updatedAt: ts(), subtasks: (t.subtasks || []).map(function(s) { return { id: gid(), text: s.text, done: false }; }) });
@@ -1709,8 +1803,16 @@ export default function App() {
     if (!window.confirm("Sterge " + selectedTasks.length + " taskuri? Actiune ireversibila!")) return;
     var selected = selectedTasks.slice();
     var n = selected.length;
-    var newTasks = tasks.filter(function(x) { return !selected.includes(x.id); });
-    setTasks(newTasks);
+    // Mark as _deleted so merge-save handles removal properly
+    var markedTasks = tasks.map(function(x) { return selected.includes(x.id) ? Object.assign({}, x, { _deleted: true, updatedAt: ts() }) : x; });
+    setTasks(markedTasks);
+    setTimeout(function() {
+      _setTasks(function(prev) {
+        var cleaned = prev.filter(function(x) { return !x._deleted; });
+        tasksRef.current = cleaned;
+        return cleaned;
+      });
+    }, 2000);
     addLog("BULK_DELETE", "Sterse " + n + " taskuri in bulk");
     setSelectedTasks([]); setBulkMode(false);
   };
