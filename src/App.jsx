@@ -661,6 +661,16 @@ export default function App() {
   useEffect(function() {
     var listener = function(newLog) { setErrorLog(newLog.slice()); };
     _errorLogListeners.push(listener);
+    // Load errorLog from Supabase on mount (it persists across refreshes)
+    (async function() {
+      try {
+        var { data } = await supabase.from("app_data").select("data").eq("id", "errorLog").maybeSingle();
+        if (data && data.data && Array.isArray(data.data)) {
+          _errorLog = data.data;
+          setErrorLog(_errorLog.slice());
+        }
+      } catch(e) {}
+    })();
     return function() { _errorLogListeners = _errorLogListeners.filter(function(fn) { return fn !== listener; }); };
   }, []);
 
@@ -870,19 +880,7 @@ export default function App() {
   }, [branding]);
 
   // taskBackups REMOVED - was causing Supabase write failures (too large).
-  // Keep empty state for backward compat with BackupPage component.
-  var [taskBackups, setTaskBackups] = useState([]);
-  // One-time cleanup: delete the old taskBackups row from Supabase to free space
-  useEffect(function() {
-    if (loading) return;
-    var cleanupKey = "s7_taskBackups_cleaned_v2";
-    if (localStorage.getItem(cleanupKey)) return;
-    try {
-      supabase.from("app_data").upsert({ id: "taskBackups", data: [], updated_at: new Date().toISOString() }, { onConflict: "id" }).then(function() {
-        localStorage.setItem(cleanupKey, "1");
-      });
-    } catch(e) {}
-  }, [loading]);
+  // Feature eliminated from UI and code.
 
   // FEATURE 7: Anomaly detection - runs every 5min
   useEffect(function() {
@@ -1750,7 +1748,6 @@ export default function App() {
     { id: "league", label: "Liga Saptamanii", icon: Icons.trophy },
     { id: "leagueMonthly", label: "Liga Lunara", icon: Icons.challenge },
     { id: "announce", label: "Announcements", icon: Icons.announce },
-    { id: "backups", label: "Backup Taskuri", icon: Icons.history },
     { id: "departments", label: "Departamente", icon: Icons.dept },
     { id: "shops", label: "Magazine", icon: Icons.shops },
     { id: "products", label: "Produse", icon: Icons.prod },
@@ -1770,13 +1767,13 @@ export default function App() {
     { label: "Operational", items: ["targets", "templates", "recurring", "leaves"] },
     { label: "Echipa", items: ["workload", "performance", "teamReport", "league", "leagueMonthly", "digest", "achievements", "wallfame", "brandstats"] },
     { label: "Comunicare", items: ["announce"] },
-    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "penalizari", "backups", "errorlog"] },
+    { label: "Configurare", items: ["departments", "shops", "products", "sheets", "manage_users", "branding", "config", "pipeline", "wheelSetup", "penalizari", "errorlog"] },
   ];
 
   var accessibleNav = navItems.filter(function(n) {
     if (me.role === "admin") return true;
     if (me.access && me.access.length > 0) return me.access.includes(n.id);
-    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "backups", "branding", "teamReport"].includes(n.id);
+    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "branding", "teamReport"].includes(n.id);
     if (me.role === "member") return ["tasks", "kanban", "achievements", "announce"].includes(n.id);
     return false;
   });
@@ -1976,7 +1973,6 @@ export default function App() {
           {page === "challenge" && <ChallengePage dailyChallenge={dailyChallenge} setDailyChallenge={setDailyChallenge} isAdmin={isAdmin} team={team} tasks={tasks} user={user} visUsers={visUsers} />}
           {page === "anomalies" && <AnomaliesPage anomalies={anomalies} team={team} tasks={tasks} isMob={isMob} />}
           {page === "log" && <LogPage logs={logs} visUsers={visUsers} isMob={isMob} />}
-          {page === "backups" && <BackupPage taskBackups={taskBackups} setTaskBackups={setTaskBackups} tasks={tasks} setTasks={setTasks} team={team} user={user} isAdmin={isAdmin} addLog={addLog} />}
           {page === "loginhistory" && <LoginHistoryPage loginHistory={loginHistory} team={team} isMob={isMob} />}
           {page === "departments" && <DeptPage departments={departments} setDepartments={setDepartments} tasks={tasks} team={team} visUsers={visUsers} isMob={isMob} canEdit={canCreate} />}
           {page === "shops" && <ShopsBordPage shops={shops} setShops={setShops} tasks={tasks} team={team} isMob={isMob} canEdit={canCreate} slas={slas} />}
