@@ -70,15 +70,21 @@ async function cloudSave(key, value, _retryCount) {
         return cloudSave(key, value, retries + 1);
       }
       logError("SUPABASE_SAVE_FAIL", "FINAL FAIL salvare \"" + key + "\" dupa 3 incercari! Datele sunt DOAR in localStorage.", error.message || "");
+      throw new Error("Supabase save failed: " + (error.message || JSON.stringify(error)));
     }
+    return true; // explicit success
   } catch (e) {
     var retries2 = _retryCount || 0;
-    logError("SUPABASE_EXCEPTION", "Exceptie la salvare \"" + key + "\" (retry " + retries2 + "/2)", e.message || "");
-    if (retries2 < 2) {
-      await new Promise(function(r) { setTimeout(r, 1000 * (retries2 + 1)); });
-      return cloudSave(key, value, retries2 + 1);
+    // Don't double-log if already logged as SUPABASE_SAVE_FAIL above
+    if (!e.message || !e.message.startsWith("Supabase save failed:")) {
+      logError("SUPABASE_EXCEPTION", "Exceptie la salvare \"" + key + "\" (retry " + retries2 + "/2)", e.message || "");
+      if (retries2 < 2) {
+        await new Promise(function(r) { setTimeout(r, 1000 * (retries2 + 1)); });
+        return cloudSave(key, value, retries2 + 1);
+      }
+      logError("SUPABASE_SAVE_FAIL", "FINAL FAIL salvare \"" + key + "\" dupa 3 incercari!", e.message || "");
     }
-    logError("SUPABASE_SAVE_FAIL", "FINAL FAIL salvare \"" + key + "\" dupa 3 incercari!", e.message || "");
+    throw e;
   }
 }
 
@@ -404,6 +410,10 @@ export default function App() {
       // Only auto-save if we're not in initial load (first render done)
       if (_firstRenderDoneRef.current) {
         // Save immediately to Supabase - no debounce, no race condition
+        immediateSave("tasks", next).catch(function(err) {
+          console.error("[CRITICAL] Auto-save tasks failed:", err);
+          logError("SUPABASE_SAVE_FAIL", "Auto-save tasks fail in setTasks wrapper", err && err.message ? err.message : String(err));
+        });
       }
       return next;
     });
@@ -753,36 +763,44 @@ export default function App() {
       Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) hasPending = true; });
       Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) hasPending = true; });
 
-      // Flush all pending saves
-      Object.keys(_latestValues).forEach(function(key) {
-        if (saveTimers[key]) {
-          clearTimeout(saveTimers[key]);
-          if (!_skipLocalStorage[key]) {
-            try { localStorage.setItem("s7_" + key, JSON.stringify(_latestValues[key])); } catch(e3) {}
-          }
-          // sendBeacon WITH proper auth headers (Supabase needs apikey + Authorization)
-          if (key === "tasks" || key === "timers" || key === "statusHistory") {
-            try {
-              var SUPABASE_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
-              var payload = JSON.stringify({ id: key, data: _latestValues[key], updated_at: new Date().toISOString() });
-              // Use fetch with keepalive (better than sendBeacon for auth)
-              fetch("https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "apikey": SUPABASE_KEY,
-                  "Authorization": "Bearer " + SUPABASE_KEY,
-                  "Prefer": "resolution=merge-duplicates"
-                },
-                body: payload,
-                keepalive: true
-              }).catch(function() {});
-            } catch(e2) {}
-          }
+      var SUPABASE_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+      var SUPABASE_URL = "https://ploucecgizjwyumzmhmo.supabase.co";
+
+      // Flush everything that might be pending: both debounced timers AND immediate saves
+      // that haven't completed yet (_pendingKeys tracks in-flight requests too)
+      var keysToFlush = {};
+      Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) keysToFlush[k] = true; });
+      Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) keysToFlush[k] = true; });
+      // Also flush the critical keys unconditionally if we have their latest values
+      ["tasks", "timers", "statusHistory"].forEach(function(k) {
+        if (_latestValues[k] !== undefined) keysToFlush[k] = true;
+      });
+
+      Object.keys(keysToFlush).forEach(function(key) {
+        if (saveTimers[key]) { clearTimeout(saveTimers[key]); delete saveTimers[key]; }
+        if (!_skipLocalStorage[key] && _latestValues[key] !== undefined) {
+          try { localStorage.setItem("s7_" + key, JSON.stringify(_latestValues[key])); } catch(e3) {}
+        }
+        // Use fetch with keepalive - survives page unload
+        if (_latestValues[key] !== undefined) {
+          try {
+            var payload = JSON.stringify({ id: key, data: _latestValues[key], updated_at: new Date().toISOString() });
+            fetch(SUPABASE_URL + "/rest/v1/app_data?on_conflict=id", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "apikey": SUPABASE_KEY,
+                "Authorization": "Bearer " + SUPABASE_KEY,
+                "Prefer": "resolution=merge-duplicates"
+              },
+              body: payload,
+              keepalive: true
+            }).catch(function() {});
+          } catch(e2) {}
         }
       });
 
-      // If still pending, warn user
+      // If still pending, warn user so they don't lose data
       if (hasPending) {
         e.preventDefault();
         e.returnValue = "Ai schimbari care inca se salveaza. Asteapta 2-3 secunde inainte sa dai refresh!";
