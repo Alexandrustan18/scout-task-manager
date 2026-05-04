@@ -39,27 +39,49 @@ var _skipLocalStorage = { taskBackups: true, taskActivity: true, cloud_taskBacku
 // Keys that MUST be saved instantly (no debounce) - critical state changes
 var _instantSaveKeys = { tasks: false }; // not used yet - framework for future use
 
+// ═══ MODIF 1: Mutex/queue pentru serializare apeluri immediateSave per key ═══
+// Bug fix pipeline 25→24: dacă două apeluri immediateSave("tasks", ...) ruleaza in paralel,
+// ambele citesc remote-ul vechi din Supabase si al doilea il suprascrie pe primul. Pierdem
+// task-uri create rapid (ex: secondary pipeline Mara Poze -> Carla la 25 produse).
+// Solutia: o coada per key, fiecare salvare asteapta sa termine cea precedenta.
+var _saveQueues = {}; // { [key]: Promise }
+
 // Force immediate save bypassing debounce - used for critical operations
 async function immediateSave(key, value) {
   _latestValues[key] = value;
   if (saveTimers[key]) { clearTimeout(saveTimers[key]); delete saveTimers[key]; }
-  _saveVersions[key] = Date.now();
-  _pendingKeys[key] = true;
-  var safetyTimer = setTimeout(function() { delete _pendingKeys[key]; }, 15000);
-  try {
-    // CRITICAL: For tasks, use merge-save to prevent concurrent overwrites
-    // When 2 users save at the same time, we need to merge, not overwrite
-    if (key === "tasks") {
-      var merged = await cloudSaveTasksMerge(value);
-      // Update _latestValues with the merged version so future saves have the right base
-      if (merged) _latestValues[key] = merged;
-      return merged;
+
+  // Serialize: each call for the same key waits for the previous one to finish
+  var prev = _saveQueues[key] || Promise.resolve();
+  var run = prev.then(async function() {
+    // Use the LATEST value (may have been updated by a newer call while waiting)
+    var current = _latestValues[key];
+    _saveVersions[key] = Date.now();
+    _pendingKeys[key] = true;
+    var safetyTimer = setTimeout(function() { delete _pendingKeys[key]; }, 15000);
+    try {
+      if (key === "tasks") {
+        var merged = await cloudSaveTasksMerge(current);
+        if (merged) _latestValues[key] = merged;
+        return merged;
+      }
+      await cloudSave(key, current);
+    } finally {
+      clearTimeout(safetyTimer);
+      delete _pendingKeys[key];
     }
-    await cloudSave(key, value);
-  } finally {
-    clearTimeout(safetyTimer);
-    delete _pendingKeys[key];
-  }
+  }).catch(function(err) {
+    // Don't break the queue if one save fails
+    console.error("[immediateSave queue]", key, err);
+    throw err;
+  });
+
+  _saveQueues[key] = run.finally(function() {
+    // Clear queue ref only if no newer save was added
+    if (_saveQueues[key] === run) delete _saveQueues[key];
+  });
+
+  return run;
 }
 
 async function cloudSave(key, value, _retryCount) {
@@ -594,6 +616,8 @@ export default function App() {
   var [showPenaltyPopup, setShowPenaltyPopup] = useState(null);
   // Task Activity / Audit Trail
   var [taskActivity, setTaskActivity] = useState([]);
+  // ═══ MODIF 2: League monthly archive ═══
+  var [leagueArchive, setLeagueArchive] = useState([]);
   // Error Log for admin
   var [errorLog, setErrorLog] = useState(_errorLog || []);
   // Undo stack - last 10 actions
@@ -609,7 +633,7 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc, ta] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc, ta, lar] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
         cloudLoad("logs", []),
@@ -645,6 +669,7 @@ export default function App() {
         cloudLoad("penalties", []),
         cloudLoad("penaltyConfig", null),
         cloudLoad("taskActivity", []),
+        cloudLoad("leagueArchive", []),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       _setTasks(tk || []); tasksRef.current = tk || [];
@@ -687,6 +712,7 @@ export default function App() {
       setPenalties(pen || []);
       if (pc) setPenaltyConfig(pc);
       setTaskActivity(ta || []);
+      setLeagueArchive(lar || []);
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
       setStatusHistory(stH || {});
@@ -1077,6 +1103,29 @@ export default function App() {
   useEffect(function() { if (!loading && _firstRenderDoneRef.current && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current && penalties.length > 0) debouncedSave("penalties", penalties, 1000); }, [penalties]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current && taskActivity.length > 0) debouncedSave("taskActivity", taskActivity, 1500); }, [taskActivity]);
+  // ═══ MODIF 2: Auto-save leagueArchive ═══
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current && leagueArchive.length > 0) debouncedSave("leagueArchive", leagueArchive, 1500); }, [leagueArchive]);
+
+  // ═══ MODIF 2: Auto-arhivare luna anterioara (rulează la mount după loading) ═══
+  // Verifică dacă luna anterioară a fost deja arhivată; dacă nu, creează snapshot.
+  // Rulează doar pentru admin (ca să nu se dubleze din mai multe browsere simultan).
+  useEffect(function() {
+    if (loading || !user || !team[user] || team[user].role !== "admin") return;
+    if (tasks.length === 0) return;
+    var now = new Date();
+    var lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+    var lmKey = lastMonth.getFullYear() + "-" + String(lastMonth.getMonth() + 1).padStart(2, "0");
+    // Verifică dacă există deja snapshot pentru luna anterioară
+    var alreadyArchived = leagueArchive.some(function(s) { return s.monthKey === lmKey; });
+    if (alreadyArchived) return;
+    // Creează snapshot
+    var snapshot = buildLeagueSnapshot(lastMonth, tasks, team, targets, monthlyBonus, userXP, achievements);
+    if (snapshot) {
+      setLeagueArchive(function(p) { return [snapshot].concat(p).slice(0, 36); }); // max 36 luni
+      addLog("LEAGUE", "Auto-arhivare luna " + lmKey + " (membri: " + snapshot.members.length + ", PM: " + snapshot.pms.length + ")");
+    }
+  }, [loading, user, tasks, leagueArchive]);
+
 
   // Feature 6: Auto-escalare admin - tasks overdue 5+ days
   useEffect(function() {
@@ -1492,8 +1541,53 @@ export default function App() {
   };
   var handleLogout = function() { if (user) addLog("LOGOUT", (team[user] ? team[user].name : "") + " a iesit"); setUser(null); localStorage.removeItem("s7_user"); setPage("dashboard"); };
 
-  var visUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") return [user].concat(m.team || []); return [user]; }, [user, team]);
-  var assUsers = useMemo(function() { if (!user) return []; var m = team[user]; if (!m) return []; if (m.role === "admin") return Object.keys(team); if (m.role === "pm") { var otherPMs = Object.keys(team).filter(function(k) { return team[k].role === "pm" && k !== user; }); return [user, "admin"].concat(m.team || []).concat(otherPMs); } return [user]; }, [user, team]);
+  // ═══ MODIF 3: Permisiuni atribuire taskuri ═══
+  // Logica: pentru fiecare PM, returnez membrii care:
+  //   - au PM-ul curent în array-ul `assignableBy`, SAU
+  //   - dacă nu au `assignableBy` setat (legacy), folosesc relația clasică `pm === currentUser`
+  // O persoană poate fi în ambele echipe (Mara și Carla pot fi ambele bifate).
+  // Admin vede pe toată lumea ca de obicei.
+  var canPMAssignTo = useCallback(function(pmKey, memberKey) {
+    var m = team[memberKey];
+    if (!m) return false;
+    if (m.role !== "member") return false;
+    // Dacă există assignableBy explicit, respectă-l (sursa de adevăr)
+    if (Array.isArray(m.assignableBy)) {
+      return m.assignableBy.includes(pmKey);
+    }
+    // Fallback legacy: dacă pm-ul lui e pmKey
+    return m.pm === pmKey;
+  }, [team]);
+
+  // Returnează lista membrilor de care răspunde un PM (util peste tot în loc de me.team)
+  var pmTeamMembers = useCallback(function(pmKey) {
+    return Object.keys(team).filter(function(k) { return canPMAssignTo(pmKey, k); });
+  }, [team, canPMAssignTo]);
+
+  var visUsers = useMemo(function() {
+    if (!user) return [];
+    var m = team[user]; if (!m) return [];
+    if (m.role === "admin") return Object.keys(team);
+    if (m.role === "pm") {
+      // Toți membrii pe care PM-ul îi poate atribui
+      var visMembers = pmTeamMembers(user);
+      return [user].concat(visMembers);
+    }
+    return [user];
+  }, [user, team, pmTeamMembers]);
+
+  var assUsers = useMemo(function() {
+    if (!user) return [];
+    var m = team[user]; if (!m) return [];
+    if (m.role === "admin") return Object.keys(team);
+    if (m.role === "pm") {
+      var otherPMs = Object.keys(team).filter(function(k) { return team[k].role === "pm" && k !== user; });
+      var assMembers = pmTeamMembers(user);
+      return [user, "admin"].concat(assMembers).concat(otherPMs);
+    }
+    return [user];
+  }, [user, team, pmTeamMembers]);
+
   var visTasks = useMemo(function() {
     if (!user) return [];
     return tasks.filter(function(t) {
@@ -1804,50 +1898,70 @@ export default function App() {
           addNotif("challenge", (team[prevTask.assignee] || {}).name + " a completat Daily Challenge!", tid, "admin");
         }
       }
-      // Pipeline
+      // Pipeline (primary: ex Dana Done -> Mara Poze)
       if (prevTask._pipelineNext) {
         var lastComment = (prevTask.comments || []).slice(-1)[0];
         var pipeDesc = prevTask.description || "";
         if (lastComment) pipeDesc = pipeDesc + "\n\nObservatii: " + lastComment.text;
         var pipeLinks = prevTask._replacedLink ? [prevTask._replacedLink] : (prevTask.links || []).slice();
-        var pipeTask = { id: gid(), title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: TD, links: pipeLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id };
-        setTasks(function(p) { return [pipeTask].concat(p); });
-        setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTask.id] = [{ status: "To Do", at: ts() }]; return n; });
-        addNotif("pipeline", "Task pipeline: \"" + pipeTask.title + "\"", pipeTask.id, prevTask._pipelineNext);
+        var pipeTaskId = gid();
+        var pipeTask = { id: pipeTaskId, title: prevTask.title + " - Foto Produs", description: pipeDesc, assignee: prevTask._pipelineNext, status: "To Do", priority: prevTask.priority, platform: prevTask.platform || "", taskType: "Foto Produs", department: "FOTO PRODUS", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: TD, links: pipeLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id };
+        // ═══ MODIF 1: dedup atomic la primary pipeline ═══
+        var primaryAdded = false;
+        setTasks(function(prev) {
+          var existing = prev.find(function(x) {
+            return x._fromPipeline === prevTask.id && !x._adsPipeline && !x._deleted;
+          });
+          if (existing) return prev;
+          primaryAdded = true;
+          return [pipeTask].concat(prev);
+        });
+        if (primaryAdded) {
+          setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTaskId] = [{ status: "To Do", at: ts() }]; return n; });
+          addNotif("pipeline", "Task pipeline: \"" + pipeTask.title + "\"", pipeTaskId, prevTask._pipelineNext);
+        }
       }
-      // Secondary pipeline: Mara Poze Done -> Carla (Ads task, deadline next day)
+      // ═══ MODIF 1: Secondary pipeline atomicizat ═══
+      // BUG FIX 25→24: Foloseste setTasks(prev => ...) ca sa citeasca state-ul curent,
+      // nu `tasks` din closure (care poate fi stale daca finalizezi rapid 25 task-uri).
+      // Plus: foloseste crypto-strong dedup key (campaignParentId + productName) cand e disponibil,
+      // ca sa prinda si cazul cand acelasi produs e procesat de doua ori.
       if (prevTask.assignee === "mara_poze" && prevTask._fromPipeline) {
-        // Check if Ads task already exists for this parent (prevent duplicates)
-        var existingAds = tasks.find(function(x) { return x._adsPipeline === true && x.dependsOn && x.dependsOn.includes(prevTask.id); });
-        if (!existingAds) {
-          // Original title is "X - Foto Produs", strip it to get product name
-          var cleanTitle = (prevTask.title || "").replace(/ - Foto Produs$/, "");
-          // Smart deadline calc:
-          // - "Work day" ends at 06:00 next morning. If Mara finishes between 00:00-06:00, counts as previous day.
-          // - Carla's deadline = next business day (Mon-Fri) after Mara's "effective" finish day
-          // - Fri finish -> Monday (skip weekend)
-          // - Sat finish -> Monday
-          // - Sun finish -> Monday
-          var now = new Date();
-          var effectiveDate = new Date(now);
-          if (now.getHours() < 6) {
-            // Before 6 AM = previous day's work
-            effectiveDate.setDate(effectiveDate.getDate() - 1);
-          }
-          var adsDate = new Date(effectiveDate);
-          adsDate.setDate(adsDate.getDate() + 1); // default: next day
-          var dow = adsDate.getDay(); // 0=Sun, 6=Sat
-          if (dow === 0) { // Sunday -> Monday
-            adsDate.setDate(adsDate.getDate() + 1);
-          } else if (dow === 6) { // Saturday -> Monday
-            adsDate.setDate(adsDate.getDate() + 2);
-          }
-          var adsDeadline = ds(adsDate);
-          var adsLinks = (prevTask.links || []).slice();
-          var adsTask = { id: gid(), title: cleanTitle + " - Ads", description: "Pune ads pentru acest produs. Foto produs gata.\n\n" + (prevTask.description || ""), assignee: "carla", status: "To Do", priority: prevTask.priority, platform: "Meta Ads", taskType: "Ad Creation", department: "AD", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: adsDeadline, links: adsLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id, _adsPipeline: true };
-          setTasks(function(p) { return [adsTask].concat(p); });
-          setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[adsTask.id] = [{ status: "To Do", at: ts() }]; return n; });
-          addNotif("pipeline", "Task Ads pregatit: \"" + adsTask.title + "\"", adsTask.id, "carla");
+        var cleanTitle = (prevTask.title || "").replace(/ - Foto Produs$/, "");
+        var now = new Date();
+        var effectiveDate = new Date(now);
+        if (now.getHours() < 6) {
+          effectiveDate.setDate(effectiveDate.getDate() - 1);
+        }
+        var adsDate = new Date(effectiveDate);
+        adsDate.setDate(adsDate.getDate() + 1);
+        var dow = adsDate.getDay();
+        if (dow === 0) {
+          adsDate.setDate(adsDate.getDate() + 1);
+        } else if (dow === 6) {
+          adsDate.setDate(adsDate.getDate() + 2);
+        }
+        var adsDeadline = ds(adsDate);
+        var adsLinks = (prevTask.links || []).slice();
+        var adsTaskId = gid();
+        var adsTask = { id: adsTaskId, title: cleanTitle + " - Ads", description: "Pune ads pentru acest produs. Foto produs gata.\n\n" + (prevTask.description || ""), assignee: "carla", status: "To Do", priority: prevTask.priority, platform: "Meta Ads", taskType: "Ad Creation", department: "AD", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: adsDeadline, links: adsLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id, _adsPipeline: true };
+
+        // Atomic: citeste state-ul curent prin setTasks(prev => ...) si decide pe baza lui
+        var actuallyAdded = false;
+        setTasks(function(prev) {
+          // Verifica daca exista deja Ads task pentru acest prevTask in state-ul CURENT
+          var exists = prev.find(function(x) {
+            return x._adsPipeline === true && !x._deleted && x.dependsOn && x.dependsOn.includes(prevTask.id);
+          });
+          if (exists) return prev; // skip - exista deja
+          actuallyAdded = true;
+          return [adsTask].concat(prev);
+        });
+
+        // Side-effects (notificari, log) doar daca am adaugat efectiv task-ul
+        if (actuallyAdded) {
+          setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[adsTaskId] = [{ status: "To Do", at: ts() }]; return n; });
+          addNotif("pipeline", "Task Ads pregatit: \"" + adsTask.title + "\"", adsTaskId, "carla");
           addLog("PIPELINE", "Mara Poze -> Carla: " + adsTask.title + " (deadline: " + adsDeadline + ")");
         }
       }
@@ -1855,11 +1969,17 @@ export default function App() {
 
     // Rollback: if Mara Poze changes status FROM Done back to something else, remove the Ads task (only if still To Do)
     if (prevTask && prevTask.assignee === "mara_poze" && prevTask.status === "Done" && st !== "Done") {
-      var adsToRemove = tasks.find(function(x) { return x._adsPipeline === true && x.dependsOn && x.dependsOn.includes(prevTask.id) && x.status === "To Do"; });
-      if (adsToRemove) {
-        setTasks(function(p) { return p.filter(function(x) { return x.id !== adsToRemove.id; }); });
-        addLog("PIPELINE", "Rollback Ads: " + adsToRemove.title + " sters (Mara Poze a schimbat statusul)");
-        addNotif("pipeline_rollback", "Taskul Ads \"" + adsToRemove.title + "\" a fost sters - foto produs nu mai e finalizat", adsToRemove.id, "carla");
+      // ═══ MODIF 1: citește state curent prin setTasks(prev => ...) ═══
+      var removedAds = null;
+      setTasks(function(prev) {
+        var found = prev.find(function(x) { return x._adsPipeline === true && !x._deleted && x.dependsOn && x.dependsOn.includes(prevTask.id) && x.status === "To Do"; });
+        if (!found) return prev;
+        removedAds = found;
+        return prev.map(function(x) { return x.id === found.id ? Object.assign({}, x, { _deleted: true, updatedAt: ts() }) : x; });
+      });
+      if (removedAds) {
+        addLog("PIPELINE", "Rollback Ads: " + removedAds.title + " sters (Mara Poze a schimbat statusul)");
+        addNotif("pipeline_rollback", "Taskul Ads \"" + removedAds.title + "\" a fost sters - foto produs nu mai e finalizat", removedAds.id, "carla");
       }
     }
   };
@@ -2101,7 +2221,7 @@ export default function App() {
             if (groupItems.length === 0) return null;
             var renderItem = function(n) {
               var myActiveCount = n.id === "tasks" ? tasks.filter(function(t) { return t.assignee === user && t.status !== "Done" && !t._campaignParent; }).length : null;
-              var pmOverdueCount = (n.id === "dashboard" && me.role === "pm") ? tasks.filter(function(t) { return (me.team || []).includes(t.assignee) && isOv(t) && t.status !== "Done" && !t._campaignParent; }).length : 0;
+              var pmOverdueCount = (n.id === "dashboard" && me.role === "pm") ? tasks.filter(function(t) { return pmTeamMembers(user).includes(t.assignee) && isOv(t) && t.status !== "Done" && !t._campaignParent; }).length : 0;
               var adminOverdueCount = (n.id === "dashboard" && me.role === "admin") ? tasks.filter(function(t) { return t.status !== "Done" && isOv(t) && !t._campaignParent; }).length : 0;
               var overdueCount = pmOverdueCount || adminOverdueCount;
               return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}>
@@ -2202,7 +2322,7 @@ export default function App() {
             </div>
           </Card>}
           {page === "dashboard" && me.role === "member" && <MemberDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} />}
-          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} penalties={penalties} />}
+          {page === "dashboard" && me.role === "pm" && <PMDashboard me={me} user={user} allTasks={tasks} timers={timers} targets={targets} getPerf={getPerf} team={team} leaves={leaves} isMob={isMob} achievements={achievements} visUsers={visUsers} setPage={setPage} monthlyBonus={monthlyBonus} penalties={penalties} pmTeamMembers={pmTeamMembers} />}
           {page === "dashboard" && me.role === "admin" && <DashPage stats={stats} tasks={visTasks} team={team} visUsers={visUsers} sessions={sessions} timers={timers} getTS={getTS} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} targets={targets} loginTrack={loginTrack} allTasks={tasks} slaBreaches={slaBreaches} me={me} anomalies={anomalies} dailyChallenge={dailyChallenge} announcements={announcements} user={user} setAnnouncements={setAnnouncements} leaves={leaves} setPage={setPage} achievements={achievements} monthlyBonus={monthlyBonus} logs={logs} taskActivity={taskActivity} shops={shops} departments={departments} />}
           {page === "birdseye" && <BirdsEyePage tasks={tasks} team={team} timers={timers} getTS={getTS} isMob={isMob} sessions={sessions} anomalies={anomalies} />}
           {page === "tasks" && <TasksPage fProps={fProps} grouped={grouped} filtered={filtered} user={user} team={team} onEdit={function(t) { setEditTask(t); setShowAdd(true); }} onView={setViewTask} onDel={delTask} onDup={dupTask} onChgSt={chgSt} isMob={isMob} timers={timers} getTS={getTS} togTimer={togTimer} bulkMode={bulkMode} selectedTasks={selectedTasks} toggleSel={toggleSel} canEdit={canEdit} canDelete={canDelete} onExplode={explodeCampaign} tasks={tasks} visTasks={visTasks} />}
@@ -2211,14 +2331,14 @@ export default function App() {
           {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} taskTypes={taskTypes} departments={departments} leaves={leaves} />}
           {page === "templates" && <TemplatesPage templates={templates} setTemplates={setTemplates} canEdit={canCreate} isAdmin={isAdmin} shops={shops} onCreateFromTpl={function(tpl) { setEditTask({ title: tpl.name, description: tpl.description, shop: tpl.shop || "", subtasks: tpl.subtasks.map(function(s) { return { id: gid(), text: s, done: false }; }) }); setShowAdd(true); }} />}
           {page === "recurring" && <RecurringPage recurringTasks={recurringTasks} setRecurringTasks={setRecurringTasks} team={team} assUsers={assUsers} shops={shops} departments={departments} canEdit={canCreate} />}
-          {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} addNotif={addNotif} />}
+          {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} addNotif={addNotif} pmTeamMembers={pmTeamMembers} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
           {page === "wheelSetup" && <WheelSetupPage wheelConfig={wheelConfig} setWheelConfig={setWheelConfig} team={team} wheelHistory={wheelHistory} />}
           {page === "penalizari" && <PenalizariPage penalties={penalties} setPenalties={setPenalties} penaltyConfig={penaltyConfig} setPenaltyConfig={setPenaltyConfig} team={team} tasks={tasks} />}
           {page === "pipeline" && <PipelinePage pipelineRules={pipelineRules} setPipelineRules={setPipelineRules} team={team} assUsers={assUsers} shops={shops} taskTypes={taskTypes} departments={departments} platforms={platforms} addLog={addLog} />}
           {page === "league" && <LeaguePage allTasks={tasks} team={team} user={user} me={me} timers={timers} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
-          {page === "leagueMonthly" && <MonthlyLeaguePage allTasks={tasks} team={team} user={user} me={me} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} />}
+          {page === "leagueMonthly" && <MonthlyLeaguePage allTasks={tasks} team={team} user={user} me={me} targets={targets} achievements={achievements} visUsers={visUsers} isMob={isMob} monthlyBonus={monthlyBonus} setMonthlyBonus={setMonthlyBonus} userXP={userXP} leagueArchive={leagueArchive} setLeagueArchive={setLeagueArchive} addLog={addLog} />}
           {page === "workload" && <WorkPage users={visUsers} team={team} tasks={visTasks} getPerf={getPerf} timers={timers} getTS={getTS} isMob={isMob} onClickUser={setProfUser} />}
           {page === "team" && <TeamPage users={visUsers} team={team} sessions={sessions} getPerf={getPerf} isMob={isMob} onClickUser={setProfUser} />}
           {page === "performance" && <PerfPage users={visUsers} team={team} getPerf={getPerf} isMob={isMob} />}
@@ -2291,7 +2411,7 @@ function FiltersBar({ stats, dateF, setDateF, statusF, setStatusF, prioF, setPri
   </div>;
 }
 
-function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers, setPage, monthlyBonus, penalties }) {
+function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leaves, isMob, achievements, visUsers, setPage, monthlyBonus, penalties, pmTeamMembers }) {
   var [tab, setTab] = useState("personal"); // personal | team
   var [pmKpiModal, setPmKpiModal] = useState(null);
   var [pmEditMode, setPmEditMode] = useState(false);
@@ -2327,7 +2447,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
   var pmBlockLabels = { podium: "Liga Saptamanii - Podium", tabs: "Tab-uri Personal/Echipa" };
 
   // === TEAM DATA ===
-  var teamUsers = (me.team || []).filter(function(u) { return team[u]; });
+  var teamUsers = (pmTeamMembers ? pmTeamMembers(user) : (me.team || [])).filter(function(u) { return team[u]; });
   var teamTasks = allTasks.filter(function(t) { return teamUsers.includes(t.assignee) && !t._campaignParent; });
   var teamDoneToday = teamTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
   var teamActive = teamTasks.filter(function(t) { return t.status !== "Done"; });
@@ -2530,7 +2650,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
         var lastWeekOnTime = lastWeekTasks.filter(function(t2) { return !t2.deadline || ds(t2.updatedAt) <= t2.deadline; }).length;
         var onTimePct = lastWeekTasks.length > 0 ? Math.round((lastWeekOnTime / lastWeekTasks.length) * 100) : 0;
         var weekDelta = lastWeekTasks.length > 0 ? Math.round(((thisWeekTasks.length - lastWeekTasks.length) / lastWeekTasks.length) * 100) : (thisWeekTasks.length > 0 ? 100 : 0);
-        var lastWeekPenalties = (penalties || []).filter(function(p) { return (me.team || []).includes(p.userId) && p.date >= lastMondayStr && p.date <= lastFridayStr; }).length;
+        var lastWeekPenalties = (penalties || []).filter(function(p) { var tu = pmTeamMembers ? pmTeamMembers(user) : (me.team || []); return tu.includes(p.userId) && p.date >= lastMondayStr && p.date <= lastFridayStr; }).length;
 
         return <Card style={{ marginBottom: 16, borderTop: "3px solid #7C3AED" }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1E293B", marginBottom: 2 }}>Scorecard saptamanal</div>
@@ -5057,13 +5177,30 @@ function calcMemberLeaderboard(allTasks, team, targets, users) {
   }).sort(function(a, b) { return b.score - a.score; });
 }
 
+// ═══ MODIF 3: Helper top-level pentru a determina echipa unui PM ═══
+// Combină legacy team[pm].team cu toți membrii care au assignableBy.includes(pm).
+// Folosit în calcPMLeaderboard, buildLeagueSnapshot etc.
+function getPMTeam(team, pmKey) {
+  var legacyTeam = (team[pmKey] || {}).team || [];
+  var assignableSet = Object.keys(team).filter(function(k) {
+    var m = team[k];
+    if (!m || m.role !== "member") return false;
+    if (Array.isArray(m.assignableBy)) return m.assignableBy.includes(pmKey);
+    return m.pm === pmKey;
+  });
+  // Union (fără duplicate)
+  var result = legacyTeam.slice();
+  assignableSet.forEach(function(k) { if (!result.includes(k)) result.push(k); });
+  return result;
+}
+
 function calcPMLeaderboard(allTasks, team, users) {
   var now = new Date();
   var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
   var competitors = users.filter(function(u) { return team[u] && team[u].role === "pm"; });
   return competitors.map(function(u) {
-    var pmTeam = (team[u] || {}).team || [];
+    var pmTeam = getPMTeam(team, u);
     // Tasks created by PM this month
     var createdThisMonth = allTasks.filter(function(t) { return t.createdBy === u && !t._campaignParent && t.createdAt && new Date(t.createdAt) >= monthStart && new Date(t.createdAt) <= monthEnd; }).length;
     // Tasks done by PM's team this month
@@ -5081,6 +5218,86 @@ function calcPMLeaderboard(allTasks, team, users) {
 // Backwards compat wrapper
 function calcLeaderboard(allTasks, team, targets, achievements, users) {
   return calcMemberLeaderboard(allTasks, team, targets, users);
+}
+
+// ═══ MODIF 2: Helper pentru snapshot lunar - calculează clasamentul pentru o lună specifică ═══
+function buildLeagueSnapshot(monthDate, allTasks, team, targets, monthlyBonus, userXP, achievements) {
+  var monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  var monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
+  var monthKey = monthDate.getFullYear() + "-" + String(monthDate.getMonth() + 1).padStart(2, "0");
+  var monthNames = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
+  var monthLabel = monthNames[monthDate.getMonth()] + " " + monthDate.getFullYear();
+
+  var users = Object.keys(team);
+
+  // Member leaderboard pentru luna asta
+  var members = users.filter(function(u) { return team[u] && team[u].role === "member"; }).map(function(u) {
+    var ut = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && !t._deleted; });
+    var doneThis = ut.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
+    var overdueAtEnd = ut.filter(function(t) {
+      if (t.status === "Done") return false;
+      if (!t.deadline) return false;
+      return new Date(t.deadline) <= monthEnd && (new Date(t.deadline) < new Date());
+    }).length;
+    var uTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
+    var streakBonus = 0;
+    if (uTargets.length > 0) {
+      var tgt = uTargets[0];
+      var totalDays = Math.ceil((monthEnd - monthStart) / (1000 * 60 * 60 * 24));
+      for (var d = 0; d < totalDays; d++) {
+        var dt = new Date(monthStart); dt.setDate(dt.getDate() + d);
+        if (dt > new Date()) break;
+        if (dt.getDay() === 0 || dt.getDay() === 6) continue;
+        var doneDay = ut.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === ds(dt); }).length;
+        if (doneDay >= (tgt.target || 0)) streakBonus += 3;
+      }
+    }
+    var score = doneThis * 10 - overdueAtEnd * 5 + streakBonus;
+    return {
+      user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8",
+      doneThis: doneThis, overdue: overdueAtEnd, score: Math.max(0, score),
+      xp: (userXP || {})[u] || 0, achCount: ((achievements || {})[u] || []).length
+    };
+  }).sort(function(a, b) { return b.score - a.score; });
+
+  // PM leaderboard pentru luna asta
+  var pms = users.filter(function(u) { return team[u] && team[u].role === "pm"; }).map(function(u) {
+    var pmTeam = getPMTeam(team, u);
+    var created = allTasks.filter(function(t) { return t.createdBy === u && !t._campaignParent && !t._deleted && t.createdAt && new Date(t.createdAt) >= monthStart && new Date(t.createdAt) <= monthEnd; }).length;
+    var teamDone = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && !t._deleted && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
+    var ownDone = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && !t._deleted && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
+    var teamOv = allTasks.filter(function(t) {
+      if (!pmTeam.includes(t.assignee) || t._campaignParent || t._deleted) return false;
+      if (t.status === "Done" || !t.deadline) return false;
+      return new Date(t.deadline) <= monthEnd;
+    }).length;
+    var score = created * 5 + teamDone * 8 + ownDone * 10 - teamOv * 15;
+    return {
+      user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8",
+      created: created, teamDone: teamDone, ownDone: ownDone, teamOverdue: teamOv,
+      score: Math.max(0, score), teamSize: pmTeam.length
+    };
+  }).sort(function(a, b) { return b.score - a.score; });
+
+  if (members.length === 0 && pms.length === 0) return null;
+
+  var memberWinner = members[0] || null;
+  var pmWinner = pms[0] || null;
+  var memberBonus = monthlyBonus && monthlyBonus.enabled ? (monthlyBonus.memberAmount || monthlyBonus.amount || 0) : 0;
+  var pmBonus = monthlyBonus && monthlyBonus.enabled ? (monthlyBonus.pmAmount || 0) : 0;
+  var memberCur = (monthlyBonus && monthlyBonus.memberCurrency) || (monthlyBonus && monthlyBonus.currency) || "RON";
+  var pmCur = (monthlyBonus && monthlyBonus.pmCurrency) || "RON";
+
+  return {
+    id: gid(),
+    monthKey: monthKey,
+    monthLabel: monthLabel,
+    archivedAt: ts(),
+    members: members,
+    pms: pms,
+    memberWinner: memberWinner ? { user: memberWinner.user, name: memberWinner.name, score: memberWinner.score, doneThis: memberWinner.doneThis, bonus: memberBonus, currency: memberCur } : null,
+    pmWinner: pmWinner ? { user: pmWinner.user, name: pmWinner.name, score: pmWinner.score, created: pmWinner.created, teamDone: pmWinner.teamDone, bonus: pmBonus, currency: pmCur } : null
+  };
 }
 
 function PodiumCompact({ leaderboard, onNavigate, monthlyBonus, title, subtitle, leagueType }) {
@@ -5159,7 +5376,7 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
   // PM leaderboard (weekly)
   var pms = visUsers.filter(function(u) { return team[u] && team[u].role === "pm"; });
   var pmBoard = pms.map(function(u) {
-    var pmTeam = (team[u] || {}).team || [];
+    var pmTeam = getPMTeam(team, u);
     var created = allTasks.filter(function(t) { return t.createdBy === u && !t._campaignParent && t.createdAt && new Date(t.createdAt) >= weekStart && new Date(t.createdAt) <= weekEnd; }).length;
     var teamDone = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; }).length;
     var ownDone = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= weekStart && new Date(t.updatedAt) <= weekEnd; }).length;
@@ -5285,7 +5502,7 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
   </div>;
 }
 
-function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, user, visUsers, me, addLog, addNotif }) {
+function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, user, visUsers, me, addLog, addNotif, pmTeamMembers }) {
   try {
   var [selectedUser, setSelectedUser] = useState(visUsers.filter(function(u) { return u !== "admin" && team[u] && team[u].role !== "admin"; })[0] || "");
   var [calMonth, setCalMonth] = useState(new Date());
@@ -5297,7 +5514,7 @@ function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, 
   var canEditUser = function(uid) {
     if (!team[uid]) return false;
     if (me.role === "admin") return true;
-    if (me.role === "pm") { return (me.team || []).includes(uid) || uid === user; }
+    if (me.role === "pm") { var tu = pmTeamMembers ? pmTeamMembers(user) : (me.team || []); return tu.includes(uid) || uid === user; }
     return uid === user;
   };
 
@@ -5779,6 +5996,59 @@ function EditUserInline({ u, m, team, setTeam }) {
         </label>;
       })}
     </div>
+
+    {/* ═══ MODIF 3: Assignable By (doar pentru membri) ═══ */}
+    {m.role === "member" && (function() {
+      var allPMs = Object.keys(team).filter(function(k) { return team[k] && team[k].role === "pm"; });
+      // Source of truth: assignableBy. Daca lipseste, fallback la pm field.
+      var curAssignable = Array.isArray(m.assignableBy) ? m.assignableBy : (m.pm ? [m.pm] : []);
+      var togglePM = function(pmKey) {
+        var newArr;
+        if (curAssignable.includes(pmKey)) {
+          newArr = curAssignable.filter(function(p) { return p !== pmKey; });
+        } else {
+          newArr = curAssignable.concat([pmKey]);
+        }
+        // Update atomic: scriem assignableBy + sincronizam team[pm].team pentru fiecare PM + actualizam pm field-ul (pentru compat)
+        setTeam(function(t) {
+          var n = Object.assign({}, t);
+          // 1. Setam assignableBy pe membru
+          n[u] = Object.assign({}, n[u], { assignableBy: newArr });
+          // 2. Sincronizam pm field cu primul PM din lista (pentru compat cu cod legacy)
+          n[u].pm = newArr[0] || "";
+          // 3. Pentru fiecare PM existent: actualizam team[pm].team (legacy)
+          allPMs.forEach(function(pmKey) {
+            var pmObj = n[pmKey];
+            if (!pmObj) return;
+            var pmTeamArr = (pmObj.team || []).slice();
+            var shouldBeIn = newArr.includes(pmKey);
+            var isIn = pmTeamArr.includes(u);
+            if (shouldBeIn && !isIn) {
+              pmTeamArr.push(u);
+              n[pmKey] = Object.assign({}, pmObj, { team: pmTeamArr });
+            } else if (!shouldBeIn && isIn) {
+              n[pmKey] = Object.assign({}, pmObj, { team: pmTeamArr.filter(function(x) { return x !== u; }) });
+            }
+          });
+          return n;
+        });
+      };
+      return <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px dashed #E2E8F0" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 4 }}>Atribuire taskuri (PM responsabil)</div>
+        <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 8 }}>Bifează ce PM-i pot atribui taskuri către {m.name}. Persoana poate fi în mai multe echipe.</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6 }}>
+          {allPMs.length === 0 ? <div style={{ fontSize: 11, color: "#94A3B8", fontStyle: "italic" }}>Niciun PM în sistem.</div> : allPMs.map(function(pmKey) {
+            var checked = curAssignable.includes(pmKey);
+            return <label key={pmKey} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer", padding: "8px 10px", borderRadius: 8, background: checked ? "#ECFDF5" : "#F8FAFC", border: "1px solid " + (checked ? GR + "60" : "#E2E8F0"), transition: "all 0.15s" }}>
+              <input type="checkbox" checked={checked} onChange={function() { togglePM(pmKey); }} style={{ accentColor: GR }} />
+              <Av color={(team[pmKey] || {}).color || "#94A3B8"} size={22} fs={10} userId={pmKey}>{((team[pmKey] || {}).name || pmKey)[0]}</Av>
+              <span style={{ fontWeight: checked ? 700 : 500 }}>{(team[pmKey] || {}).name || pmKey}</span>
+            </label>;
+          })}
+        </div>
+        {curAssignable.length === 0 && <div style={{ marginTop: 8, padding: "6px 10px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 6, fontSize: 11, color: "#991B1B" }}>⚠ Niciun PM bifat - {m.name} nu va putea primi taskuri de la PM-i. Doar admin va putea atribui.</div>}
+      </div>;
+    })()}
   </div>;
 }
 
@@ -6568,7 +6838,10 @@ function BonusConfig({ monthlyBonus, setMonthlyBonus }) {
   </Card>;
 }
 
-function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, visUsers, isMob, monthlyBonus, setMonthlyBonus, userXP }) {
+function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, visUsers, isMob, monthlyBonus, setMonthlyBonus, userXP, leagueArchive, setLeagueArchive, addLog }) {
+  // ═══ MODIF 2: tabs view: 'current' (luna curenta) sau 'history' (lunile arhivate) ═══
+  var [view, setView] = useState("current");
+  var [selectedArchive, setSelectedArchive] = useState(null); // ID-ul snapshot-ului selectat
   var [leagueTab, setLeagueTab] = useState(me.role === "pm" ? "pm" : "members");
   var now = new Date();
   var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -6633,12 +6906,138 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
   };
 
   return <div>
-    <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Liga Lunara - {monthLabel}</h2>
-      <div style={{ fontSize: 12, color: "#64748B" }}>Clasament lunar. Se reseteaza pe 1 a fiecarei luni. {daysRemaining} zile ramase.</div>
+    <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+      <div>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Liga Lunara{view === "current" ? " - " + monthLabel : ""}</h2>
+        <div style={{ fontSize: 12, color: "#64748B" }}>{view === "current" ? "Clasament lunar. Se reseteaza pe 1 a fiecarei luni. " + daysRemaining + " zile ramase." : "Istoric clasamente lunile anterioare."}</div>
+      </div>
+      {/* ═══ MODIF 2: Switch view + Buton arhivare manuala (admin only) ═══ */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 4, padding: 4, background: "#F1F5F9", borderRadius: 10 }}>
+          <button onClick={function() { setView("current"); setSelectedArchive(null); }} style={{ padding: "8px 16px", borderRadius: 7, border: "none", background: view === "current" ? "#fff" : "transparent", color: view === "current" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: view === "current" ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>Luna curentă</button>
+          <button onClick={function() { setView("history"); }} style={{ padding: "8px 16px", borderRadius: 7, border: "none", background: view === "history" ? "#fff" : "transparent", color: view === "history" ? "#1E293B" : "#64748B", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: view === "history" ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>Istoric ({(leagueArchive || []).length})</button>
+        </div>
+        {me.role === "admin" && view === "current" && <button onClick={function() {
+          if (!window.confirm("Arhivezi luna curentă ACUM? Va salva snapshot-ul cu clasamentul actual. Util la finalul lunii înainte de plata bonusurilor.")) return;
+          var snap = buildLeagueSnapshot(now, allTasks, team, targets, monthlyBonus, userXP, achievements);
+          if (!snap) { alert("Niciun participant - nu pot crea snapshot."); return; }
+          // Verifică dacă deja există pentru luna asta
+          var existing = (leagueArchive || []).find(function(s) { return s.monthKey === snap.monthKey; });
+          if (existing && !window.confirm("Există deja un snapshot pentru " + snap.monthLabel + ". Îl suprascrii?")) return;
+          setLeagueArchive(function(p) {
+            var filtered = (p || []).filter(function(s) { return s.monthKey !== snap.monthKey; });
+            return [snap].concat(filtered).slice(0, 36);
+          });
+          if (addLog) addLog("LEAGUE", "Arhivare manuala " + snap.monthLabel);
+          alert("Arhivat: " + snap.monthLabel + " (" + snap.members.length + " membri, " + snap.pms.length + " PM)");
+        }} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid " + GR, background: "#fff", color: GR, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Arhivează acum</button>}
+      </div>
     </div>
 
-    {/* Bonus Banners */}
+    {/* ═══ MODIF 2: View ISTORIC ═══ */}
+    {view === "history" && <div>
+      {(leagueArchive || []).length === 0 ? <Card style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Niciun snapshot în arhivă</div>
+        <div style={{ fontSize: 12 }}>Arhivarea se face automat pe 1 a lunii. Sau apasă "Arhivează acum" pentru a salva manual luna curentă.</div>
+      </Card> : selectedArchive === null ? <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 12 }}>Selectează o lună:</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
+          {leagueArchive.map(function(snap) {
+            var memWin = snap.memberWinner;
+            var pmWin = snap.pmWinner;
+            return <Card key={snap.id} onClick={function() { setSelectedArchive(snap.id); }} style={{ cursor: "pointer", padding: 14, transition: "all 0.15s" }} onMouseEnter={function(e) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={function(e) { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>{snap.monthLabel}</div>
+              <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 10 }}>Arhivat: {ff(snap.archivedAt)}</div>
+              {memWin && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "#FEFCE8", borderRadius: 6, marginBottom: 4, border: "1px solid #FDE68A" }}>
+                <span style={{ fontSize: 18 }}>🏆</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E" }}>Câștigător membru</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{memWin.name} - {memWin.score} pts</div>
+                  {memWin.bonus > 0 && <div style={{ fontSize: 10, color: "#92400E", fontWeight: 700 }}>{memWin.bonus} {memWin.currency} bonus</div>}
+                </div>
+              </div>}
+              {pmWin && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "#F5F3FF", borderRadius: 6, border: "1px solid #DDD6FE" }}>
+                <span style={{ fontSize: 18 }}>🏆</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED" }}>Câștigător PM</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pmWin.name} - {pmWin.score} pts</div>
+                  {pmWin.bonus > 0 && <div style={{ fontSize: 10, color: "#7C3AED", fontWeight: 700 }}>{pmWin.bonus} {pmWin.currency} bonus</div>}
+                </div>
+              </div>}
+              <div style={{ marginTop: 8, fontSize: 11, color: "#94A3B8" }}>Click pentru detalii ▶</div>
+            </Card>;
+          })}
+        </div>
+      </div> : (function() {
+        var snap = leagueArchive.find(function(s) { return s.id === selectedArchive; });
+        if (!snap) return <Card style={{ textAlign: "center", padding: 30, color: "#94A3B8" }}>Snapshot inexistent.</Card>;
+        var board = leagueTab === "pm" ? snap.pms : snap.members;
+        var maxS = board.length > 0 ? board[0].score : 1;
+        return <div>
+          <button onClick={function() { setSelectedArchive(null); }} style={Object.assign({}, S.cancelBtn, { marginBottom: 14 })}>← Înapoi la istoric</button>
+          <Card style={{ marginBottom: 16, borderLeft: "4px solid #7C3AED" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>{snap.monthLabel}</div>
+            <div style={{ fontSize: 11, color: "#94A3B8" }}>Snapshot din {ff(snap.archivedAt)}</div>
+          </Card>
+          {/* Bonus winners */}
+          <div style={{ display: "grid", gridTemplateColumns: isMob ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            {snap.memberWinner && <Card style={{ background: "linear-gradient(135deg, #FEFCE8, #FFF)", borderLeft: "4px solid #EAB308" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#EAB308", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>🏆 Câștigător membru</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#1E293B" }}>{snap.memberWinner.name}</div>
+              <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>{snap.memberWinner.score} pts | {snap.memberWinner.doneThis} taskuri done</div>
+              {snap.memberWinner.bonus > 0 && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "#92400E", padding: "6px 10px", background: "#FEF3C7", borderRadius: 6, display: "inline-block" }}>💰 {snap.memberWinner.bonus} {snap.memberWinner.currency} bonus</div>}
+            </Card>}
+            {snap.pmWinner && <Card style={{ background: "linear-gradient(135deg, #F5F3FF, #FFF)", borderLeft: "4px solid #7C3AED" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>🏆 Câștigător PM</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#1E293B" }}>{snap.pmWinner.name}</div>
+              <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>{snap.pmWinner.score} pts | {snap.pmWinner.created} create | {snap.pmWinner.teamDone} echipa done</div>
+              {snap.pmWinner.bonus > 0 && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "#7C3AED", padding: "6px 10px", background: "#EDE9FE", borderRadius: 6, display: "inline-block" }}>💰 {snap.pmWinner.bonus} {snap.pmWinner.currency} bonus</div>}
+            </Card>}
+          </div>
+          {/* Tab switcher */}
+          <div style={{ display: "flex", gap: 4, marginBottom: 16, padding: 4, background: "#F1F5F9", borderRadius: 10, width: "fit-content" }}>
+            <button onClick={function() { setLeagueTab("members"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "members" ? "#fff" : "transparent", color: leagueTab === "members" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Membri ({snap.members.length})</button>
+            <button onClick={function() { setLeagueTab("pm"); }} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: leagueTab === "pm" ? "#fff" : "transparent", color: leagueTab === "pm" ? "#1E293B" : "#64748B", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>PM ({snap.pms.length})</button>
+          </div>
+          {/* Leaderboard */}
+          <Card>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B", marginBottom: 14 }}>Clasament {leagueTab === "pm" ? "PM" : "Membri"} - {snap.monthLabel}</div>
+            {board.length === 0 ? <div style={{ textAlign: "center", padding: 20, color: "#94A3B8" }}>Niciun participant.</div> : board.map(function(p, idx) {
+              var medals = ["🥇", "🥈", "🥉"];
+              var widthPct = maxS > 0 ? (p.score / maxS) * 100 : 0;
+              return <div key={p.user} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", marginBottom: 6, borderRadius: 10, background: idx < 3 ? "#FEFCE850" : "#fff", border: "1px solid " + (idx < 3 ? "#FDE68A40" : "#E2E8F0"), position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: widthPct + "%", background: idx === 0 ? "linear-gradient(90deg, #EAB30810, transparent)" : "transparent", zIndex: 0 }} />
+                <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+                  <div style={{ fontSize: 18, width: 28, textAlign: "center" }}>{idx < 3 ? medals[idx] : <span style={{ fontSize: 13, color: "#94A3B8", fontWeight: 700 }}>#{idx + 1}</span>}</div>
+                  <Av color={p.color} size={32} fs={12} userId={p.user}>{p.name[0]}</Av>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{p.name}</div>
+                    <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>
+                      {leagueTab === "pm" ? (p.created + " create | " + p.teamDone + " echipa done | " + p.ownDone + " proprii | " + p.teamOverdue + " overdue") : (p.doneThis + " done | " + p.overdue + " overdue")}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", minWidth: 60 }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: idx === 0 ? "#EAB308" : "#1E293B" }}>{p.score}</div>
+                    <div style={{ fontSize: 9, color: "#94A3B8", fontWeight: 600, textTransform: "uppercase" }}>puncte</div>
+                  </div>
+                </div>
+              </div>;
+            })}
+          </Card>
+          {me.role === "admin" && <div style={{ marginTop: 14, textAlign: "right" }}>
+            <button onClick={function() {
+              if (!window.confirm("Ștergi snapshot-ul " + snap.monthLabel + "? Acțiune ireversibilă.")) return;
+              setLeagueArchive(function(p) { return p.filter(function(s) { return s.id !== snap.id; }); });
+              setSelectedArchive(null);
+              if (addLog) addLog("LEAGUE", "Sters snapshot " + snap.monthLabel);
+            }} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #DC2626", background: "#fff", color: "#DC2626", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Șterge snapshot</button>
+          </div>}
+        </div>;
+      })()}
+    </div>}
+
+    {/* ═══ MODIF 2: View CURRENT (codul vechi) - doar dacă view === "current" ═══ */}
+    {view === "current" && <div>
     {monthlyBonus && monthlyBonus.enabled && (monthlyBonus.memberAmount > 0 || (monthlyBonus.pmAmount > 0 && me.role !== "member")) && <div style={{ display: "grid", gridTemplateColumns: isMob || me.role === "member" ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
       {monthlyBonus.memberAmount > 0 && <Card style={{ background: "linear-gradient(135deg, #FEFCE8, #FEF3C7 40%, #FFF 80%)", borderLeft: "4px solid #EAB308", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: -10, right: -5, fontSize: 60, opacity: 0.06 }}>💰</div>
@@ -6734,6 +7133,7 @@ function MonthlyLeaguePage({ allTasks, team, user, me, targets, achievements, vi
       </div>
       <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 8 }}>Clasamentul se reseteaza automat pe 1 a fiecarei luni.</div>
     </Card>
+    </div>}
   </div>;
 }
 
