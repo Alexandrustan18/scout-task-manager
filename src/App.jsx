@@ -44,6 +44,8 @@ var _instantSaveKeys = { tasks: false }; // not used yet - framework for future 
 // ambele citesc remote-ul vechi din Supabase si al doilea il suprascrie pe primul. Pierdem
 // task-uri create rapid (ex: secondary pipeline Mara Poze -> Carla la 25 produse).
 // Solutia: o coada per key, fiecare salvare asteapta sa termine cea precedenta.
+// IMPORTANT: queue-ul NU se blocheaza pe rejected promises - daca o salvare esueaza,
+// urmatoarea ruleaza oricum (nu propagam rejection prin queue chain).
 var _saveQueues = {}; // { [key]: Promise }
 
 // Force immediate save bypassing debounce - used for critical operations
@@ -51,11 +53,22 @@ async function immediateSave(key, value) {
   _latestValues[key] = value;
   if (saveTimers[key]) { clearTimeout(saveTimers[key]); delete saveTimers[key]; }
 
-  // Serialize: each call for the same key waits for the previous one to finish
-  var prev = _saveQueues[key] || Promise.resolve();
+  // CRITICAL: Set _pendingKeys and _saveVersions IMMEDIATELY (synchronously) so that
+  // realtime subscription does NOT overwrite our local state with stale Supabase data
+  // while we are still queued waiting to save. Without this, realtime arriving between
+  // setTasks() and actual save will revert all changes.
+  _saveVersions[key] = Date.now();
+  _pendingKeys[key] = true;
+
+  // Serialize: each call for the same key waits for the previous one to finish.
+  // CRITICAL: convert prev to a non-rejecting promise via .catch(() => {}) so that
+  // a failed save doesn't block subsequent saves.
+  var prev = (_saveQueues[key] || Promise.resolve()).catch(function() { /* swallow */ });
+
   var run = prev.then(async function() {
     // Use the LATEST value (may have been updated by a newer call while waiting)
     var current = _latestValues[key];
+    // Refresh markers right before actual write
     _saveVersions[key] = Date.now();
     _pendingKeys[key] = true;
     var safetyTimer = setTimeout(function() { delete _pendingKeys[key]; }, 15000);
@@ -66,18 +79,14 @@ async function immediateSave(key, value) {
         return merged;
       }
       await cloudSave(key, current);
+      return true;
     } finally {
       clearTimeout(safetyTimer);
       delete _pendingKeys[key];
     }
-  }).catch(function(err) {
-    // Don't break the queue if one save fails
-    console.error("[immediateSave queue]", key, err);
-    throw err;
   });
 
   _saveQueues[key] = run.finally(function() {
-    // Clear queue ref only if no newer save was added
     if (_saveQueues[key] === run) delete _saveQueues[key];
   });
 
@@ -822,6 +831,52 @@ export default function App() {
     return function() { supabase.removeChannel(channel); };
   }, []);
 
+  // ═══ MODIF: Auto-resync tasks la fiecare 30s (backup pentru realtime) ═══
+  // Daca realtime subscription se deconecteaza (tab in background, reteaua pica, etc),
+  // utilizatorul poate ramane cu state vechi. Polling-ul asta re-incarca taskurile din
+  // Supabase la fiecare 30 secunde si actualizeaza local state daca exista versiune mai noua.
+  // Nu suprascrie modificari locale in curs de salvare (verifica _pendingKeys).
+  useEffect(function() {
+    if (loading || !user) return;
+    var interval = setInterval(async function() {
+      // Skip daca avem o salvare in curs - nu vrem sa suprascriem date locale
+      if (_pendingKeys["tasks"]) return;
+      // Skip daca am salvat ceva recent (5s grace period dupa ultima salvare)
+      var lastSave = _saveVersions["tasks"] || 0;
+      if (Date.now() - lastSave < 5000) return;
+      try {
+        var { data: row, error } = await supabase.from("app_data").select("data").eq("id", "tasks").maybeSingle();
+        if (error || !row || !Array.isArray(row.data)) return;
+        var remoteTasks = row.data;
+        // Compara count si updatedAt-ul cel mai recent ca sa decid daca actualizez
+        if (remoteTasks.length !== tasksRef.current.length) {
+          // Diferenta de count → cineva a creat/sters → resync
+          _setTasks(remoteTasks);
+          tasksRef.current = remoteTasks;
+          return;
+        }
+        // Acelasi count - verific daca exista vreun task cu updatedAt mai nou in remote
+        var localMap = {};
+        tasksRef.current.forEach(function(t) { if (t && t.id) localMap[t.id] = t; });
+        var hasNewerRemote = remoteTasks.some(function(rt) {
+          if (!rt || !rt.id) return false;
+          var lt = localMap[rt.id];
+          if (!lt) return true;
+          var rTime = rt.updatedAt ? new Date(rt.updatedAt).getTime() : 0;
+          var lTime = lt.updatedAt ? new Date(lt.updatedAt).getTime() : 0;
+          return rTime > lTime;
+        });
+        if (hasNewerRemote) {
+          _setTasks(remoteTasks);
+          tasksRef.current = remoteTasks;
+        }
+      } catch (e) {
+        // Tacut - polling-ul incearca din nou peste 30s
+      }
+    }, 30000);
+    return function() { clearInterval(interval); };
+  }, [loading, user]);
+
   useEffect(function() { var h = function() { setIsMob(window.innerWidth < 820); }; window.addEventListener("resize", h); return function() { window.removeEventListener("resize", h); }; }, []);
 
   // AUTO-UPDATE MECHANISM: Detects when a new version is deployed on Vercel
@@ -1427,16 +1482,23 @@ export default function App() {
       if (rule.triggerShop && rule.triggerShop !== task.shop) match = false;
       if (rule.triggerDepartment && rule.triggerDepartment !== task.department) match = false;
       if (!match) return;
-      // Check if pipeline task already exists for this source
-      var exists = tasks.find(function(t) { return t._pipelineRuleId === rule.id && t.dependsOn && t.dependsOn.includes(task.id); });
-      if (exists) return;
       var newDeadline = TD;
       if (rule.deadlineOffset) { var d = new Date(); d.setDate(d.getDate() + (parseInt(rule.deadlineOffset) || 1)); newDeadline = ds(d); }
-      var pipeTask = { id: gid(), title: (rule.newTitlePrefix || "") + task.title + (rule.newTitleSuffix || ""), description: rule.newDescription || task.description || "", assignee: rule.targetAssignee || task.assignee, status: "To Do", priority: rule.newPriority || task.priority, platform: rule.newPlatform || task.platform || "", taskType: rule.newTaskType || task.taskType || "", department: rule.newDepartment || task.department || "", shop: task.shop, product: task.product || "", productName: task.productName || "", deadline: newDeadline, links: (task.links || []).slice(), subtasks: [], comments: [], tags: [], dependsOn: [task.id], campaignItems: [], createdBy: "system", createdAt: ts(), updatedAt: ts(), _campaignParentId: task._campaignParentId || "", _fromPipeline: task.id, _pipelineRuleId: rule.id };
-      setTasks(function(p) { return [pipeTask].concat(p); });
-      setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTask.id] = [{ status: "To Do", at: ts() }]; return n; });
-      addNotif("pipeline", "Pipeline: \"" + pipeTask.title + "\"", pipeTask.id, rule.targetAssignee);
-      addLog("PIPELINE", "Rule \"" + rule.name + "\": " + task.title + " -> " + pipeTask.title);
+      var pipeTaskId = gid();
+      var pipeTask = { id: pipeTaskId, title: (rule.newTitlePrefix || "") + task.title + (rule.newTitleSuffix || ""), description: rule.newDescription || task.description || "", assignee: rule.targetAssignee || task.assignee, status: "To Do", priority: rule.newPriority || task.priority, platform: rule.newPlatform || task.platform || "", taskType: rule.newTaskType || task.taskType || "", department: rule.newDepartment || task.department || "", shop: task.shop, product: task.product || "", productName: task.productName || "", deadline: newDeadline, links: (task.links || []).slice(), subtasks: [], comments: [], tags: [], dependsOn: [task.id], campaignItems: [], createdBy: "system", createdAt: ts(), updatedAt: ts(), _campaignParentId: task._campaignParentId || "", _fromPipeline: task.id, _pipelineRuleId: rule.id };
+      // ═══ MODIF 1: Atomic dedup - citeste state curent prin setTasks(prev => ...) ═══
+      var ruleAdded = false;
+      setTasks(function(prev) {
+        var exists = prev.find(function(t) { return t._pipelineRuleId === rule.id && !t._deleted && t.dependsOn && t.dependsOn.includes(task.id); });
+        if (exists) return prev;
+        ruleAdded = true;
+        return [pipeTask].concat(prev);
+      });
+      if (ruleAdded) {
+        setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[pipeTaskId] = [{ status: "To Do", at: ts() }]; return n; });
+        addNotif("pipeline", "Pipeline: \"" + pipeTask.title + "\"", pipeTaskId, rule.targetAssignee);
+        addLog("PIPELINE", "Rule \"" + rule.name + "\": " + task.title + " -> " + pipeTask.title);
+      }
     });
   };
 
@@ -1921,67 +1983,14 @@ export default function App() {
           addNotif("pipeline", "Task pipeline: \"" + pipeTask.title + "\"", pipeTaskId, prevTask._pipelineNext);
         }
       }
-      // ═══ MODIF 1: Secondary pipeline atomicizat ═══
-      // BUG FIX 25→24: Foloseste setTasks(prev => ...) ca sa citeasca state-ul curent,
-      // nu `tasks` din closure (care poate fi stale daca finalizezi rapid 25 task-uri).
-      // Plus: foloseste crypto-strong dedup key (campaignParentId + productName) cand e disponibil,
-      // ca sa prinda si cazul cand acelasi produs e procesat de doua ori.
-      if (prevTask.assignee === "mara_poze" && prevTask._fromPipeline) {
-        var cleanTitle = (prevTask.title || "").replace(/ - Foto Produs$/, "");
-        var now = new Date();
-        var effectiveDate = new Date(now);
-        if (now.getHours() < 6) {
-          effectiveDate.setDate(effectiveDate.getDate() - 1);
-        }
-        var adsDate = new Date(effectiveDate);
-        adsDate.setDate(adsDate.getDate() + 1);
-        var dow = adsDate.getDay();
-        if (dow === 0) {
-          adsDate.setDate(adsDate.getDate() + 1);
-        } else if (dow === 6) {
-          adsDate.setDate(adsDate.getDate() + 2);
-        }
-        var adsDeadline = ds(adsDate);
-        var adsLinks = (prevTask.links || []).slice();
-        var adsTaskId = gid();
-        var adsTask = { id: adsTaskId, title: cleanTitle + " - Ads", description: "Pune ads pentru acest produs. Foto produs gata.\n\n" + (prevTask.description || ""), assignee: "carla", status: "To Do", priority: prevTask.priority, platform: "Meta Ads", taskType: "Ad Creation", department: "AD", shop: prevTask.shop, product: prevTask.product || "", productName: prevTask.productName || "", deadline: adsDeadline, links: adsLinks, subtasks: [], comments: [], tags: [], dependsOn: [prevTask.id], campaignItems: [], createdBy: prevTask.createdBy || "admin", createdAt: ts(), updatedAt: ts(), _campaignParentId: prevTask._campaignParentId || "", _fromPipeline: prevTask.id, _adsPipeline: true };
-
-        // Atomic: citeste state-ul curent prin setTasks(prev => ...) si decide pe baza lui
-        var actuallyAdded = false;
-        setTasks(function(prev) {
-          // Verifica daca exista deja Ads task pentru acest prevTask in state-ul CURENT
-          var exists = prev.find(function(x) {
-            return x._adsPipeline === true && !x._deleted && x.dependsOn && x.dependsOn.includes(prevTask.id);
-          });
-          if (exists) return prev; // skip - exista deja
-          actuallyAdded = true;
-          return [adsTask].concat(prev);
-        });
-
-        // Side-effects (notificari, log) doar daca am adaugat efectiv task-ul
-        if (actuallyAdded) {
-          setStatusHistory(function(prev) { var n = Object.assign({}, prev); n[adsTaskId] = [{ status: "To Do", at: ts() }]; return n; });
-          addNotif("pipeline", "Task Ads pregatit: \"" + adsTask.title + "\"", adsTaskId, "carla");
-          addLog("PIPELINE", "Mara Poze -> Carla: " + adsTask.title + " (deadline: " + adsDeadline + ")");
-        }
-      }
+      // ═══ MODIF: Pipeline secondary HARDCODAT ELIMINAT ═══
+      // Vechiul cod crea automat task Ads pentru Carla cand Mara Poze finaliza un foto produs.
+      // Acum: foloseste Pipeline Builder ca sa configurezi exact ce regula vrei
+      // (ex: Mara Poze Done -> Alexandra LP, sau orice altceva).
+      // Logica de ads automat catre carla a fost eliminata complet.
     }
 
-    // Rollback: if Mara Poze changes status FROM Done back to something else, remove the Ads task (only if still To Do)
-    if (prevTask && prevTask.assignee === "mara_poze" && prevTask.status === "Done" && st !== "Done") {
-      // ═══ MODIF 1: citește state curent prin setTasks(prev => ...) ═══
-      var removedAds = null;
-      setTasks(function(prev) {
-        var found = prev.find(function(x) { return x._adsPipeline === true && !x._deleted && x.dependsOn && x.dependsOn.includes(prevTask.id) && x.status === "To Do"; });
-        if (!found) return prev;
-        removedAds = found;
-        return prev.map(function(x) { return x.id === found.id ? Object.assign({}, x, { _deleted: true, updatedAt: ts() }) : x; });
-      });
-      if (removedAds) {
-        addLog("PIPELINE", "Rollback Ads: " + removedAds.title + " sters (Mara Poze a schimbat statusul)");
-        addNotif("pipeline_rollback", "Taskul Ads \"" + removedAds.title + "\" a fost sters - foto produs nu mai e finalizat", removedAds.id, "carla");
-      }
-    }
+    // ═══ MODIF: Rollback Ads HARDCODAT ELIMINAT (impreuna cu pipeline-ul de sus) ═══
   };
 
   var handleDrop = function(st) { if (!dragId) return; chgSt(dragId, st); setDragId(null); };
