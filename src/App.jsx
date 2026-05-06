@@ -351,7 +351,17 @@ function isTd(i) { return i && ds(i) === TD; }
 function isTm(i) { return i && ds(i) === TM; }
 function isP(i) { return i && ds(i) < TD; }
 function isF(i) { return i && ds(i) > TM; }
-function isOv(t) { return isP(t.deadline) && t.status !== "Done"; }
+function isOv(t) {
+  if (!t.deadline || t.status === "Done") return false;
+  if (!isP(t.deadline)) return false;
+  // Grace period: daca deadline-ul a fost IERI si e inainte de 09:00 azi, NU e overdue inca
+  var now = new Date();
+  var todayStr = ds(now);
+  var yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+  var yesterdayStr = ds(yesterday);
+  if (t.deadline === yesterdayStr && now.getHours() < 9) return false;
+  return true;
+}
 function ft(s) { if (!s) return "0:00"; var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60; return (h ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(sc).padStart(2, "0"); }
 function dl(i) { if (!i) return "Fara data"; if (isTd(i)) return "Azi"; if (isTm(i)) return "Maine"; if (isP(i)) return "Trecut"; return fd(i); }
 function hDiff(a, b) { if (!a || !b) return 0; return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 3600000); }
@@ -575,6 +585,7 @@ export default function App() {
   var [recurringTasks, setRecurringTasks] = useState([]);
   var [selectedTasks, setSelectedTasks] = useState([]);
   var [bulkMode, setBulkMode] = useState(false);
+  var [showBulkDupModal, setShowBulkDupModal] = useState(false);
   var [statusHistory, setStatusHistory] = useState({});
   var [showFinalize, setShowFinalize] = useState(null);
   // FEATURE 2: Product audit trail
@@ -848,27 +859,32 @@ export default function App() {
         var { data: row, error } = await supabase.from("app_data").select("data").eq("id", "tasks").maybeSingle();
         if (error || !row || !Array.isArray(row.data)) return;
         var remoteTasks = row.data;
-        // Compara count si updatedAt-ul cel mai recent ca sa decid daca actualizez
-        if (remoteTasks.length !== tasksRef.current.length) {
-          // Diferenta de count → cineva a creat/sters → resync
-          _setTasks(remoteTasks);
-          tasksRef.current = remoteTasks;
-          return;
-        }
-        // Acelasi count - verific daca exista vreun task cu updatedAt mai nou in remote
+        // ═══ MERGE PER-TASK pe baza updatedAt ═══
+        // In loc sa suprascriu tot array-ul local cu remote (care poate avea date stale),
+        // pentru fiecare task pastrez versiunea cu updatedAt mai recent.
+        // Local castiga peste remote daca local e mai nou (ex: "In Progress" pus acum 2s).
         var localMap = {};
         tasksRef.current.forEach(function(t) { if (t && t.id) localMap[t.id] = t; });
-        var hasNewerRemote = remoteTasks.some(function(rt) {
-          if (!rt || !rt.id) return false;
-          var lt = localMap[rt.id];
-          if (!lt) return true;
-          var rTime = rt.updatedAt ? new Date(rt.updatedAt).getTime() : 0;
+        var remoteMap = {};
+        remoteTasks.forEach(function(t) { if (t && t.id) remoteMap[t.id] = t; });
+        var allIds = {};
+        Object.keys(localMap).forEach(function(id) { allIds[id] = true; });
+        Object.keys(remoteMap).forEach(function(id) { allIds[id] = true; });
+        var merged = [];
+        var changed = false;
+        Object.keys(allIds).forEach(function(id) {
+          var lt = localMap[id];
+          var rt = remoteMap[id];
+          if (!lt && rt) { merged.push(rt); changed = true; return; }
+          if (lt && !rt) { merged.push(lt); /* task local nou, inca nesalvat */ return; }
           var lTime = lt.updatedAt ? new Date(lt.updatedAt).getTime() : 0;
-          return rTime > lTime;
+          var rTime = rt.updatedAt ? new Date(rt.updatedAt).getTime() : 0;
+          if (rTime > lTime) { merged.push(rt); changed = true; }
+          else { merged.push(lt); }
         });
-        if (hasNewerRemote) {
-          _setTasks(remoteTasks);
-          tasksRef.current = remoteTasks;
+        if (changed) {
+          _setTasks(merged);
+          tasksRef.current = merged;
         }
       } catch (e) {
         // Tacut - polling-ul incearca din nou peste 30s
@@ -1475,6 +1491,10 @@ export default function App() {
     if (newStatus !== "Done" || !pipelineRules || pipelineRules.length === 0) return;
     pipelineRules.forEach(function(rule) {
       if (!rule.active) return;
+      // ═══ ANTI-LOOP GUARD 1: nu re-executa aceeasi regula pe propriul output ═══
+      if (task._pipelineRuleId === rule.id) return;
+      // ═══ ANTI-LOOP GUARD 2: STOP daca taskType-ul curent e marcat ca terminus ═══
+      if (rule.stopAfterTaskType && task.taskType === rule.stopAfterTaskType) return;
       var match = true;
       if (rule.triggerStatus && rule.triggerStatus !== newStatus) match = false;
       if (rule.triggerAssignee && rule.triggerAssignee !== task.assignee) match = false;
@@ -1482,6 +1502,10 @@ export default function App() {
       if (rule.triggerShop && rule.triggerShop !== task.shop) match = false;
       if (rule.triggerDepartment && rule.triggerDepartment !== task.department) match = false;
       if (!match) return;
+      // ═══ ANTI-LOOP GUARD 3: nu crea task identic (acelasi assignee + taskType ca cel curent) ═══
+      var sameAssignee = (rule.targetAssignee || task.assignee) === task.assignee;
+      var sameTaskType = (rule.newTaskType || task.taskType || "") === (task.taskType || "");
+      if (sameAssignee && sameTaskType) return;
       var newDeadline = TD;
       if (rule.deadlineOffset) { var d = new Date(); d.setDate(d.getDate() + (parseInt(rule.deadlineOffset) || 1)); newDeadline = ds(d); }
       var pipeTaskId = gid();
@@ -2088,6 +2112,45 @@ export default function App() {
     addLog("BULK", "Duplicate " + copies.length + " taskuri");
     setSelectedTasks([]); setBulkMode(false);
   };
+  // ═══ BULK DUPLICATE CU SETARI CUSTOM ═══
+  // Primeste un obiect cu campurile de override; cele lasate "" pastreaza valoarea din original.
+  var bulkDupAdvanced = function(overrides) {
+    var copies = selectedTasks.map(function(tid) {
+      var t = tasks.find(function(x) { return x.id === tid; });
+      if (!t) return null;
+      var copy = Object.assign({}, t, {
+        id: gid(),
+        title: t.title + " (copie)",
+        status: "To Do",
+        createdAt: ts(),
+        updatedAt: ts(),
+        comments: [],
+        _finalizedCount: 0,
+        // Curat metadata de pipeline ca sa nu se confunde
+        _fromPipeline: undefined,
+        _pipelineRuleId: undefined,
+        dependsOn: []
+      });
+      // Aplica override-urile (doar daca nu sunt "")
+      if (overrides.assignee) copy.assignee = overrides.assignee;
+      if (overrides.department) copy.department = overrides.department;
+      if (overrides.platform) copy.platform = overrides.platform;
+      if (overrides.taskType) copy.taskType = overrides.taskType;
+      if (overrides.shop) copy.shop = overrides.shop;
+      if (overrides.deadline) copy.deadline = overrides.deadline;
+      if (overrides.priority) copy.priority = overrides.priority;
+      return copy;
+    }).filter(Boolean);
+    setTasks(function(p) { return copies.concat(p); });
+    // Initializez statusHistory pentru fiecare copie
+    setStatusHistory(function(prev) {
+      var n = Object.assign({}, prev);
+      copies.forEach(function(c) { n[c.id] = [{ status: "To Do", at: ts() }]; });
+      return n;
+    });
+    addLog("BULK", "Duplicate cu setari " + copies.length + " taskuri");
+    setSelectedTasks([]); setBulkMode(false); setShowBulkDupModal(false);
+  };
   var selectAllFiltered = function() { setSelectedTasks(filtered.map(function(t) { return t.id; })); };
   var toggleSel = function(tid) { setSelectedTasks(function(p) { return p.includes(tid) ? p.filter(function(x) { return x !== tid; }) : p.concat([tid]); }); };
 
@@ -2319,6 +2382,7 @@ export default function App() {
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #2563EB", background: "#EFF6FF", color: "#2563EB", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={bulkDup}><Ic d={Icons.copy} size={12} color="#2563EB" /> Duplica</button>
+                <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #7C3AED", background: "#F5F3FF", color: "#7C3AED", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={function() { if (selectedTasks.length === 0) return; setShowBulkDupModal(true); }}><Ic d={Icons.copy} size={12} color="#7C3AED" /> Duplica cu setari</button>
                 <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #DC2626", background: "#FEF2F2", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={bulkDel}><Ic d={Icons.del} size={12} color="#DC2626" /> Sterge</button>
               </div>
             </div>
@@ -2385,8 +2449,114 @@ export default function App() {
         var tm = timers[tid]; if (tm && tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; setTimers(function(p2) { var n2 = Object.assign({}, p2); n2[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n2; }); }
         setShowFinalize(null);
       }} onClose={function() { setShowFinalize(null); }} />}
+      {showBulkDupModal && <BulkDupModal
+        count={selectedTasks.length}
+        assUsers={assUsers}
+        team={team}
+        shops={shops}
+        departments={departments}
+        platforms={platforms}
+        taskTypes={taskTypes}
+        onApply={bulkDupAdvanced}
+        onClose={function() { setShowBulkDupModal(false); }}
+      />}
     </div>
   );
+}
+
+function BulkDupModal({ count, assUsers, team, shops, departments, platforms, taskTypes, onApply, onClose }) {
+  var [assignee, setAssignee] = useState("");
+  var [department, setDepartment] = useState("");
+  var [platform, setPlatform] = useState("");
+  var [taskType, setTaskType] = useState("");
+  var [shop, setShop] = useState("");
+  var [deadline, setDeadline] = useState("");
+  var [priority, setPriority] = useState("");
+
+  var apply = function() {
+    onApply({
+      assignee: assignee,
+      department: department,
+      platform: platform,
+      taskType: taskType,
+      shop: shop,
+      deadline: deadline,
+      priority: priority
+    });
+  };
+
+  return <div style={S.modalOv} onClick={onClose}>
+    <div style={Object.assign({}, S.modalBox, { maxWidth: 640 })} onClick={function(e) { e.stopPropagation(); }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#1E293B", marginBottom: 4 }}>Duplica {count} taskuri cu setari</div>
+        <div style={{ fontSize: 12, color: "#64748B" }}>Lasa "Pastreaza original" pe campurile pe care nu vrei sa le schimbi. Setarile alese se aplica la toate cele {count} copii.</div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          <label style={S.label}>Assignee</label>
+          <select style={S.fSelF} value={assignee} onChange={function(e) { setAssignee(e.target.value); }}>
+            <option value="">Pastreaza original</option>
+            {assUsers.map(function(u) { return <option key={u} value={u}>{(team[u] || {}).name}</option>; })}
+          </select>
+        </div>
+
+        <div>
+          <label style={S.label}>Departament</label>
+          <select style={S.fSelF} value={department} onChange={function(e) { setDepartment(e.target.value); }}>
+            <option value="">Pastreaza original</option>
+            {(departments || []).map(function(d) { return <option key={d} value={d}>{d}</option>; })}
+          </select>
+        </div>
+
+        <div>
+          <label style={S.label}>Platforma</label>
+          <select style={S.fSelF} value={platform} onChange={function(e) { setPlatform(e.target.value); }}>
+            <option value="">Pastreaza original</option>
+            {(platforms || []).map(function(p) { return <option key={p} value={p}>{p}</option>; })}
+          </select>
+        </div>
+
+        <div>
+          <label style={S.label}>Tip task</label>
+          <select style={S.fSelF} value={taskType} onChange={function(e) { setTaskType(e.target.value); }}>
+            <option value="">Pastreaza original</option>
+            {(taskTypes || []).map(function(t) { return <option key={t} value={t}>{t}</option>; })}
+          </select>
+        </div>
+
+        <div>
+          <label style={S.label}>Magazin</label>
+          <select style={S.fSelF} value={shop} onChange={function(e) { setShop(e.target.value); }}>
+            <option value="">Pastreaza original</option>
+            {(shops || []).map(function(s) { return <option key={s} value={s}>{s}</option>; })}
+          </select>
+        </div>
+
+        <div>
+          <label style={S.label}>Prioritate</label>
+          <select style={S.fSelF} value={priority} onChange={function(e) { setPriority(e.target.value); }}>
+            <option value="">Pastreaza original</option>
+            <option value="Low">Low</option>
+            <option value="Normal">Normal</option>
+            <option value="High">High</option>
+            <option value="Urgent">Urgent</option>
+          </select>
+        </div>
+
+        <div style={{ gridColumn: "1 / span 2" }}>
+          <label style={S.label}>Deadline</label>
+          <input type="date" style={S.input} value={deadline} onChange={function(e) { setDeadline(e.target.value); }} />
+          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>Lasa gol pentru a pastra deadline-ul original al fiecarui task</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+        <button style={S.cancelBtn} onClick={onClose}>Anuleaza</button>
+        <button style={S.primBtn} onClick={apply}><Ic d={Icons.copy} size={14} color="#fff" /> Creeaza {count} copii</button>
+      </div>
+    </div>
+  </div>;
 }
 
 function LoginScreen({ team, onLogin, announcements }) {
@@ -6130,7 +6300,7 @@ function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, tas
 
 function ViewTaskModal({ task, team, user, tasks, setTasks, timers, getTS, togTimer, products, onClose, onEdit, statusHistory, isAdmin, taskActivity }) {
   var [commentText, setCommentText] = useState(""); var [showHistory, setShowHistory] = useState(false); var t = tasks.find(function(x) { return x.id === task.id; }) || task; var a = team[t.assignee] || {}; var secs = getTS(t.id); var subtasks = t.subtasks || []; var comments = t.comments || []; var doneS = subtasks.filter(function(s) { return s.done; }).length;
-  var addComment = function() { if (!commentText.trim()) return; setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, x, { comments: (x.comments || []).concat([{ id: gid(), userId: user, text: commentText.trim(), time: ts() }]) }) : x; }); }); setCommentText(""); };
+  var addComment = function() { if (!commentText.trim()) return; setTasks(function(p) { return p.map(function(x) { return x.id === t.id ? Object.assign({}, x, { comments: (x.comments || []).concat([{ id: gid(), userId: user, text: commentText.trim(), time: ts() }]), updatedAt: ts() }) : x; }); }); setCommentText(""); };
   var toggleSub = function(stId) { setTasks(function(p) { return p.map(function(x) { if (x.id !== t.id) return x; return Object.assign({}, x, { subtasks: (x.subtasks || []).map(function(s) { return s.id === stId ? Object.assign({}, s, { done: !s.done }) : s; }) }); }); }); };
   var hist = (statusHistory || {})[t.id] || [];
   var tis = {};
@@ -7410,11 +7580,12 @@ function PipelinePage({ pipelineRules, setPipelineRules, team, assUsers, shops, 
   var [form, setForm] = useState({
     name: "", triggerAssignee: "", triggerTaskType: "", triggerDepartment: "", triggerShop: "", triggerStatus: "Done",
     targetAssignee: "", newTaskType: "", newDepartment: "", newPlatform: "", newPriority: "Normal",
-    newTitlePrefix: "", newTitleSuffix: " - Next", newDescription: "", deadlineOffset: "1", active: true
+    newTitlePrefix: "", newTitleSuffix: " - Next", newDescription: "", deadlineOffset: "1", active: true,
+    stopAfterTaskType: ""
   });
 
   var resetForm = function() {
-    setForm({ name: "", triggerAssignee: "", triggerTaskType: "", triggerDepartment: "", triggerShop: "", triggerStatus: "Done", targetAssignee: "", newTaskType: "", newDepartment: "", newPlatform: "", newPriority: "Normal", newTitlePrefix: "", newTitleSuffix: " - Next", newDescription: "", deadlineOffset: "1", active: true });
+    setForm({ name: "", triggerAssignee: "", triggerTaskType: "", triggerDepartment: "", triggerShop: "", triggerStatus: "Done", targetAssignee: "", newTaskType: "", newDepartment: "", newPlatform: "", newPriority: "Normal", newTitlePrefix: "", newTitleSuffix: " - Next", newDescription: "", deadlineOffset: "1", active: true, stopAfterTaskType: "" });
     setEditId(null);
   };
 
@@ -7499,6 +7670,16 @@ function PipelinePage({ pipelineRules, setPipelineRules, team, assUsers, shops, 
         </div>
         <label style={S.label}>Descriere task nou (optional)</label>
         <textarea style={S.ta} value={form.newDescription} onChange={function(e) { set("newDescription", e.target.value); }} placeholder="Se adauga la taskul nou creat..." />
+      </div>
+
+      {/* STOP RULE section - anti-loop */}
+      <div style={{ marginTop: 14, padding: "12px 16px", background: "#FFF7ED", borderRadius: 8, border: "1px solid #F59E0B30" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#D97706", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>STOP — Anti-Loop (recomandat)</div>
+        <div style={{ fontSize: 11, color: "#92400E", marginBottom: 8 }}>Daca taskul curent are acest taskType, regula NU se mai aplica. Foloseste-l ca terminus de pipeline (ex: dupa "Ads" sa NU se mai genereze nimic).</div>
+        <select style={S.fSelF} value={form.stopAfterTaskType || ""} onChange={function(e) { set("stopAfterTaskType", e.target.value); }}>
+          <option value="">Fara stop (regula se aplica mereu)</option>
+          {(taskTypes || []).map(function(t) { return <option key={t} value={t}>STOP daca taskType = {t}</option>; })}
+        </select>
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
