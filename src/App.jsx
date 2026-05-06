@@ -2114,13 +2114,52 @@ export default function App() {
   };
   // ═══ BULK DUPLICATE CU SETARI CUSTOM ═══
   // Primeste un obiect cu campurile de override; cele lasate "" pastreaza valoarea din original.
+  // ═══ Helper: curata sufixele de pipeline din titlu ═══
+  // Sterge orice " - <text>" de la final daca matcheaza un sufix cunoscut de pipeline,
+  // PLUS " (copie)" oriunde apare. Repeta pana titlul e curat (cazul "Foo - LP - Ads").
+  var cleanPipelineTitle = function(title) {
+    if (!title) return "";
+    var clean = title;
+    var pipelineSuffixes = [
+      " - Foto Produs", " - Foto produs", " - foto produs",
+      " - LP", " - Lp", " - lp",
+      " - Ads", " - ADS", " - ads",
+      " - Landing Page", " - Landing page", " - landing page",
+      " - Next", " - NEXT", " - next",
+      " - Review", " - REVIEW", " - review",
+      " - Copy", " - COPY", " - copy",
+      " - Creative", " - CREATIVE", " - creative"
+    ];
+    // Sterge "(copie)" peste tot (poate fi multiplicat din duplicate succesive)
+    while (clean.indexOf(" (copie)") !== -1) {
+      clean = clean.replace(" (copie)", "");
+    }
+    // Sterge sufixe in mod repetat (pentru cazuri ca "Foo - LP - Ads")
+    var changed = true;
+    var iterations = 0;
+    while (changed && iterations < 10) {
+      changed = false;
+      iterations++;
+      for (var i = 0; i < pipelineSuffixes.length; i++) {
+        var suf = pipelineSuffixes[i];
+        if (clean.length >= suf.length && clean.substring(clean.length - suf.length) === suf) {
+          clean = clean.substring(0, clean.length - suf.length);
+          changed = true;
+        }
+      }
+    }
+    return clean.trim();
+  };
+
   var bulkDupAdvanced = function(overrides) {
     var copies = selectedTasks.map(function(tid) {
       var t = tasks.find(function(x) { return x.id === tid; });
       if (!t) return null;
+      // Titlu curat: fara sufixe de pipeline, fara "(copie)"
+      var cleanTitle = cleanPipelineTitle(t.title);
       var copy = Object.assign({}, t, {
         id: gid(),
-        title: t.title + " (copie)",
+        title: cleanTitle,
         status: "To Do",
         createdAt: ts(),
         updatedAt: ts(),
@@ -2129,6 +2168,8 @@ export default function App() {
         // Curat metadata de pipeline ca sa nu se confunde
         _fromPipeline: undefined,
         _pipelineRuleId: undefined,
+        _pipelineNext: "",
+        _finalized: undefined,
         dependsOn: []
       });
       // Aplica override-urile (doar daca nu sunt "")
@@ -2150,6 +2191,42 @@ export default function App() {
     });
     addLog("BULK", "Duplicate cu setari " + copies.length + " taskuri");
     setSelectedTasks([]); setBulkMode(false); setShowBulkDupModal(false);
+  };
+
+  // ═══ BULK CLEAN "(copie)" din titluri ═══
+  var bulkCleanCopie = function() {
+    if (selectedTasks.length === 0) return;
+    var changed = 0;
+    setTasks(function(prev) {
+      return prev.map(function(t) {
+        if (!selectedTasks.includes(t.id)) return t;
+        if (!t.title || t.title.indexOf("(copie)") === -1) return t;
+        var newTitle = t.title;
+        while (newTitle.indexOf(" (copie)") !== -1) newTitle = newTitle.replace(" (copie)", "");
+        while (newTitle.indexOf("(copie)") !== -1) newTitle = newTitle.replace("(copie)", "");
+        newTitle = newTitle.trim();
+        if (newTitle === t.title) return t;
+        changed++;
+        return Object.assign({}, t, { title: newTitle, updatedAt: ts() });
+      });
+    });
+    addLog("BULK", "Sterse '(copie)' din " + selectedTasks.length + " taskuri");
+    setSelectedTasks([]); setBulkMode(false);
+  };
+
+  // ═══ BULK CLEAN sufixe pipeline (Foto Produs, LP, Ads etc.) ═══
+  var bulkCleanPipelineSuffixes = function() {
+    if (selectedTasks.length === 0) return;
+    setTasks(function(prev) {
+      return prev.map(function(t) {
+        if (!selectedTasks.includes(t.id)) return t;
+        var newTitle = cleanPipelineTitle(t.title);
+        if (newTitle === t.title) return t;
+        return Object.assign({}, t, { title: newTitle, updatedAt: ts() });
+      });
+    });
+    addLog("BULK", "Curatate sufixe pipeline din " + selectedTasks.length + " taskuri");
+    setSelectedTasks([]); setBulkMode(false);
   };
   var selectAllFiltered = function() { setSelectedTasks(filtered.map(function(t) { return t.id; })); };
   var toggleSel = function(tid) { setSelectedTasks(function(p) { return p.includes(tid) ? p.filter(function(x) { return x !== tid; }) : p.concat([tid]); }); };
@@ -2383,6 +2460,8 @@ export default function App() {
               <div style={{ display: "flex", gap: 8 }}>
                 <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #2563EB", background: "#EFF6FF", color: "#2563EB", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={bulkDup}><Ic d={Icons.copy} size={12} color="#2563EB" /> Duplica</button>
                 <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #7C3AED", background: "#F5F3FF", color: "#7C3AED", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={function() { if (selectedTasks.length === 0) return; setShowBulkDupModal(true); }}><Ic d={Icons.copy} size={12} color="#7C3AED" /> Duplica cu setari</button>
+                <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #0C7E3E", background: "#F0FDF4", color: "#0C7E3E", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={function() { if (selectedTasks.length === 0) return; if (!window.confirm("Sterg '(copie)' din titlul a " + selectedTasks.length + " taskuri?")) return; bulkCleanCopie(); }} title="Sterge '(copie)' din titluri">🧹 Curata (copie)</button>
+                <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #D97706", background: "#FFF7ED", color: "#D97706", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={function() { if (selectedTasks.length === 0) return; if (!window.confirm("Sterg sufixele de pipeline (- Foto Produs, - LP, - Ads, - Landing Page, etc.) din titlul a " + selectedTasks.length + " taskuri?")) return; bulkCleanPipelineSuffixes(); }} title="Sterge sufixele de pipeline din titluri">✂️ Curata sufixe</button>
                 <button style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #DC2626", background: "#FEF2F2", color: "#DC2626", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={bulkDel}><Ic d={Icons.del} size={12} color="#DC2626" /> Sterge</button>
               </div>
             </div>
