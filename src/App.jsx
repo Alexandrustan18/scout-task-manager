@@ -94,6 +94,12 @@ async function immediateSave(key, value) {
 }
 
 async function cloudSave(key, value, _retryCount) {
+  // Phase 2: for tasks key, only persist the hot subset.
+  // Cold tasks live in id=tasks_archive (modified by the migration script only).
+  // This keeps the per-save payload at ~1 MB instead of ~3 MB.
+  if (key === "tasks" && Array.isArray(value)) {
+    value = _splitHotCold(value).hot;
+  }
   if (!_skipLocalStorage[key]) {
     try { localStorage.setItem("s7_" + key, JSON.stringify(value)); } catch(e2) {
       logError("LOCALSTORAGE", "Nu pot salva in localStorage: " + key, e2.message || "");
@@ -181,8 +187,12 @@ async function cloudSaveTasksMerge(localTasks, _retryCount) {
 
     var merged = Object.values(mergedMap);
 
-    // Save the merged array
-    var { error: writeErr } = await supabase.from("app_data").upsert({ id: "tasks", data: merged, updated_at: new Date().toISOString() }, { onConflict: "id" });
+    // Phase 2: only persist the hot subset to id=tasks (cold lives in id=tasks_archive,
+    // modified by the migration script only). Returns merged for UI consistency.
+    var hotOnly = _splitHotCold(merged).hot;
+
+    // Save the hot array
+    var { error: writeErr } = await supabase.from("app_data").upsert({ id: "tasks", data: hotOnly, updated_at: new Date().toISOString() }, { onConflict: "id" });
     if (writeErr) {
       var retries = _retryCount || 0;
       logError("SUPABASE_SAVE", "Eroare merge-save tasks (retry " + retries + "/2)", writeErr.message || JSON.stringify(writeErr));
@@ -222,6 +232,34 @@ function _updateClockOffsetFromHeader(headerValue) {
   _clockOffsetLastSync = localMs;
 }
 function nowMs() { return Date.now() + _clockOffsetMs; }
+
+// ═══ Phase 2: Hot/Cold task split (perf — shrinks save payload) ═══
+// Hot = all non-Done + tombstones + most recently updated 500 Done.
+// Cold = everything else (older Done). Cold is stored in id=tasks_archive,
+// only modified by the migration script. Client writes only the hot subset.
+var _HOT_DONE_KEEP = 500;
+function _splitHotCold(arr) {
+  if (!Array.isArray(arr)) return { hot: [], cold: [] };
+  var tombstones = [];
+  var notDone = [];
+  var done = [];
+  for (var i = 0; i < arr.length; i++) {
+    var t = arr[i];
+    if (!t) continue;
+    if (t._deleted) tombstones.push(t);
+    else if (t.status !== "Done") notDone.push(t);
+    else done.push(t);
+  }
+  done.sort(function(a, b) {
+    var ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    var tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    return tb - ta;
+  });
+  return {
+    hot: tombstones.concat(notDone).concat(done.slice(0, _HOT_DONE_KEEP)),
+    cold: done.slice(_HOT_DONE_KEEP),
+  };
+}
 
 var saveTimers = {};
 var _latestValues = {};
@@ -715,9 +753,10 @@ export default function App() {
       } catch (e) {
         console.warn("[CLOCK SYNC] Initial sync failed, falling back to local clock:", e && e.message);
       }
-      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc, ta, lar] = await Promise.all([
+      var [t, tk, tkArchive, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc, ta, lar] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
+        cloudLoad("tasks_archive", []),
         cloudLoad("logs", []),
         cloudLoad("sessions", {}),
         cloudLoad("shops", DEF_SHOPS),
@@ -754,7 +793,10 @@ export default function App() {
         cloudLoad("leagueArchive", []),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
-      _setTasks(tk || []); tasksRef.current = tk || [];
+      // Phase 2: union hot (id=tasks) + archive (id=tasks_archive) for in-memory state.
+      // Writes only touch hot via cloudSave's hot-filter. Archive is read-only here.
+      var unionTasks = (tk || []).concat(tkArchive || []);
+      _setTasks(unionTasks); tasksRef.current = unionTasks;
       setLogs((lg || []).slice(0, 500));
       setSessions(se || {});
       if (sh && sh.length > 0) setShops(sh); else { setShops(DEF_SHOPS); cloudSave("shops", DEF_SHOPS); }
