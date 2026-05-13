@@ -8,6 +8,17 @@ var supabase = createClient(
 );
 
 async function cloudLoad(key, fallback) {
+  // Phase 3: tasks loads from per-row format (id LIKE 'task_%') rather than single blob row.
+  if (key === "tasks") {
+    var perRow = await _cloudLoadAllTasks();
+    if (perRow && perRow.length > 0) {
+      try { localStorage.setItem("s7_tasks", JSON.stringify(perRow)); } catch(e) {}
+      _lastSyncedTasks = perRow.slice();
+      return perRow;
+    }
+    // Fallback: if per-row returned empty (migration not run, network issue), fall through
+    // to legacy single-blob load so the app doesn't show empty.
+  }
   var lsData = null;
   if (!_skipLocalStorage[key]) {
     try { var ls = localStorage.getItem("s7_" + key); if (ls) lsData = JSON.parse(ls); } catch(e3) {
@@ -94,11 +105,9 @@ async function immediateSave(key, value) {
 }
 
 async function cloudSave(key, value, _retryCount) {
-  // Phase 2: for tasks key, only persist the hot subset.
-  // Cold tasks live in id=tasks_archive (modified by the migration script only).
-  // This keeps the per-save payload at ~1 MB instead of ~3 MB.
+  // Phase 3: tasks key now uses per-row writes (atomic at DB row level, no merge race).
   if (key === "tasks" && Array.isArray(value)) {
-    value = _splitHotCold(value).hot;
+    return _cloudSaveTasksPerRow(value, _retryCount);
   }
   if (!_skipLocalStorage[key]) {
     try { localStorage.setItem("s7_" + key, JSON.stringify(value)); } catch(e2) {
@@ -139,6 +148,13 @@ async function cloudSave(key, value, _retryCount) {
 // then saves. This way, if Carla creates 5 tasks and Mara updates 1 at the same time,
 // BOTH changes are preserved.
 async function cloudSaveTasksMerge(localTasks, _retryCount) {
+  // Phase 3: delegate to per-row save. Concurrent-write safety is provided by row-level
+  // DB atomicity, not whole-blob client-side merge.
+  return _cloudSaveTasksPerRow(localTasks, _retryCount);
+}
+
+// Phase 2 legacy (kept for reference / fallback path; not called in Phase 3):
+async function _cloudSaveTasksMergeLegacy(localTasks, _retryCount) {
   try { localStorage.setItem("s7_tasks", JSON.stringify(localTasks)); } catch(e) {}
   try {
     // Read what's currently in Supabase
@@ -232,6 +248,116 @@ function _updateClockOffsetFromHeader(headerValue) {
   _clockOffsetLastSync = localMs;
 }
 function nowMs() { return Date.now() + _clockOffsetMs; }
+
+// ═══ Phase 3: Per-task rows in app_data (concurrent-write safety) ═══
+// Each task lives in its own app_data row with id="task_<taskId>". Writes are
+// per-row UPDATE/UPSERT/DELETE — atomic at DB row level. No more whole-blob
+// merge races between concurrent users.
+//
+// Read path: SELECT id LIKE 'task_%' (paginated, strict-prefix filtered client-side
+//   because SQL '_' is a single-char wildcard that incidentally matches taskActivity etc.).
+// Write path: diff current tasks vs _lastSyncedTasks, bulk-upsert changed rows,
+//   bulk-delete removed rows. Module-level _lastSyncedTasks holds the last
+//   successfully synced snapshot for diffing.
+// Realtime: postgres_changes on app_data with id startsWith 'task_' updates exactly
+//   the one task in the in-memory state.
+var _lastSyncedTasks = [];
+
+async function _cloudLoadAllTasks() {
+  var supabaseClient = (typeof supabase !== "undefined") ? supabase : null;
+  if (!supabaseClient) return [];
+  var all = [];
+  try {
+    for (var offset = 0; offset < 20000; offset += 1000) {
+      var { data, error } = await supabaseClient
+        .from("app_data")
+        .select("id, data")
+        .like("id", "task_%")
+        .range(offset, offset + 999);
+      if (error) { logError("SUPABASE_LOAD", "Per-row load failed", error.message || ""); break; }
+      if (!data || data.length === 0) break;
+      for (var i = 0; i < data.length; i++) all.push(data[i]);
+      if (data.length < 1000) break;
+    }
+  } catch (e) {
+    logError("SUPABASE_LOAD", "Per-row load exception", e.message || "");
+  }
+  // Strict prefix filter — exclude tasksActivity, tasksBackup, tasks, tasks_archive, etc.
+  var out = [];
+  for (var j = 0; j < all.length; j++) {
+    var r = all[j];
+    if (r && r.id && typeof r.id === "string" && r.id.indexOf("task_") === 0 && r.data) {
+      out.push(r.data);
+    }
+  }
+  return out;
+}
+
+function _diffTasks(current, baseline) {
+  var prevById = {};
+  for (var i = 0; i < baseline.length; i++) {
+    var p = baseline[i];
+    if (p && p.id) prevById[p.id] = p;
+  }
+  var upserts = [];
+  var seen = {};
+  for (var k = 0; k < current.length; k++) {
+    var c = current[k];
+    if (!c || !c.id) continue;
+    seen[c.id] = true;
+    var pp = prevById[c.id];
+    if (!pp) { upserts.push(c); continue; } // new task
+    // Changed if updatedAt or _deleted flag differs (cheap comparison)
+    if (c.updatedAt !== pp.updatedAt || c._deleted !== pp._deleted) {
+      upserts.push(c);
+    }
+  }
+  var deletes = [];
+  for (var pid in prevById) {
+    if (!seen[pid]) deletes.push(pid);
+  }
+  return { upserts: upserts, deletes: deletes };
+}
+
+async function _cloudSaveTasksPerRow(localTasks, _retryCount) {
+  var supabaseClient = (typeof supabase !== "undefined") ? supabase : null;
+  if (!supabaseClient) return localTasks;
+  try { localStorage.setItem("s7_tasks", JSON.stringify(localTasks)); } catch(e) {}
+  var diff = _diffTasks(localTasks, _lastSyncedTasks);
+  if (diff.upserts.length === 0 && diff.deletes.length === 0) return localTasks;
+  // Bulk upsert in batches of 100 (PostgREST handles this fine; smaller is safer)
+  var BATCH = 100;
+  if (diff.upserts.length > 0) {
+    for (var i = 0; i < diff.upserts.length; i += BATCH) {
+      var slice = diff.upserts.slice(i, i + BATCH);
+      var rows = slice.map(function(t) { return { id: "task_" + t.id, data: t, updated_at: new Date().toISOString() }; });
+      var { error } = await supabaseClient.from("app_data").upsert(rows, { onConflict: "id" });
+      if (error) {
+        var retries = _retryCount || 0;
+        logError("SUPABASE_SAVE", "Per-row upsert failed (retry " + retries + "/2)", error.message || JSON.stringify(error));
+        if (retries < 2) {
+          await new Promise(function(r) { setTimeout(r, 1000 * (retries + 1)); });
+          return _cloudSaveTasksPerRow(localTasks, retries + 1);
+        }
+        logError("SUPABASE_SAVE_FAIL", "FINAL FAIL per-row upsert", error.message || "");
+        throw new Error("Per-row save failed: " + (error.message || ""));
+      }
+    }
+  }
+  if (diff.deletes.length > 0) {
+    var deleteIds = diff.deletes.map(function(id) { return "task_" + id; });
+    for (var d = 0; d < deleteIds.length; d += BATCH) {
+      var dslice = deleteIds.slice(d, d + BATCH);
+      var { error: delErr } = await supabaseClient.from("app_data").delete().in("id", dslice);
+      if (delErr) {
+        logError("SUPABASE_SAVE", "Per-row delete failed", delErr.message || "");
+        // Continue — deletes are best-effort; failed deletes leave a row but don't lose data
+      }
+    }
+  }
+  _lastSyncedTasks = localTasks.slice();
+  return localTasks;
+}
 
 // ═══ Phase 2: Hot/Cold task split (perf — shrinks save payload) ═══
 // Hot = all non-Done + tombstones + most recently updated 500 Done.
@@ -753,10 +879,9 @@ export default function App() {
       } catch (e) {
         console.warn("[CLOCK SYNC] Initial sync failed, falling back to local clock:", e && e.message);
       }
-      var [t, tk, tkArchive, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc, ta, lar] = await Promise.all([
+      var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc, ta, lar] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
-        cloudLoad("tasks_archive", []),
         cloudLoad("logs", []),
         cloudLoad("sessions", {}),
         cloudLoad("shops", DEF_SHOPS),
@@ -793,10 +918,11 @@ export default function App() {
         cloudLoad("leagueArchive", []),
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
-      // Phase 2: union hot (id=tasks) + archive (id=tasks_archive) for in-memory state.
-      // Writes only touch hot via cloudSave's hot-filter. Archive is read-only here.
-      var unionTasks = (tk || []).concat(tkArchive || []);
-      _setTasks(unionTasks); tasksRef.current = unionTasks;
+      // Phase 3: tasks come from per-row format (cloudLoad("tasks") routes to _cloudLoadAllTasks).
+      // Old id=tasks and id=tasks_archive rows are preserved as backups but not consulted.
+      _setTasks(tk || []); tasksRef.current = tk || [];
+      // Initialize per-row save diff baseline so the first user save doesn't re-upsert every task
+      _lastSyncedTasks = (tk || []).slice();
       setLogs((lg || []).slice(0, 500));
       setSessions(se || {});
       if (sh && sh.length > 0) setShops(sh); else { setShops(DEF_SHOPS); cloudSave("shops", DEF_SHOPS); }
@@ -941,6 +1067,46 @@ export default function App() {
 
       // Use _setTasks directly (not the wrapped setTasks) to avoid save loop
       // Realtime updates come FROM Supabase, so we must not save them back
+
+      // Phase 3: per-task row events (id starts with "task_") apply to a single task only.
+      if (typeof key === "string" && key.indexOf("task_") === 0) {
+        var evtType = payload.eventType || payload.type;
+        if (evtType === "DELETE") {
+          var deletedId = key.slice(5); // strip "task_" prefix
+          _setTasks(function(prev) {
+            var next = [];
+            for (var i = 0; i < prev.length; i++) if (prev[i].id !== deletedId) next.push(prev[i]);
+            tasksRef.current = next;
+            // Keep _lastSyncedTasks in sync so the next diff doesn't try to re-delete
+            _lastSyncedTasks = _lastSyncedTasks.filter(function(t) { return t.id !== deletedId; });
+            return next;
+          });
+        } else if (payload.new && payload.new.data) {
+          var incoming = payload.new.data;
+          if (incoming && incoming.id) {
+            _setTasks(function(prev) {
+              var found = false;
+              var next = prev.map(function(t) {
+                if (t.id === incoming.id) { found = true; return incoming; }
+                return t;
+              });
+              if (!found) next = [incoming].concat(next);
+              tasksRef.current = next;
+              // Update baseline so we don't re-upsert this incoming version on next save
+              var lsFound = false;
+              _lastSyncedTasks = _lastSyncedTasks.map(function(t) {
+                if (t.id === incoming.id) { lsFound = true; return incoming; }
+                return t;
+              });
+              if (!lsFound) _lastSyncedTasks = [incoming].concat(_lastSyncedTasks);
+              return next;
+            });
+          }
+        }
+        return;
+      }
+
+      // Legacy: id="tasks" blob (rare now — pre-Phase-3 fallback only)
       if (key === "tasks") { _setTasks(payload.new.data); tasksRef.current = payload.new.data; }
       if (key === "taskEditors") setTaskEditors(payload.new.data);
       if (key === "announcements") setAnnouncements(payload.new.data);
@@ -976,23 +1142,20 @@ export default function App() {
     return function() { clearInterval(iv); };
   }, [user]);
 
-  // ═══ MODIF: Auto-resync tasks la fiecare 30s (backup pentru realtime) ═══
-  // Daca realtime subscription se deconecteaza (tab in background, reteaua pica, etc),
-  // utilizatorul poate ramane cu state vechi. Polling-ul asta re-incarca taskurile din
-  // Supabase la fiecare 30 secunde si actualizeaza local state daca exista versiune mai noua.
-  // Nu suprascrie modificari locale in curs de salvare (verifica _pendingKeys).
+  // ═══ Phase 3: Auto-resync tasks la fiecare 5 min (backup pentru realtime) ═══
+  // Cu per-row writes, realtime e principal mechanism. Polling-ul reincarca toate
+  // task-urile via _cloudLoadAllTasks doar la 5 min interval (vs 30s in Phase 2)
+  // pentru a recupera dupa o pierdere de conexiune realtime fara cost de bandwidth.
   useEffect(function() {
     if (loading || !user) return;
     var interval = setInterval(async function() {
       // Skip daca avem o salvare in curs - nu vrem sa suprascriem date locale
       if (_pendingKeys["tasks"]) return;
-      // Skip daca am salvat ceva recent (5s grace period dupa ultima salvare)
       var lastSave = _saveVersions["tasks"] || 0;
       if (Date.now() - lastSave < 5000) return;
       try {
-        var { data: row, error } = await supabase.from("app_data").select("data").eq("id", "tasks").maybeSingle();
-        if (error || !row || !Array.isArray(row.data)) return;
-        var remoteTasks = row.data;
+        var remoteTasks = await _cloudLoadAllTasks();
+        if (!Array.isArray(remoteTasks) || remoteTasks.length === 0) return;
         // ═══ MERGE PER-TASK pe baza updatedAt ═══
         // In loc sa suprascriu tot array-ul local cu remote (care poate avea date stale),
         // pentru fiecare task pastrez versiunea cu updatedAt mai recent.
@@ -1027,11 +1190,13 @@ export default function App() {
         if (changed) {
           _setTasks(merged);
           tasksRef.current = merged;
+          // Keep diff baseline in sync so the next save doesn't re-upsert tasks we just synced
+          _lastSyncedTasks = merged.slice();
         }
       } catch (e) {
-        // Tacut - polling-ul incearca din nou peste 30s
+        // Tacut - polling-ul incearca din nou peste 5 min
       }
-    }, 30000);
+    }, 300000); // 5 minutes (was 30s in Phase 2 — heavier with per-row reads)
     return function() { clearInterval(interval); };
   }, [loading, user]);
 
