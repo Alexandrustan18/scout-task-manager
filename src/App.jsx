@@ -743,12 +743,12 @@ export default function App() {
       setProducts(pr || []);
       // Bug 4 fix: sweep stale running timers on load (running >8h is almost certainly abandoned)
       var sweptTimers = tm || {};
-      var nowMs = Date.now();
+      var sweepNow = nowMs();
       var sweptCount = 0;
       Object.keys(sweptTimers).forEach(function(stid) {
         var stm = sweptTimers[stid];
         if (stm && stm.running && stm.startedAt) {
-          var ageSec = Math.floor((nowMs - new Date(stm.startedAt).getTime()) / 1000);
+          var ageSec = Math.floor((sweepNow - new Date(stm.startedAt).getTime()) / 1000);
           if (ageSec > 28800 || ageSec < 0) {
             sweptTimers[stid] = { running: false, total: stm.total || 0, startedAt: null };
             sweptCount++;
@@ -1212,20 +1212,26 @@ export default function App() {
   // Auto-stop timers that are running on hidden/invalid tasks
   useEffect(function() {
     if (loading || tasks.length === 0) return;
-    var needsUpdate = false;
-    var newTimers = Object.assign({}, timers);
-    Object.keys(timers).forEach(function(tid) {
-      var tm = timers[tid];
-      if (!tm || !tm.running) return;
-      var t = tasks.find(function(x) { return x.id === tid; });
-      // Stop if task doesn't exist, is a campaign parent, or not In Progress
-      if (!t || t._campaignParent === true || t.status !== "In Progress") {
-        var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0;
-        newTimers[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null };
-        needsUpdate = true;
-      }
+    setTimers(function(prevTimers) {
+      var newTimers = Object.assign({}, prevTimers);
+      var needsUpdate = false;
+      Object.keys(prevTimers).forEach(function(tid) {
+        var tm = prevTimers[tid];
+        if (!tm || !tm.running) return;
+        var t = tasks.find(function(x) { return x.id === tid; });
+        // Stop if task doesn't exist, is a campaign parent, or not In Progress
+        if (!t || t._campaignParent === true || t.status !== "In Progress") {
+          // Bug 4 hardening: server-aligned clock + clamp to [0, 8h] to neutralize
+          // negative or massive values from cross-client clock skew.
+          var el = tm.startedAt ? Math.floor((nowMs() - new Date(tm.startedAt).getTime()) / 1000) : 0;
+          if (el < 0) el = 0;
+          if (el > 28800) el = 28800;
+          newTimers[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null };
+          needsUpdate = true;
+        }
+      });
+      return needsUpdate ? newTimers : prevTimers;
     });
-    if (needsUpdate) setTimers(newTimers);
   }, [tasks, loading]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("templates", templates, 1000); }, [templates]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("targets", targets, 1000); }, [targets]);
@@ -1830,7 +1836,7 @@ export default function App() {
     if (tm.running && tm.startedAt) {
       // Bug 4 fix: cap running elapsed at 8h so phantom timers (abandoned, clock skew)
       // do not display absurd values like "5 min real = 40 min worked".
-      var el = Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000);
+      var el = Math.floor((nowMs() - new Date(tm.startedAt).getTime()) / 1000);
       if (el < 0) el = 0;
       if (el > 28800) el = 28800;
       return (tm.total || 0) + el;
@@ -1842,7 +1848,12 @@ export default function App() {
     setTimers(function(p) {
       var tm = p[tid] || { running: false, total: 0, startedAt: null };
       var n = Object.assign({}, p);
-      if (tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; n[tid] = { running: false, total: tm.total + el, startedAt: null }; }
+      if (tm.running) {
+        var el = tm.startedAt ? Math.floor((nowMs() - new Date(tm.startedAt).getTime()) / 1000) : 0;
+        if (el < 0) el = 0;
+        if (el > 28800) el = 28800;
+        n[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null };
+      }
       else { n[tid] = { running: true, total: tm.total, startedAt: ts() }; }
       return n;
     });
@@ -2050,7 +2061,7 @@ export default function App() {
       setTimers(function(p) {
         var tm = p[tid];
         if (!tm || !tm.running) return p;
-        var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0;
+        var el = tm.startedAt ? Math.floor((nowMs() - new Date(tm.startedAt).getTime()) / 1000) : 0;
         if (el > 28800) el = 28800;
         if (el < 0) el = 0;
         capturedEl = el;
@@ -2632,7 +2643,13 @@ export default function App() {
         newSH[tid] = newSH[tid].concat([{ status: "Done", at: ts() }]);
         setStatusHistory(newSH);
         immediateSave("statusHistory", newSH).catch(function(e) {});
-        var tm = timers[tid]; if (tm && tm.running) { var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0; setTimers(function(p2) { var n2 = Object.assign({}, p2); n2[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n2; }); }
+        var tm = timers[tid];
+        if (tm && tm.running) {
+          var el = tm.startedAt ? Math.floor((nowMs() - new Date(tm.startedAt).getTime()) / 1000) : 0;
+          if (el < 0) el = 0;
+          if (el > 28800) el = 28800;
+          setTimers(function(p2) { var n2 = Object.assign({}, p2); n2[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n2; });
+        }
         setShowFinalize(null);
       }} onClose={function() { setShowFinalize(null); }} />}
       {showBulkDupModal && <BulkDupModal
@@ -3480,7 +3497,7 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
           {t.shop && <Badge bg="#ECFDF5" color={GR}>{t.shop}</Badge>}
           <Badge bg={SBG[t.status]} color={SC[t.status]}>{t.status}</Badge>
           {ov && <Badge bg="#FEF2F2" color="#DC2626">Intarziat</Badge>}
-          {running && <span style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft((timers[t.id].total || 0) + (timers[t.id].startedAt ? Math.floor((Date.now() - new Date(timers[t.id].startedAt).getTime()) / 1000) : 0))}</span>}
+          {running && <span style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", fontVariantNumeric: "tabular-nums" }}>{ft((timers[t.id].total || 0) + (timers[t.id].startedAt ? Math.floor((nowMs() - new Date(timers[t.id].startedAt).getTime()) / 1000) : 0))}</span>}
         </div>;
       })}
       {activeTasks.length > 5 && <div style={{ fontSize: 11, color: "#94A3B8", textAlign: "center", marginTop: 6 }}>...si inca {activeTasks.length - 5} taskuri. Vezi toate in pagina Taskuri.</div>}
@@ -6449,7 +6466,7 @@ function TaskModal({ task, team, assUsers, shops, products, onSave, onClose, tas
     if (!task || !task.id) return;
     var editor = taskEditors && taskEditors[task.id];
     if (editor && editor.userId !== user) {
-      var age = Date.now() - new Date(editor.at).getTime();
+      var age = nowMs() - new Date(editor.at).getTime();
       if (age < 120000) {
         // show subtle warning in console, not blocking UI
         console.log("Conflict: " + editor.name + " is also editing this task");
