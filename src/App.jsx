@@ -264,23 +264,30 @@ function nowMs() { return Date.now() + _clockOffsetMs; }
 var _lastSyncedTasks = [];
 
 async function _cloudLoadAllTasks() {
-  var supabaseClient = (typeof supabase !== "undefined") ? supabase : null;
-  if (!supabaseClient) return [];
+  // Use raw fetch + Range header (supabase-js wrapper was returning empty for some reason).
+  var SUPA_URL = "https://ploucecgizjwyumzmhmo.supabase.co";
+  var SUPA_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
   var all = [];
   try {
     for (var offset = 0; offset < 20000; offset += 1000) {
-      var { data, error } = await supabaseClient
-        .from("app_data")
-        .select("id, data")
-        .like("id", "task_%")
-        .range(offset, offset + 999);
-      if (error) { logError("SUPABASE_LOAD", "Per-row load failed", error.message || ""); break; }
-      if (!data || data.length === 0) break;
-      for (var i = 0; i < data.length; i++) all.push(data[i]);
-      if (data.length < 1000) break;
+      var resp = await fetch(SUPA_URL + "/rest/v1/app_data?id=like.task_%25&select=id,data", {
+        headers: {
+          apikey: SUPA_KEY,
+          Authorization: "Bearer " + SUPA_KEY,
+          Range: offset + "-" + (offset + 999),
+        },
+      });
+      if (!resp.ok) {
+        logError("SUPABASE_LOAD", "Per-row load HTTP " + resp.status, "");
+        break;
+      }
+      var batch = await resp.json();
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      for (var i = 0; i < batch.length; i++) all.push(batch[i]);
+      if (batch.length < 1000) break;
     }
   } catch (e) {
-    logError("SUPABASE_LOAD", "Per-row load exception", e.message || "");
+    logError("SUPABASE_LOAD", "Per-row load exception", (e && e.message) || "");
   }
   // Strict prefix filter — exclude tasksActivity, tasksBackup, tasks, tasks_archive, etc.
   var out = [];
@@ -320,27 +327,38 @@ function _diffTasks(current, baseline) {
 }
 
 async function _cloudSaveTasksPerRow(localTasks, _retryCount) {
-  var supabaseClient = (typeof supabase !== "undefined") ? supabase : null;
-  if (!supabaseClient) return localTasks;
+  // Use raw fetch (consistent with _cloudLoadAllTasks).
+  var SUPA_URL = "https://ploucecgizjwyumzmhmo.supabase.co";
+  var SUPA_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
   try { localStorage.setItem("s7_tasks", JSON.stringify(localTasks)); } catch(e) {}
   var diff = _diffTasks(localTasks, _lastSyncedTasks);
   if (diff.upserts.length === 0 && diff.deletes.length === 0) return localTasks;
-  // Bulk upsert in batches of 100 (PostgREST handles this fine; smaller is safer)
   var BATCH = 100;
   if (diff.upserts.length > 0) {
     for (var i = 0; i < diff.upserts.length; i += BATCH) {
       var slice = diff.upserts.slice(i, i + BATCH);
       var rows = slice.map(function(t) { return { id: "task_" + t.id, data: t, updated_at: new Date().toISOString() }; });
-      var { error } = await supabaseClient.from("app_data").upsert(rows, { onConflict: "id" });
-      if (error) {
+      var resp = await fetch(SUPA_URL + "/rest/v1/app_data?on_conflict=id", {
+        method: "POST",
+        headers: {
+          apikey: SUPA_KEY,
+          Authorization: "Bearer " + SUPA_KEY,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates",
+        },
+        body: JSON.stringify(rows),
+      });
+      if (!resp.ok) {
         var retries = _retryCount || 0;
-        logError("SUPABASE_SAVE", "Per-row upsert failed (retry " + retries + "/2)", error.message || JSON.stringify(error));
+        var bodyText = "";
+        try { bodyText = await resp.text(); } catch(e) {}
+        logError("SUPABASE_SAVE", "Per-row upsert HTTP " + resp.status + " (retry " + retries + "/2)", bodyText.slice(0, 200));
         if (retries < 2) {
           await new Promise(function(r) { setTimeout(r, 1000 * (retries + 1)); });
           return _cloudSaveTasksPerRow(localTasks, retries + 1);
         }
-        logError("SUPABASE_SAVE_FAIL", "FINAL FAIL per-row upsert", error.message || "");
-        throw new Error("Per-row save failed: " + (error.message || ""));
+        logError("SUPABASE_SAVE_FAIL", "FINAL FAIL per-row upsert", bodyText.slice(0, 200));
+        throw new Error("Per-row save failed: HTTP " + resp.status);
       }
     }
   }
@@ -348,10 +366,15 @@ async function _cloudSaveTasksPerRow(localTasks, _retryCount) {
     var deleteIds = diff.deletes.map(function(id) { return "task_" + id; });
     for (var d = 0; d < deleteIds.length; d += BATCH) {
       var dslice = deleteIds.slice(d, d + BATCH);
-      var { error: delErr } = await supabaseClient.from("app_data").delete().in("id", dslice);
-      if (delErr) {
-        logError("SUPABASE_SAVE", "Per-row delete failed", delErr.message || "");
-        // Continue — deletes are best-effort; failed deletes leave a row but don't lose data
+      // PostgREST DELETE with in.(...) filter
+      var idList = dslice.map(function(x) { return '"' + x.replace(/"/g, '\\"') + '"'; }).join(",");
+      var delResp = await fetch(SUPA_URL + "/rest/v1/app_data?id=in.(" + encodeURIComponent(idList) + ")", {
+        method: "DELETE",
+        headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY },
+      });
+      if (!delResp.ok) {
+        logError("SUPABASE_SAVE", "Per-row delete HTTP " + delResp.status, "");
+        // Continue — deletes are best-effort
       }
     }
   }
