@@ -294,7 +294,7 @@ async function _loadErrorLogFromSupabase() {
   try {
     var { data } = await supabase.from("app_data").select("data").eq("id", "errorLog").maybeSingle();
     if (data && data.data && Array.isArray(data.data)) {
-      _errorLog = data.data;
+      _errorLog = data.data.slice(0, 200);
       _errorLogListeners.forEach(function(fn) { try { fn(_errorLog); } catch(e) {} });
     }
   } catch(e) {}
@@ -376,6 +376,24 @@ var MN = ["Ian", "Feb", "Mar", "Apr", "Mai", "Iun", "Iul", "Aug", "Sep", "Oct", 
 function fd(i) { if (!i) return ""; var d = new Date(i); return d.getDate() + " " + MN[d.getMonth()]; }
 function ff(i) { if (!i) return ""; var d = new Date(i); return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" }) + " " + d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }); }
 function fr(i) { if (!i) return "-"; var df = Date.now() - new Date(i).getTime(); if (df < 60000) return "Acum"; if (df < 3600000) return Math.floor(df / 60000) + "m"; if (df < 86400000) return Math.floor(df / 3600000) + "h"; return fd(i); }
+
+// ═══ Phase 1: Cap fast-growing aux arrays to prevent Supabase blob bloat (perf) ═══
+function _trimNotifs(arr) {
+  if (!Array.isArray(arr) || arr.length <= 500) return arr;
+  return arr.slice().sort(function(a, b) {
+    var ta = a && a.time ? new Date(a.time).getTime() : 0;
+    var tb = b && b.time ? new Date(b.time).getTime() : 0;
+    return tb - ta;
+  }).slice(0, 500);
+}
+function _trimTaskActivity(arr) {
+  if (!Array.isArray(arr) || arr.length <= 1000) return arr;
+  return arr.slice().sort(function(a, b) {
+    var ta = a && a.at ? new Date(a.at).getTime() : 0;
+    var tb = b && b.at ? new Date(b.at).getTime() : 0;
+    return tb - ta;
+  }).slice(0, 1000);
+}
 function isTd(i) { return i && ds(i) === TD; }
 function isTm(i) { return i && ds(i) === TM; }
 function isP(i) { return i && ds(i) < TD; }
@@ -737,7 +755,7 @@ export default function App() {
       ]);
       if (t && Object.keys(t).length > 0) setTeam(t); else { setTeam(DEF_TEAM); cloudSave("team", DEF_TEAM); }
       _setTasks(tk || []); tasksRef.current = tk || [];
-      setLogs(lg || []);
+      setLogs((lg || []).slice(0, 500));
       setSessions(se || {});
       if (sh && sh.length > 0) setShops(sh); else { setShops(DEF_SHOPS); cloudSave("shops", DEF_SHOPS); }
       setProducts(pr || []);
@@ -760,7 +778,7 @@ export default function App() {
       if (tpl && tpl.length > 0) setTemplates(tpl); else { setTemplates(DEF_TEMPLATES); cloudSave("templates", DEF_TEMPLATES); }
       setTargets(tgt || []);
       setSheets(sht || []);
-      setNotifications(nf || []);
+      setNotifications(_trimNotifs(nf || []));
       if (tt && tt.length > 0) setTaskTypes(tt); else { setTaskTypes(DEF_TASK_TYPES); cloudSave("taskTypes", DEF_TASK_TYPES); }
       if (dp && dp.length > 0) setDepartments(dp); else { setDepartments(DEF_DEPARTMENTS); cloudSave("departments", DEF_DEPARTMENTS); }
       if (plf && plf.length > 0) setPlatforms(plf); else { setPlatforms(DEF_PLATFORMS); cloudSave("platforms", DEF_PLATFORMS); }
@@ -790,7 +808,7 @@ export default function App() {
       setWheelHistory(wh || []);
       setPenalties(pen || []);
       if (pc) setPenaltyConfig(pc);
-      setTaskActivity(ta || []);
+      setTaskActivity(_trimTaskActivity(ta || []));
       setLeagueArchive(lar || []);
       setLoginTrack(lt || {});
       setRecurringTasks(rc || []);
@@ -894,7 +912,7 @@ export default function App() {
               setTimeout(function() { setToasts(function(tp) { return tp.filter(function(x) { return x.id !== n.id; }); }); }, 6000);
             });
           }
-          return incoming;
+          return _trimNotifs(incoming);
         });
       }
     }).subscribe();
@@ -1074,7 +1092,7 @@ export default function App() {
       try {
         var { data } = await supabase.from("app_data").select("data").eq("id", "errorLog").maybeSingle();
         if (data && data.data && Array.isArray(data.data)) {
-          _errorLog = data.data;
+          _errorLog = data.data.slice(0, 200);
           setErrorLog(_errorLog.slice());
         }
       } catch(e) {}
@@ -1251,7 +1269,14 @@ export default function App() {
   useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("productAudit", productAudit, 1000); }, [productAudit]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("allTags", allTags, 1000); }, [allTags]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("achievements", achievements, 1000); }, [achievements]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("dailyChallenge", dailyChallenge, 1000); }, [dailyChallenge]);
+  useEffect(function() {
+    if (loading || !_firstRenderDoneRef.current) return;
+    // Phase 1 fix: never save null/undefined to dailyChallenge — Supabase column is NOT NULL.
+    // Previously this triggered ~68 SUPABASE_SAVE errors per session on startup before the
+    // daily-reset hydrated the value.
+    if (dailyChallenge === null || dailyChallenge === undefined) return;
+    debouncedSave("dailyChallenge", dailyChallenge, 1000);
+  }, [dailyChallenge]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("loginHistory", loginHistory, 2000); }, [loginHistory]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("announcements", announcements, 1000); }, [announcements]);
   useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("slas", slas, 1000); }, [slas]);
@@ -1543,7 +1568,7 @@ export default function App() {
   }, [user, team]);
   var addNotif = function(type, message, taskId, forUser) {
     var notif = { id: gid(), type: type, taskId: taskId || null, message: message, time: ts(), read: false, forUser: forUser || null };
-    setNotifications(function(p) { return [notif].concat(p); });
+    setNotifications(function(p) { return _trimNotifs([notif].concat(p)); });
     setToasts(function(p) { return p.concat([notif]).slice(-5); });
     setTimeout(function() { setToasts(function(p) { return p.filter(function(x) { return x.id !== notif.id; }); }); }, 6000);
   };
