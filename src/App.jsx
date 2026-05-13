@@ -682,6 +682,21 @@ export default function App() {
 
   useEffect(function() {
     async function loadAll() {
+      // ═══ Sync server clock (Bug 4 hardening) ═══
+      // Done before any Supabase work so all subsequent timestamps use the correct clock.
+      // Bounded by a 5s timeout so a slow/down Supabase never blocks app startup —
+      // if it times out, we fall back to local clock with offset 0 (no worse than before).
+      try {
+        var SUPA_URL_BOOT = "https://ploucecgizjwyumzmhmo.supabase.co";
+        var SUPA_KEY_BOOT = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+        var clockCtl = new AbortController();
+        var clockTimeout = setTimeout(function() { clockCtl.abort(); }, 5000);
+        var clockRes = await fetch(SUPA_URL_BOOT + "/rest/v1/", { method: "HEAD", headers: { apikey: SUPA_KEY_BOOT }, signal: clockCtl.signal });
+        clearTimeout(clockTimeout);
+        _updateClockOffsetFromHeader(clockRes.headers.get("date"));
+      } catch (e) {
+        console.warn("[CLOCK SYNC] Initial sync failed, falling back to local clock:", e && e.message);
+      }
       var [t, tk, lg, se, sh, pr, tm, tpl, tgt, sht, nf, tt, dp, lt, rc, stH, pa, at, ach, dc, lh, ann, sl, lv, lr, brd, plf, plr, uxp, mb, wc, wh, pen, pc, ta, lar] = await Promise.all([
         cloudLoad("team", DEF_TEAM),
         cloudLoad("tasks", []),
@@ -885,6 +900,21 @@ export default function App() {
     }).subscribe();
     return function() { supabase.removeChannel(channel); };
   }, []);
+
+  // Periodic clock re-sync (Bug 4 hardening) — keeps offset accurate during long sessions.
+  useEffect(function() {
+    if (!user) return;
+    var iv = setInterval(function() {
+      try {
+        var SUPA_URL_RS = "https://ploucecgizjwyumzmhmo.supabase.co";
+        var SUPA_KEY_RS = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+        fetch(SUPA_URL_RS + "/rest/v1/", { method: "HEAD", headers: { apikey: SUPA_KEY_RS } })
+          .then(function(r) { _updateClockOffsetFromHeader(r.headers.get("date")); })
+          .catch(function() { /* silent — keep current offset */ });
+      } catch (e) { /* silent */ }
+    }, 3600000); // every hour
+    return function() { clearInterval(iv); };
+  }, [user]);
 
   // ═══ MODIF: Auto-resync tasks la fiecare 30s (backup pentru realtime) ═══
   // Daca realtime subscription se deconecteaza (tab in background, reteaua pica, etc),
