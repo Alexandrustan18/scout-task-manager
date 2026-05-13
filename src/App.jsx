@@ -156,10 +156,17 @@ async function cloudSaveTasksMerge(localTasks, _retryCount) {
         // Task exists in both - use the one with newer updatedAt
         var localTime = localT.updatedAt ? new Date(localT.updatedAt).getTime() : 0;
         var remoteTime = remoteT.updatedAt ? new Date(remoteT.updatedAt).getTime() : 0;
-        if (localTime >= remoteTime) {
-          mergedMap[localT.id] = localT;
+        var winner = localTime >= remoteTime ? localT : remoteT;
+        // ═══ Bug 2 fix: status field uses statusAt-based priority ═══
+        // Prevents stale-tab non-status edits from reverting another tab's newer Done/etc.
+        // Falls back to updatedAt when statusAt is missing on either side.
+        var localStatusAt = localT.statusAt ? new Date(localT.statusAt).getTime() : localTime;
+        var remoteStatusAt = remoteT.statusAt ? new Date(remoteT.statusAt).getTime() : remoteTime;
+        if (localStatusAt !== remoteStatusAt && localT.status !== remoteT.status) {
+          var statusWinner = localStatusAt > remoteStatusAt ? localT : remoteT;
+          winner = Object.assign({}, winner, { status: statusWinner.status, statusAt: statusWinner.statusAt || statusWinner.updatedAt });
         }
-        // else: keep remote (it's newer)
+        mergedMap[localT.id] = winner;
       }
     });
 
@@ -697,7 +704,22 @@ export default function App() {
       setSessions(se || {});
       if (sh && sh.length > 0) setShops(sh); else { setShops(DEF_SHOPS); cloudSave("shops", DEF_SHOPS); }
       setProducts(pr || []);
-      setTimers(tm || {});
+      // Bug 4 fix: sweep stale running timers on load (running >8h is almost certainly abandoned)
+      var sweptTimers = tm || {};
+      var nowMs = Date.now();
+      var sweptCount = 0;
+      Object.keys(sweptTimers).forEach(function(stid) {
+        var stm = sweptTimers[stid];
+        if (stm && stm.running && stm.startedAt) {
+          var ageSec = Math.floor((nowMs - new Date(stm.startedAt).getTime()) / 1000);
+          if (ageSec > 28800 || ageSec < 0) {
+            sweptTimers[stid] = { running: false, total: stm.total || 0, startedAt: null };
+            sweptCount++;
+          }
+        }
+      });
+      if (sweptCount > 0) console.warn("[TIMER SWEEP] Stopped " + sweptCount + " abandoned timer(s) at load.");
+      setTimers(sweptTimers);
       if (tpl && tpl.length > 0) setTemplates(tpl); else { setTemplates(DEF_TEMPLATES); cloudSave("templates", DEF_TEMPLATES); }
       setTargets(tgt || []);
       setSheets(sht || []);
@@ -879,8 +901,16 @@ export default function App() {
           if (lt && !rt) { merged.push(lt); /* task local nou, inca nesalvat */ return; }
           var lTime = lt.updatedAt ? new Date(lt.updatedAt).getTime() : 0;
           var rTime = rt.updatedAt ? new Date(rt.updatedAt).getTime() : 0;
-          if (rTime > lTime) { merged.push(rt); changed = true; }
-          else { merged.push(lt); }
+          var winner = rTime > lTime ? rt : lt;
+          // ═══ Bug 2 fix: status uses statusAt-based priority (mirrors cloudSaveTasksMerge) ═══
+          var lStatusAt = lt.statusAt ? new Date(lt.statusAt).getTime() : lTime;
+          var rStatusAt = rt.statusAt ? new Date(rt.statusAt).getTime() : rTime;
+          if (lStatusAt !== rStatusAt && lt.status !== rt.status) {
+            var statusWinner = lStatusAt > rStatusAt ? lt : rt;
+            winner = Object.assign({}, winner, { status: statusWinner.status, statusAt: statusWinner.statusAt || statusWinner.updatedAt });
+          }
+          if (winner !== lt) changed = true;
+          merged.push(winner);
         });
         if (changed) {
           _setTasks(merged);
@@ -1742,7 +1772,19 @@ export default function App() {
     return { score: sc, done: dn, total: tot, active: ac, overdue: od, review: rv, avgTime: avg };
   }, [tasks, timers]);
 
-  var getTS = function(tid) { var tm = timers[tid]; if (!tm) return 0; if (tm.running && tm.startedAt) return tm.total + Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000); return tm.total; };
+  var getTS = function(tid) {
+    var tm = timers[tid];
+    if (!tm) return 0;
+    if (tm.running && tm.startedAt) {
+      // Bug 4 fix: cap running elapsed at 8h so phantom timers (abandoned, clock skew)
+      // do not display absurd values like "5 min real = 40 min worked".
+      var el = Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000);
+      if (el < 0) el = 0;
+      if (el > 28800) el = 28800;
+      return (tm.total || 0) + el;
+    }
+    return tm.total || 0;
+  };
 
   var togTimer = function(tid) {
     setTimers(function(p) {
@@ -1920,7 +1962,8 @@ export default function App() {
     }
     // CRITICAL: Build new tasks array and save IMMEDIATELY to Supabase (no debounce)
     // This prevents data loss when user refreshes quickly after marking Done
-    var newTasks = tasks.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts() }) : x; });
+    // statusAt tracks status-change time separately so non-status edits in stale tabs cannot revert status (Bug 2 fix)
+    var newTasks = tasks.map(function(x) { return x.id === tid ? Object.assign({}, x, { status: st, updatedAt: ts(), statusAt: ts() }) : x; });
     setTasks(newTasks);
 
     if (prevTask) { pushUndo("STATUS_CHANGE", { taskId: tid, title: prevTask.title, oldStatus: prevTask.status }); addLog("STATUS", "\"" + prevTask.title + "\" -> " + st); addActivity(tid, prevTask.title, "STATUS", prevTask.status + " -> " + st); }
@@ -1948,14 +1991,25 @@ export default function App() {
       });
     }
     if (st === "Done" || st === "To Do") {
-      var tm = timers[tid];
-      if (tm && tm.running) {
+      // Bug 4 fix: read latest timer state INSIDE the setter callback (no stale closure)
+      // and cap elapsed at 8 hours to prevent phantom inflation from abandoned timers.
+      var capturedEl = 0;
+      var capturedTotal = 0;
+      setTimers(function(p) {
+        var tm = p[tid];
+        if (!tm || !tm.running) return p;
         var el = tm.startedAt ? Math.floor((Date.now() - new Date(tm.startedAt).getTime()) / 1000) : 0;
-        setTimers(function(p) { var n = Object.assign({}, p); n[tid] = { running: false, total: (tm.total || 0) + el, startedAt: null }; return n; });
-        // FEATURE 10: check speed achievement
-        if (st === "Done" && prevTask && el > 0 && (tm.total + el) < 3600) {
-          setTimeout(function() { checkAchievements(prevTask.assignee); }, 500);
-        }
+        if (el > 28800) el = 28800;
+        if (el < 0) el = 0;
+        capturedEl = el;
+        capturedTotal = tm.total || 0;
+        var n = Object.assign({}, p);
+        n[tid] = { running: false, total: capturedTotal + el, startedAt: null };
+        return n;
+      });
+      // FEATURE 10: check speed achievement (use captured values)
+      if (st === "Done" && prevTask && capturedEl > 0 && (capturedTotal + capturedEl) < 3600) {
+        setTimeout(function() { checkAchievements(prevTask.assignee); }, 500);
       }
     }
     if (st === "Done" && prevTask) {
@@ -2025,7 +2079,8 @@ export default function App() {
     var selected = selectedTasks.slice();
     var newTasks = tasks.map(function(x) {
       if (!selected.includes(x.id)) return x;
-      return Object.assign({}, x, { status: ns, updatedAt: ts() });
+      // statusAt tracks status-change time separately (Bug 2 fix)
+      return Object.assign({}, x, { status: ns, updatedAt: ts(), statusAt: ts() });
     });
     setTasks(newTasks);
 
@@ -5180,7 +5235,20 @@ function BackupPage({ taskBackups, setTaskBackups, tasks, setTasks, team, user, 
       d.remove.forEach(function(t) { idsToRemove.add(t.id); totalRemoved++; });
     });
 
-    setTasks(function(prev) { return prev.filter(function(t) { return !idsToRemove.has(t.id); }); });
+    // Bug 3 fix: use the same _deleted + delayed-cleanup pattern as delTask,
+    // otherwise the merge-save can silently re-add duplicates (or worse, lose unrelated tasks).
+    setTasks(function(prev) {
+      return prev.map(function(t) {
+        return idsToRemove.has(t.id) ? Object.assign({}, t, { _deleted: true, updatedAt: ts() }) : t;
+      });
+    });
+    setTimeout(function() {
+      _setTasks(function(prev) {
+        var cleaned = prev.filter(function(x) { return !x._deleted; });
+        tasksRef.current = cleaned;
+        return cleaned;
+      });
+    }, 2000);
     addLog("DEDUP", "Sterse " + totalRemoved + " duplicate");
     alert("Sterse " + totalRemoved + " duplicate! Backup salvat in caz ca vrei sa refaci.");
     setDupePreview(null);
