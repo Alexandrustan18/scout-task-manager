@@ -691,7 +691,7 @@ export default function App() {
         var SUPA_KEY_BOOT = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
         var clockCtl = new AbortController();
         var clockTimeout = setTimeout(function() { clockCtl.abort(); }, 5000);
-        var clockRes = await fetch(SUPA_URL_BOOT + "/rest/v1/", { method: "HEAD", headers: { apikey: SUPA_KEY_BOOT }, signal: clockCtl.signal });
+        var clockRes = await fetch(SUPA_URL_BOOT + "/rest/v1/app_data?select=id&limit=0", { method: "HEAD", headers: { apikey: SUPA_KEY_BOOT, Authorization: "Bearer " + SUPA_KEY_BOOT }, signal: clockCtl.signal });
         clearTimeout(clockTimeout);
         _updateClockOffsetFromHeader(clockRes.headers.get("date"));
       } catch (e) {
@@ -908,7 +908,7 @@ export default function App() {
       try {
         var SUPA_URL_RS = "https://ploucecgizjwyumzmhmo.supabase.co";
         var SUPA_KEY_RS = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
-        fetch(SUPA_URL_RS + "/rest/v1/", { method: "HEAD", headers: { apikey: SUPA_KEY_RS } })
+        fetch(SUPA_URL_RS + "/rest/v1/app_data?select=id&limit=0", { method: "HEAD", headers: { apikey: SUPA_KEY_RS, Authorization: "Bearer " + SUPA_KEY_RS } })
           .then(function(r) { _updateClockOffsetFromHeader(r.headers.get("date")); })
           .catch(function() { /* silent — keep current offset */ });
       } catch (e) { /* silent */ }
