@@ -201,6 +201,28 @@ async function cloudSaveTasksMerge(localTasks, _retryCount) {
   }
 }
 
+// ═══ Server clock sync (Bug 4 hardening) ═══
+// Clients can have wildly wrong system clocks (NTP off, manual changes, dead CMOS).
+// We sync to Supabase's HTTP `Date` header at startup and on every subsequent response
+// so all timer math uses one authoritative clock regardless of any user's local time.
+var _clockOffsetMs = 0;
+var _clockOffsetLastSync = 0;
+function _updateClockOffsetFromHeader(headerValue) {
+  if (!headerValue) return;
+  var serverMs = new Date(headerValue).getTime();
+  if (!isFinite(serverMs)) return;
+  var localMs = Date.now();
+  var newOffset = serverMs - localMs;
+  if (Math.abs(newOffset - _clockOffsetMs) > 2000 || _clockOffsetLastSync === 0) {
+    _clockOffsetMs = newOffset;
+    if (Math.abs(newOffset) > 60000) {
+      console.warn("[CLOCK SYNC] Local clock offset detected:", Math.round(newOffset / 1000) + "s. Server-corrected timestamps active.");
+    }
+  }
+  _clockOffsetLastSync = localMs;
+}
+function nowMs() { return Date.now() + _clockOffsetMs; }
+
 var saveTimers = {};
 var _latestValues = {};
 var _saveVersions = {};
@@ -345,7 +367,7 @@ var DEF_TEMPLATES = [
 ];
 
 function gid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-function ts() { return new Date().toISOString(); }
+function ts() { return new Date(Date.now() + _clockOffsetMs).toISOString(); }
 function ds(d) { var x = typeof d === "string" ? new Date(d) : d; return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0"); }
 var TD = ds(new Date());
 var TM = (function() { var d = new Date(); d.setDate(d.getDate() + 1); return ds(d); })();
