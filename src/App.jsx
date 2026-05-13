@@ -263,6 +263,15 @@ function nowMs() { return Date.now() + _clockOffsetMs; }
 //   the one task in the in-memory state.
 var _lastSyncedTasks = [];
 
+// One-time cleanup of stale localStorage from previous Phase 2 deploys (s7_tasks_archive
+// was ~1.88 MB; with Phase 3 writing s7_tasks at ~2.8 MB, the 5 MB localStorage budget
+// was exceeded and the s7_tasks write failed silently). Phase 3 doesn't read this key.
+try {
+  if (typeof localStorage !== "undefined" && localStorage.getItem("s7_tasks_archive")) {
+    localStorage.removeItem("s7_tasks_archive");
+  }
+} catch (e) { /* silent */ }
+
 async function _cloudLoadAllTasks() {
   // Use raw fetch + Range header (supabase-js wrapper was returning empty for some reason).
   var SUPA_URL = "https://ploucecgizjwyumzmhmo.supabase.co";
