@@ -3,8 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 
 // ═══ SUPABASE ═══
 var supabase = createClient(
-  "https://ploucecgizjwyumzmhmo.supabase.co",
-  "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh"
+  "https://34-62-56-73.nip.io",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU"
 );
 
 async function cloudLoad(key, fallback) {
@@ -274,8 +274,8 @@ try {
 
 async function _cloudLoadAllTasks() {
   // Use raw fetch + Range header (supabase-js wrapper was returning empty for some reason).
-  var SUPA_URL = "https://ploucecgizjwyumzmhmo.supabase.co";
-  var SUPA_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+  var SUPA_URL = "https://34-62-56-73.nip.io";
+  var SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU";
   var all = [];
   try {
     for (var offset = 0; offset < 20000; offset += 1000) {
@@ -337,8 +337,8 @@ function _diffTasks(current, baseline) {
 
 async function _cloudSaveTasksPerRow(localTasks, _retryCount) {
   // Use raw fetch (consistent with _cloudLoadAllTasks).
-  var SUPA_URL = "https://ploucecgizjwyumzmhmo.supabase.co";
-  var SUPA_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+  var SUPA_URL = "https://34-62-56-73.nip.io";
+  var SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU";
   try { localStorage.setItem("s7_tasks", JSON.stringify(localTasks)); } catch(e) {}
   var diff = _diffTasks(localTasks, _lastSyncedTasks);
   if (diff.upserts.length === 0 && diff.deletes.length === 0) return localTasks;
@@ -901,8 +901,8 @@ export default function App() {
       // Bounded by a 5s timeout so a slow/down Supabase never blocks app startup —
       // if it times out, we fall back to local clock with offset 0 (no worse than before).
       try {
-        var SUPA_URL_BOOT = "https://ploucecgizjwyumzmhmo.supabase.co";
-        var SUPA_KEY_BOOT = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+        var SUPA_URL_BOOT = "https://34-62-56-73.nip.io";
+        var SUPA_KEY_BOOT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU";
         var clockCtl = new AbortController();
         var clockTimeout = setTimeout(function() { clockCtl.abort(); }, 5000);
         var clockRes = await fetch(SUPA_URL_BOOT + "/rest/v1/app_data?select=id&limit=0", { method: "HEAD", headers: { apikey: SUPA_KEY_BOOT, Authorization: "Bearer " + SUPA_KEY_BOOT }, signal: clockCtl.signal });
@@ -1071,8 +1071,8 @@ export default function App() {
               clearTimeout(saveTimers[k]);
               delete saveTimers[k];
               try {
-                var SUPABASE_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
-                fetch("https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id", {
+                var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU";
+                fetch("https://34-62-56-73.nip.io/rest/v1/app_data?on_conflict=id", {
                   method: "POST",
                   headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY, "Prefer": "resolution=merge-duplicates" },
                   body: JSON.stringify({ id: k, data: _latestValues[k], updated_at: new Date().toISOString() }),
@@ -1164,8 +1164,8 @@ export default function App() {
     if (!user) return;
     var iv = setInterval(function() {
       try {
-        var SUPA_URL_RS = "https://ploucecgizjwyumzmhmo.supabase.co";
-        var SUPA_KEY_RS = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
+        var SUPA_URL_RS = "https://34-62-56-73.nip.io";
+        var SUPA_KEY_RS = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU";
         fetch(SUPA_URL_RS + "/rest/v1/app_data?select=id&limit=0", { method: "HEAD", headers: { apikey: SUPA_KEY_RS, Authorization: "Bearer " + SUPA_KEY_RS } })
           .then(function(r) { _updateClockOffsetFromHeader(r.headers.get("date")); })
           .catch(function() { /* silent — keep current offset */ });
@@ -1285,8 +1285,8 @@ export default function App() {
                 clearTimeout(saveTimers[k]);
                 delete saveTimers[k];
                 try {
-                  var SUPABASE_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
-                  fetch("https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id", {
+                  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU";
+                  fetch("https://34-62-56-73.nip.io/rest/v1/app_data?on_conflict=id", {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -1418,8 +1418,8 @@ export default function App() {
       Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) hasPending = true; });
       Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) hasPending = true; });
 
-      var SUPABASE_KEY = "sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh";
-      var SUPABASE_URL = "https://ploucecgizjwyumzmhmo.supabase.co";
+      var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU";
+      var SUPABASE_URL = "https://34-62-56-73.nip.io";
 
       // Flush everything that might be pending: both debounced timers AND immediate saves
       // that haven't completed yet (_pendingKeys tracks in-flight requests too)
