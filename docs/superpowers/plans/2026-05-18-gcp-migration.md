@@ -227,33 +227,28 @@ Expected: `docker-compose.yml` and `.env.example` exist in `~/supabase/`.
 - Create on VM: `~/supabase/.env`
 - Local: `/tmp/scout-tasks-credentials.txt` (downloaded back, kept off git)
 
-- [ ] **Step 1: Generate strong secrets locally and prepare the .env**
+- [ ] **Step 1: Generate strong secrets via Docker (no local Python deps needed)**
 
-On your local machine (NOT on VM yet):
+Run locally:
 ```bash
-cat > /tmp/gen-secrets.sh <<'EOF'
-#!/bin/bash
-set -e
-# Postgres password
+mkdir -p /tmp/migration && cd /tmp/migration
+
 POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 32)
-# JWT secret (must be 32+ chars)
 JWT_SECRET=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 48)
-# Build ANON and SERVICE_ROLE JWTs using the JWT secret
-# Use Python jwt library for clean generation
-ANON_KEY=$(python3 -c "
-import jwt, time
-exp = int(time.time()) + 60*60*24*365*5  # 5 years
-print(jwt.encode({'role':'anon','iss':'supabase','iat':int(time.time()),'exp':exp}, '$JWT_SECRET', algorithm='HS256'))
-")
-SERVICE_ROLE_KEY=$(python3 -c "
-import jwt, time
-exp = int(time.time()) + 60*60*24*365*5
-print(jwt.encode({'role':'service_role','iss':'supabase','iat':int(time.time()),'exp':exp}, '$JWT_SECRET', algorithm='HS256'))
-")
-# Dashboard admin password
 DASHBOARD_PASSWORD=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
 
-cat <<ENV
+# Generate JWT tokens using a one-shot Python docker container (5-year expiry)
+ANON_KEY=$(docker run --rm python:3-alpine sh -c "pip install -q pyjwt && python -c \"
+import jwt, time
+print(jwt.encode({'role':'anon','iss':'supabase','iat':int(time.time()),'exp':int(time.time())+60*60*24*365*5}, '$JWT_SECRET', algorithm='HS256'))
+\"")
+
+SERVICE_ROLE_KEY=$(docker run --rm python:3-alpine sh -c "pip install -q pyjwt && python -c \"
+import jwt, time
+print(jwt.encode({'role':'service_role','iss':'supabase','iat':int(time.time()),'exp':int(time.time())+60*60*24*365*5}, '$JWT_SECRET', algorithm='HS256'))
+\"")
+
+cat > /tmp/scout-tasks-credentials.txt <<EOF
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 JWT_SECRET=$JWT_SECRET
 ANON_KEY=$ANON_KEY
@@ -264,16 +259,14 @@ SITE_URL=https://work-heyads.ro
 ADDITIONAL_REDIRECT_URLS=https://work-heyads.ro,http://localhost:5173
 API_EXTERNAL_URL=https://api.work-heyads.ro
 SUPABASE_PUBLIC_URL=https://api.work-heyads.ro
-ENV
 EOF
-chmod +x /tmp/gen-secrets.sh
-# Ensure python3 has jwt library
-pip3 install pyjwt 2>&1 | tail -3 || python3 -m pip install pyjwt --user 2>&1 | tail -3
-/tmp/gen-secrets.sh > /tmp/scout-tasks-credentials.txt
+
 cat /tmp/scout-tasks-credentials.txt
 ```
 
-Expected: prints the env vars including JWT-format ANON_KEY (long base64) and SERVICE_ROLE_KEY. **The `ANON_KEY` value is what the App.jsx will use later.**
+Expected: prints all env vars including JWT-format `ANON_KEY` (starts with `eyJ`). **The `ANON_KEY` is what App.jsx will use.**
+
+If `docker run` fails (no local Docker), fall back to running the same Python on the VM after Task 3 completes — just SSH in and run the same code; copy the result back.
 
 - [ ] **Step 2: Push the generated .env to the VM and merge with the example template**
 
@@ -453,58 +446,93 @@ sudo rm -f /etc/nginx/sites-enabled/default
 
 Expected: creates the config file and the symlink in `sites-enabled`.
 
-- [ ] **Step 4: Temporarily comment out the SSL lines and reload nginx for HTTP-01 challenge**
+- [ ] **Step 4: Write HTTP-only config first, then reload nginx (so certbot's webroot challenge works)**
 
 Run:
 ```bash
-gcloud compute ssh scout-tasks --zone=europe-west1-b --command="
-  sudo sed -i 's|listen 443 ssl http2;|listen 443 ssl http2 default_server;|' /etc/nginx/sites-available/api.work-heyads.ro && \
-  # Replace the server block to remove SSL temporarily
-  sudo cp /etc/nginx/sites-available/api.work-heyads.ro /etc/nginx/sites-available/api.work-heyads.ro.bak && \
-  sudo bash -c 'cat > /etc/nginx/sites-available/api.work-heyads.ro' <<'NGINX'
+gcloud compute ssh scout-tasks --zone=europe-west1-b --command="sudo tee /etc/nginx/sites-available/api.work-heyads.ro > /dev/null <<'NGINX'
 server {
     listen 80;
     server_name api.work-heyads.ro;
-
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
-
     location / {
         return 200 'tls pending';
     }
 }
 NGINX
-  sudo nginx -t && sudo systemctl reload nginx
+sudo ln -sf /etc/nginx/sites-available/api.work-heyads.ro /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
 "
 ```
 
-Expected: `nginx -t` passes (`syntax is ok` and `test is successful`), then `reload nginx` returns silently.
+Expected: `nginx -t` passes, reload returns silently.
 
-- [ ] **Step 5: Run certbot to obtain a Let's Encrypt cert**
+- [ ] **Step 5: Obtain Let's Encrypt cert via webroot (does NOT modify nginx config — we control the final config)**
 
 Run:
 ```bash
 gcloud compute ssh scout-tasks --zone=europe-west1-b --command="
-  sudo certbot --nginx -d api.work-heyads.ro \
-    --non-interactive --agree-tos -m peltea.bogdann@gmail.com \
-    --redirect
+  sudo mkdir -p /var/www/html && \
+  sudo certbot certonly --webroot -w /var/www/html -d api.work-heyads.ro \
+    --non-interactive --agree-tos -m peltea.bogdann@gmail.com
 "
 ```
 
-Expected: outputs `Successfully received certificate.` and `Successfully deployed certificate`. Nginx config is automatically updated to use the cert.
+Expected: `Successfully received certificate.` Cert files at `/etc/letsencrypt/live/api.work-heyads.ro/fullchain.pem` + `privkey.pem`.
 
-- [ ] **Step 6: Restore the full proxy config (now with cert paths populated by certbot)**
+- [ ] **Step 6: Now write the FINAL nginx config (HTTPS + WebSocket upgrade) and reload**
 
 Run:
 ```bash
-gcloud compute ssh scout-tasks --zone=europe-west1-b --command="
-  sudo cp /etc/nginx/sites-available/api.work-heyads.ro.bak /etc/nginx/sites-available/api.work-heyads.ro && \
-  sudo nginx -t && sudo systemctl reload nginx
+gcloud compute ssh scout-tasks --zone=europe-west1-b --command="sudo tee /etc/nginx/sites-available/api.work-heyads.ro > /dev/null <<'NGINX'
+server {
+    listen 80;
+    server_name api.work-heyads.ro;
+    location /.well-known/acme-challenge/ { root /var/www/html; }
+    location / { return 301 https://\$host\$request_uri; }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.work-heyads.ro;
+
+    ssl_certificate /etc/letsencrypt/live/api.work-heyads.ro/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.work-heyads.ro/privkey.pem;
+
+    client_max_body_size 50M;
+
+    # Realtime WebSocket needs Upgrade headers — separate location BEFORE the catch-all
+    location /realtime/v1/ {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \"upgrade\";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 86400;
+    }
+
+    # PostgREST + Auth + everything else via Kong gateway (Supabase compose maps Kong to :8000)
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+NGINX
+sudo nginx -t && sudo systemctl reload nginx
 "
 ```
 
-Expected: `nginx -t` passes.
+Expected: `nginx -t` passes, reload silent.
 
 - [ ] **Step 7: Verify HTTPS works end-to-end**
 
@@ -606,20 +634,39 @@ Expected: no errors in Realtime logs. (Empty result is fine; Realtime ingests ev
 **Files:**
 - Create local: `/tmp/migration/<rowname>.csv` (one per row id)
 
-- [ ] **Step 1: Open Supabase dashboard SQL Editor**
+- [ ] **Step 1: Try direct pg_dump first (cleanest path — only falls back to SQL Editor if direct connection refused)**
+
+The Supabase egress quota typically restricts **REST/storage**, NOT direct PostgreSQL connections. Try this first:
+
+```bash
+# Get the connection string from Supabase dashboard: Settings → Database → Connection string (URI format)
+# Looks like: postgres://postgres.<ref>:<password>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
+# Or use the Direct connection: postgres://postgres:<password>@db.<ref>.supabase.co:5432/postgres
+SUPA_PG_URL="postgres://postgres:<password>@db.ploucecgizjwyumzmhmo.supabase.co:5432/postgres"
+
+# Export just the app_data table as a CSV-friendly dump
+psql "$SUPA_PG_URL" -c "\\copy (SELECT id, data, updated_at FROM app_data ORDER BY id) TO '/tmp/migration/app_data.csv' WITH (FORMAT csv, HEADER true)"
+
+ls -la /tmp/migration/app_data.csv
+wc -l /tmp/migration/app_data.csv
+```
+
+Expected: `app_data.csv` with ~3,000+ rows. If `psql` connection fails with "egress quota exceeded" or "connection refused", proceed to **Step 1b** (SQL Editor fallback). Otherwise skip 1b → go to Step 2.
+
+- [ ] **Step 1b: FALLBACK — SQL Editor CSV download (only if direct psql blocked)**
 
 User action: log into `https://supabase.com/dashboard/project/ploucecgizjwyumzmhmo/sql/new`.
 
-Run this query in the SQL Editor:
+In the SQL Editor, run:
 ```sql
-SELECT id, data, updated_at FROM app_data ORDER BY id;
+SELECT id, data::text AS data, updated_at FROM app_data ORDER BY id;
 ```
 
-In the result panel, click **"Download CSV"**.
+(`data::text` ensures JSONB is serialized as a CSV-safe string.)
 
-Save the file as `/tmp/migration/app_data.csv` on your local machine.
+Click **"Download CSV"** in the result panel. Save the file as `/tmp/migration/app_data.csv`.
 
-Expected: CSV file with ~3,000+ rows (2,981 task_* rows + ~20 config blobs + backup rows).
+Expected: CSV file with ~3,000+ rows. If SQL Editor refuses too (very unlikely — dashboard remains accessible per Supabase's email), pay for Supabase Pro for one month → run the script-based export → cancel Pro after migration.
 
 - [ ] **Step 2: Inspect the CSV format to confirm column names**
 
@@ -847,11 +894,11 @@ Expected: `HTTP 204`. Also delete any pipeline children spawned during step 6 (s
 Send Carla a short message:
 > "Platforma e mutată pe infrastructură proprie. Faceți **Ctrl+Shift+R** o dată în browser ca să primiți noua versiune. Totul funcționează la fel ca înainte; URL-ul rămâne work-heyads.ro."
 
-- [ ] **Step 9: Update Supabase project: pause or downgrade to free**
+- [ ] **Step 9: (OPTIONAL — defer for at least 24h) Pause the Supabase project**
 
-User action — log into Supabase, navigate to project `ploucecgizjwyumzmhmo` → Settings → General → **Pause project** (or **delete** if you're confident the migration is solid and don't want any chance of being billed further).
+**Don't do this immediately** — let the new backend run for at least 24h, observe a real workday's traffic, then come back to pause Supabase. The old project is already quota-blocked so it's not actively serving anyway; pausing it is permanent cleanup, not urgent.
 
-Expected: project paused. No further egress consumption.
+When ready: log into Supabase → project `ploucecgizjwyumzmhmo` → Settings → General → **Pause project**. Don't delete (delete is irreversible); pause keeps the option to unpause as an emergency rollback for ~90 days.
 
 ---
 
@@ -861,20 +908,33 @@ Expected: project paused. No further egress consumption.
 - Create on VM: `/usr/local/bin/scout-tasks-backup.sh`
 - Create on VM: `/etc/cron.d/scout-tasks-backup`
 
-- [ ] **Step 1: Write the backup script on the VM**
+- [ ] **Step 1: Determine the actual supabase install path + OS Login user**
 
 Run:
 ```bash
-gcloud compute ssh scout-tasks --zone=europe-west1-b --command="sudo tee /usr/local/bin/scout-tasks-backup.sh > /dev/null <<'BASH'
+SUPABASE_PATH=$(gcloud compute ssh scout-tasks --zone=europe-west1-b --command="find /home -name 'docker-compose.yml' -path '*supabase*' 2>/dev/null | head -1")
+echo "Supabase compose file at: $SUPABASE_PATH"
+SUPABASE_DIR=$(dirname "$SUPABASE_PATH")
+OSLOGIN_USER=$(gcloud compute ssh scout-tasks --zone=europe-west1-b --command="whoami")
+echo "OS Login user: $OSLOGIN_USER, dir: $SUPABASE_DIR"
+```
+
+Expected: e.g. `Supabase compose file at: /home/peltea_bogdann_gmail_com/supabase/docker-compose.yml`. Save both values for the next step.
+
+- [ ] **Step 2: Write the backup script on the VM with hardcoded absolute paths**
+
+Run (substitute the SUPABASE_DIR and OSLOGIN_USER from step 1):
+```bash
+gcloud compute ssh scout-tasks --zone=europe-west1-b --command="sudo tee /usr/local/bin/scout-tasks-backup.sh > /dev/null <<BASH
 #!/bin/bash
 set -e
-DATE=\$(date +%Y-%m-%d-%H%M)
-TMPFILE=/tmp/scout-tasks-pg-\$DATE.sql.gz
-cd /home/\$(ls /home | head -1)/supabase
-docker compose exec -T db pg_dump -U postgres -d postgres --no-owner --no-privileges | gzip > \$TMPFILE
-gsutil cp \$TMPFILE gs://scout-ai-491712-tasks-backups/
-rm -f \$TMPFILE
-echo \"\$(date -Iseconds) backup uploaded\" >> /var/log/scout-tasks-backup.log
+DATE=\\\$(date +%Y-%m-%d-%H%M)
+TMPFILE=/tmp/scout-tasks-pg-\\\$DATE.sql.gz
+cd $SUPABASE_DIR
+sudo -u $OSLOGIN_USER docker compose exec -T db pg_dump -U postgres -d postgres --no-owner --no-privileges | gzip > \\\$TMPFILE
+gcloud storage cp \\\$TMPFILE gs://scout-ai-491712-tasks-backups/
+rm -f \\\$TMPFILE
+echo \"\\\$(date -Iseconds) backup uploaded\" >> /var/log/scout-tasks-backup.log
 BASH
 sudo chmod +x /usr/local/bin/scout-tasks-backup.sh
 "
