@@ -2681,7 +2681,7 @@ export default function App() {
   var accessibleNav = navItems.filter(function(n) {
     if (me.role === "admin") return true;
     if (me.access && me.access.length > 0) return me.access.includes(n.id);
-    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "branding", "teamReport"].includes(n.id);
+    if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "branding"].includes(n.id);
     if (me.role === "member") return ["tasks", "kanban", "achievements", "announce"].includes(n.id);
     return false;
   });
@@ -2890,7 +2890,7 @@ export default function App() {
           {page === "products" && <ProdsPage products={products} setProducts={setProducts} shops={shops} productAudit={productAudit} setProductAudit={setProductAudit} user={user} team={team} />}
           {page === "sheets" && <SheetsPage sheets={sheets} setSheets={setSheets} shops={shops} />}
           {page === "manage_users" && <UsersPage team={team} setTeam={setTeam} addLog={addLog} />}
-          {page === "teamReport" && <TeamReportPage tasks={tasks} team={team} timers={timers} statusHistory={statusHistory} taskActivity={taskActivity} isMob={isMob} />}
+          {page === "teamReport" && <TeamReportPage tasks={tasks} team={team} timers={timers} statusHistory={statusHistory} taskActivity={taskActivity} isMob={isMob} allowedUsers={me.role === "pm" ? pmTeamMembers(user) : null} pageTitle={me.role === "pm" ? "Raport Echipa Mea" : "Raport Echipa"} />}
           {page === "errorlog" && <ErrorLogPage errorLog={errorLog} setErrorLog={setErrorLog} />}
         </div>
       </main>
@@ -8990,11 +8990,12 @@ function ErrorLogPage({ errorLog, setErrorLog }) {
 // ═══════════════════════════════════════════════════════════════
 // TEAM REPORT PAGE — Admin view with per-person click-through report
 // ═══════════════════════════════════════════════════════════════
-function TeamReportPage({ tasks, team, timers, statusHistory, taskActivity, isMob }) {
+function TeamReportPage({ tasks, team, timers, statusHistory, taskActivity, isMob, allowedUsers, pageTitle }) {
   var [selectedUser, setSelectedUser] = useState(null);
   var [dateRange, setDateRange] = useState("today");
   var [customStart, setCustomStart] = useState("");
   var [customEnd, setCustomEnd] = useState("");
+  var allowedSet = allowedUsers ? new Set(allowedUsers) : null;
 
   // Calculate date range bounds
   var getDateBounds = function() {
@@ -9029,6 +9030,7 @@ function TeamReportPage({ tasks, team, timers, statusHistory, taskActivity, isMo
   var userStats = {};
   Object.keys(team).forEach(function(uid) {
     if (team[uid].role === "admin") return;
+    if (allowedSet && !allowedSet.has(uid)) return;
     var userTasks = tasks.filter(function(t) { return t.assignee === uid && !t._campaignParent; });
     var activeTasks = userTasks.filter(function(t) { return t.status !== "Done"; });
     var doneInRange = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && inRange(t.updatedAt); });
@@ -9266,7 +9268,7 @@ function TeamReportPage({ tasks, team, timers, statusHistory, taskActivity, isMo
 
   return <div style={{ maxWidth: 1200 }}>
     <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", margin: 0 }}>Raport Echipa</h2>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1E293B", margin: 0 }}>{pageTitle || "Raport Echipa"}</h2>
       <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Click pe o persoana pentru raport detaliat</div>
     </div>
 
