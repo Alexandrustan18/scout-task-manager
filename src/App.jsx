@@ -2155,6 +2155,10 @@ export default function App() {
       }
       // FEATURE 16: clear editor lock
       setTaskEditors(function(p) { var n = Object.assign({}, p); delete n[t.id]; return n; });
+      // Pipeline misfire fix: modal-save status→Done must also spawn pipeline children
+      if (existing && existing.status !== "Done" && t.status === "Done") {
+        executePipelineRules(existing, "Done");
+      }
     } else {
       // DUPLICATE CHECK: warn if task with same title + shop + assignee exists
       var dupTitle = (t.title || "").trim().toLowerCase();
@@ -2437,6 +2441,8 @@ export default function App() {
         awardXP(prevTask.assignee, taskXP, "Task Done: " + prevTask.title);
         var assigneePM = (team[prevTask.assignee] || {}).pm;
         if (assigneePM && team[assigneePM]) awardXP(assigneePM, 5, "Team Done: " + prevTask.title);
+        // Pipeline misfire fix: bulk status→Done must also spawn pipeline children
+        if (prevTask.status !== "Done") executePipelineRules(prevTask, "Done");
       }
     });
     if (ns === "Done") { triggerCelebration("done"); setTimeout(function() { selected.forEach(function(tid) { var t = tasks.find(function(x) { return x.id === tid; }); if (t) checkAchievements(t.assignee); }); }, 500); }
