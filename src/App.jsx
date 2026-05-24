@@ -2688,7 +2688,7 @@ export default function App() {
     if (me.role === "admin") return true;
     if (me.access && me.access.length > 0) return me.access.includes(n.id);
     if (me.role === "pm") return !["manage_users", "log", "birdseye", "loginhistory", "anomalies", "branding"].includes(n.id);
-    if (me.role === "member") return ["tasks", "kanban", "achievements", "announce"].includes(n.id);
+    if (me.role === "member") return ["tasks", "kanban", "achievements", "announce", "leaves"].includes(n.id);
     return false;
   });
 
@@ -2871,7 +2871,7 @@ export default function App() {
           {page === "targets" && <TargetsPage targets={targets} setTargets={setTargets} team={team} tasks={tasks} timers={timers} canEdit={canCreate} visUsers={visUsers} taskTypes={taskTypes} departments={departments} leaves={leaves} />}
           {page === "templates" && <TemplatesPage templates={templates} setTemplates={setTemplates} canEdit={canCreate} isAdmin={isAdmin} shops={shops} onCreateFromTpl={function(tpl) { setEditTask({ title: tpl.name, description: tpl.description, shop: tpl.shop || "", subtasks: tpl.subtasks.map(function(s) { return { id: gid(), text: s, done: false }; }) }); setShowAdd(true); }} />}
           {page === "recurring" && <RecurringPage recurringTasks={recurringTasks} setRecurringTasks={setRecurringTasks} team={team} assUsers={assUsers} shops={shops} departments={departments} canEdit={canCreate} />}
-          {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} addNotif={addNotif} pmTeamMembers={pmTeamMembers} />}
+          {page === "leaves" && <LeavesPage leaves={leaves} setLeaves={setLeaves} leaveRequests={leaveRequests} setLeaveRequests={setLeaveRequests} team={team} user={user} visUsers={visUsers} me={me} addLog={addLog} addNotif={addNotif} pmTeamMembers={pmTeamMembers} isMob={isMob} />}
           {page === "branding" && <BrandingPage branding={branding} setBranding={setBranding} addLog={addLog} />}
           {page === "config" && <ConfigPage taskTypes={taskTypes} setTaskTypes={setTaskTypes} platforms={platforms} setPlatforms={setPlatforms} departments={departments} setDepartments={setDepartments} shops={shops} setShops={setShops} addLog={addLog} />}
           {page === "wheelSetup" && <WheelSetupPage wheelConfig={wheelConfig} setWheelConfig={setWheelConfig} team={team} wheelHistory={wheelHistory} />}
@@ -6167,9 +6167,16 @@ function LeaguePage({ allTasks, team, user, me, timers, targets, achievements, v
   </div>;
 }
 
-function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, user, visUsers, me, addLog, addNotif, pmTeamMembers }) {
+function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, user, visUsers, me, addLog, addNotif, pmTeamMembers, isMob }) {
   try {
-  var [selectedUser, setSelectedUser] = useState(visUsers.filter(function(u) { return u !== "admin" && team[u] && team[u].role !== "admin"; })[0] || "");
+  var [selectedUser, setSelectedUser] = useState(function() {
+    // Use `team` directly (viewableUsers not in scope yet — same filter + sort applied here)
+    var nonAdmin = Object.keys(team).filter(function(u) { return team[u] && team[u].role !== "admin"; }).sort(function(a, b) {
+      return ((team[a] || {}).name || "").localeCompare((team[b] || {}).name || "");
+    });
+    if (nonAdmin.indexOf(user) >= 0) return user;
+    return nonAdmin[0] || "";
+  });
   var [calMonth, setCalMonth] = useState(new Date());
   var [showRequestForm, setShowRequestForm] = useState(false);
   var [reqFrom, setReqFrom] = useState("");
@@ -6183,7 +6190,12 @@ function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, 
     return uid === user;
   };
 
-  var editableUsers = visUsers.filter(function(u) { return team[u] && team[u].role !== "admin" && canEditUser(u); });
+  // All non-admin team members, used for read-only listings (team grid, picker, today-on-leave)
+  var viewableUsers = Object.keys(team).filter(function(u) {
+    return team[u] && team[u].role !== "admin";
+  }).sort(function(a, b) {
+    return ((team[a] || {}).name || "").localeCompare((team[b] || {}).name || "");
+  });
 
   // Members can only request, not directly add
   var canDirectEdit = me.role === "admin" || me.role === "pm";
@@ -6252,7 +6264,7 @@ function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, 
   for (var i = 0; i < offset; i++) cells.push(null);
   for (var d2 = 1; d2 <= dim; d2++) cells.push(d2);
   var userLeaves = (leaves[selectedUser] || []);
-  var todayOnLeave = editableUsers.filter(function(u2) { return isOnLeave(leaves, u2, TD); });
+  var todayOnLeave = viewableUsers.filter(function(u2) { return isOnLeave(leaves, u2, TD); });
   var pendingRequests = (leaveRequests || []).filter(function(r) { return r.status === "pending"; });
 
   return <div>
@@ -6314,17 +6326,90 @@ function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, 
       })}
     </Card>}
 
+    {/* Team-wide leaves grid (read-only for everyone) */}
+    <Card style={{ marginBottom: 16, padding: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Calendar echipa</div>
+          <div style={{ fontSize: 11, color: "#94A3B8" }}>Cine e in concediu in {MN[m]} {y}. Click pe un membru pentru detalii.</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button style={Object.assign({}, S.cancelBtn, { padding: "4px 10px" })} onClick={function() { var n = new Date(calMonth); n.setMonth(n.getMonth() - 1); setCalMonth(n); }}>&lt;</button>
+          <div style={{ fontSize: 12, fontWeight: 700, minWidth: 90, textAlign: "center" }}>{MN[m]} {y}</div>
+          <button style={Object.assign({}, S.cancelBtn, { padding: "4px 10px" })} onClick={function() { var n = new Date(calMonth); n.setMonth(n.getMonth() + 1); setCalMonth(n); }}>&gt;</button>
+        </div>
+      </div>
+
+      {(function() {
+        // Build days-of-month array once for reuse below
+        var daysArr = [];
+        for (var dd = 1; dd <= dim; dd++) daysArr.push(dd);
+        var monthPrefix = y + "-" + String(m + 1).padStart(2, "0");
+        var hasAnyLeave = viewableUsers.some(function(u2) {
+          return (leaves[u2] || []).some(function(ds2) {
+            return typeof ds2 === "string" && ds2.indexOf(monthPrefix) === 0;
+          });
+        });
+        if (!hasAnyLeave) {
+          return <div style={{ padding: "20px 8px", textAlign: "center", color: "#94A3B8", fontSize: 12 }}>Niciun concediu in {MN[m]} {y}.</div>;
+        }
+        return <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ minWidth: (isMob ? 100 : 140) + daysArr.length * (isMob ? 24 : 28) }}>
+            {/* Day-number header row */}
+            <div style={{ display: "grid", gridTemplateColumns: (isMob ? "100px" : "140px") + " repeat(" + daysArr.length + ", minmax(0, 1fr))", gap: 2, marginBottom: 4 }}>
+              <div />
+              {daysArr.map(function(dd) {
+                var dStr = monthPrefix + "-" + String(dd).padStart(2, "0");
+                var dt = new Date(y, m, dd);
+                var dow = dt.getDay();
+                var isWk = dow === 0 || dow === 6;
+                var isTd2 = dStr === TD;
+                var dayLetter = ["D", "L", "Ma", "Mi", "J", "V", "S"][dow];
+                return <div key={dd} style={{ textAlign: "center", fontSize: 9, color: isTd2 ? GR : isWk ? "#CBD5E1" : "#94A3B8", fontWeight: isTd2 ? 700 : 600, padding: "2px 0", borderBottom: isTd2 ? "2px solid " + GR : "1px solid transparent", lineHeight: 1.1 }}>
+                  <div>{dayLetter}</div>
+                  <div style={{ fontSize: 10 }}>{dd}</div>
+                </div>;
+              })}
+            </div>
+
+            {/* One row per team member */}
+            {viewableUsers.map(function(u2) {
+              var t2 = team[u2] || {};
+              var color = t2.color || "#94A3B8";
+              var isSel = selectedUser === u2;
+              return <div key={u2} onClick={function() { setSelectedUser(u2); }} style={{ display: "grid", gridTemplateColumns: (isMob ? "100px" : "140px") + " repeat(" + daysArr.length + ", minmax(0, 1fr))", gap: 2, marginBottom: 3, cursor: "pointer", padding: "3px 0", borderRadius: 4, background: isSel ? GR + "08" : "transparent" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 6, position: "sticky", left: 0, background: isSel ? "#F0FDF4" : "#fff", zIndex: 2 }}>
+                  <Av color={color} size={22} fs={10} userId={u2}>{(t2.name || "?")[0]}</Av>
+                  <div style={{ fontSize: 12, fontWeight: isSel ? 700 : 500, color: isSel ? GR : "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t2.name}</div>
+                </div>
+                {daysArr.map(function(dd) {
+                  var dStr = monthPrefix + "-" + String(dd).padStart(2, "0");
+                  var dt = new Date(y, m, dd);
+                  var dow = dt.getDay();
+                  var isWk = dow === 0 || dow === 6;
+                  var isTd2 = dStr === TD;
+                  var isL = isOnLeave(leaves, u2, dStr);
+                  return <div key={dd} title={isL ? (t2.name || u2) + " in concediu " + dStr : dStr} style={{ height: 22, borderRadius: 3, background: isL ? color : isTd2 ? GR + "20" : isWk ? "#F8FAFC" : "#fff", border: isTd2 && !isL ? "1px solid " + GR : "1px solid #F1F5F9" }} />;
+                })}
+              </div>;
+            })}
+          </div>
+        </div>;
+      })()}
+    </Card>
+
     <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 16 }}>
       <Card style={{ padding: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Selecteaza user</div>
-        {editableUsers.map(function(u2) {
+        {viewableUsers.map(function(u2) {
           var t2 = team[u2] || {};
           var count = (leaves[u2] || []).length;
           var isSel = selectedUser === u2;
+          var ownerEditable = canEditUser(u2);
           return <div key={u2} onClick={function() { setSelectedUser(u2); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: isSel ? GR + "15" : "transparent", marginBottom: 3, border: "1px solid " + (isSel ? GR + "30" : "transparent") }}>
             <Av color={t2.color} size={26} fs={11} userId={u2}>{(t2.name || "?")[0]}</Av>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 500, color: isSel ? GR : "#1E293B" }}>{t2.name}</div>
+              <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 500, color: isSel ? GR : "#1E293B" }}>{t2.name}{!ownerEditable && <span style={{ fontSize: 9, color: "#94A3B8", marginLeft: 6, fontWeight: 500 }}>(read-only)</span>}</div>
               <div style={{ fontSize: 10, color: "#94A3B8" }}>{count} zile concediu</div>
             </div>
           </div>;
