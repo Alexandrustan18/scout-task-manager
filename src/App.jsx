@@ -6328,11 +6328,12 @@ function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, 
 
     {/* Team-wide leaves grid (read-only for everyone) */}
     <Card style={{ marginBottom: 16, padding: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 10 }}>
+        {!isMob && <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Calendar echipa</div>
           <div style={{ fontSize: 11, color: "#94A3B8" }}>Cine e in concediu in {MN[m]} {y}. Click pe un membru pentru detalii.</div>
-        </div>
+        </div>}
+        {isMob && <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>Calendar echipa</div>}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button style={Object.assign({}, S.cancelBtn, { padding: "4px 10px" })} onClick={function() { var n = new Date(calMonth); n.setMonth(n.getMonth() - 1); setCalMonth(n); }}>&lt;</button>
           <div style={{ fontSize: 12, fontWeight: 700, minWidth: 90, textAlign: "center" }}>{MN[m]} {y}</div>
@@ -6377,8 +6378,8 @@ function LeavesPage({ leaves, setLeaves, leaveRequests, setLeaveRequests, team, 
               var t2 = team[u2] || {};
               var color = t2.color || "#94A3B8";
               var isSel = selectedUser === u2;
-              return <div key={u2} onClick={function() { setSelectedUser(u2); }} style={{ display: "grid", gridTemplateColumns: (isMob ? "100px" : "140px") + " repeat(" + daysArr.length + ", minmax(0, 1fr))", gap: 2, marginBottom: 3, cursor: "pointer", padding: "3px 0", borderRadius: 4, background: isSel ? GR + "08" : "transparent" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 6, position: "sticky", left: 0, background: isSel ? "#F0FDF4" : "#fff", zIndex: 2 }}>
+              return <div key={u2} onClick={function() { setSelectedUser(u2); }} style={{ display: "grid", gridTemplateColumns: (isMob ? "100px" : "140px") + " repeat(" + daysArr.length + ", minmax(0, 1fr))", gap: 2, marginBottom: 3, cursor: "pointer", padding: "3px 0", borderRadius: 4, background: isSel ? GR + "15" : "transparent" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 6, position: "sticky", left: 0, background: isSel ? "#E8F8EE" : "#fff", zIndex: 2 }}>
                   <Av color={color} size={22} fs={10} userId={u2}>{(t2.name || "?")[0]}</Av>
                   <div style={{ fontSize: 12, fontWeight: isSel ? 700 : 500, color: isSel ? GR : "#1E293B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t2.name}</div>
                 </div>
