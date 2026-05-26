@@ -766,24 +766,27 @@ function ToastBanner({ toasts, onDismiss }) {
 
 function SaveStatusPill() {
   var [s, setS] = useState(API.getStatus());
+  var [stuckSince, setStuckSince] = useState(null);
+  var [now, setNow] = useState(Date.now());
   useEffect(function() {
-    return API.onStatus(setS);
+    return API.onStatus(function(next) {
+      setS(next);
+      // Track when writes first got stuck (queue not empty AND not synced)
+      if (next.queueLen > 0 && next.state !== "synced") {
+        setStuckSince(function(p) { return p || Date.now(); });
+      } else {
+        setStuckSince(null);
+      }
+    });
   }, []);
-  if (s.state === "synced") {
-    return <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#10B981", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>✓ Sincronizat</div>;
-  }
-  if (s.state === "saving") {
-    return <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#94A3B8", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>⏳ Se salveaza... ({s.queueLen})</div>;
-  }
-  if (s.state === "offline") {
-    return <>
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, padding: "10px 16px", background: "#DC2626", color: "#fff", textAlign: "center", fontSize: 13, fontWeight: 700, zIndex: 99999 }}>
-        ⚠️ Conectare pierduta. Modificarile NU se salveaza. Reincarca pagina (Cmd+Shift+R / Ctrl+Shift+R).
-      </div>
-      <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#DC2626", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>✗ Offline</div>
-    </>;
-  }
-  return <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#F59E0B", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>⚠️ Eroare salvare</div>;
+  useEffect(function() {
+    if (!stuckSince) return;
+    var i = setInterval(function() { setNow(Date.now()); }, 5000);
+    return function() { clearInterval(i); };
+  }, [stuckSince]);
+  // Silent retries: only show a pill if writes have been stuck >60s
+  if (!stuckSince || (now - stuckSince) < 60000) return null;
+  return <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#F59E0B", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>⚠️ Salvare intarziata ({s.queueLen})</div>;
 }
 
 // FEATURE 10: Achievement popup
