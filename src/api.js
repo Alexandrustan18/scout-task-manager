@@ -7,6 +7,8 @@ const API = "https://34-62-56-73.nip.io/api";
 const TOKEN_KEY = "s7_token";
 const TAB_KEY = "s7_tabId";
 const BOOT_CACHE_KEY = "s7_bootstrap_cache";
+const QUEUE_KEY = "s7_write_queue";
+const USERNAME_KEY = "s7_username";
 
 let _token = localStorage.getItem(TOKEN_KEY) || "";
 let _tabId = sessionStorage.getItem(TAB_KEY) || "";
@@ -66,9 +68,23 @@ export async function login(username, password) {
   const out = await r.json();
   _token = out.token;
   localStorage.setItem(TOKEN_KEY, _token);
+  localStorage.setItem(USERNAME_KEY, out.user.username);
   // Wipe any cached bootstrap from a previous user/session.
   localStorage.removeItem(BOOT_CACHE_KEY);
   Object.keys(versions).forEach((k) => delete versions[k]);
+  // Cross-user safety: discard any persisted writes that belong to a different
+  // user. We will NOT attribute one user's queued work to another.
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        const mine = arr.filter((j) => !j._username || j._username === out.user.username);
+        if (mine.length === 0) localStorage.removeItem(QUEUE_KEY);
+        else localStorage.setItem(QUEUE_KEY, JSON.stringify(mine));
+      }
+    }
+  } catch {}
   return out;
 }
 
@@ -110,18 +126,33 @@ export function setVersion(rowId, v) { versions[rowId] = v; }
 // Queue is mirrored to localStorage. Jobs NEVER drop. On reload, queue resumes
 // draining from where it left off. Callbacks (onAck/onConflict) are not
 // persisted — they only fire when the write happens in the same session.
-const QUEUE_KEY = "s7_write_queue";
 const writeQueue = [];
 let draining = false;
 
 function persistQueue() {
   try {
-    // Strip non-serializable callbacks before storing
+    // Strip non-serializable callbacks; tag each job with the user it belongs to
+    // so a different user logging in on this device won't inherit the work.
+    const me = localStorage.getItem(USERNAME_KEY) || null;
     const safe = writeQueue.map((j) => ({
       rowId: j.rowId, path: j.path, method: j.method, body: j.body, retries: j.retries || 0,
+      _username: j._username || me,
     }));
     localStorage.setItem(QUEUE_KEY, JSON.stringify(safe));
-  } catch {}
+  } catch (err) {
+    // Quota or other storage error — try evicting the bootstrap cache and retry once.
+    try {
+      localStorage.removeItem(BOOT_CACHE_KEY);
+      const me = localStorage.getItem(USERNAME_KEY) || null;
+      const safe = writeQueue.map((j) => ({
+        rowId: j.rowId, path: j.path, method: j.method, body: j.body, retries: j.retries || 0,
+        _username: j._username || me,
+      }));
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(safe));
+    } catch (e2) {
+      console.error("[api] failed to persist write queue — writes may be lost on reload", e2);
+    }
+  }
 }
 
 function loadPersistedQueue() {
@@ -137,6 +168,7 @@ function loadPersistedQueue() {
 }
 
 function enqueue(req) {
+  req._username = localStorage.getItem(USERNAME_KEY) || null;
   writeQueue.push(req);
   persistQueue();
   setStatus({ queueLen: writeQueue.length, state: "saving" });
@@ -151,10 +183,11 @@ async function drain() {
     try {
       const r = await apiFetch(job.path, { method: job.method, body: job.body });
       if (r.status === 409) {
-        // Version conflict: the server's row moved on. Adopt and drop this job.
-        // (Conflict resolution is by-design — newer version wins.)
+        // 409 on POST /tasks means "already exists" — server returned currentData,
+        // which means our previous attempt actually landed. Treat as success.
+        // 409 on PUT/PATCH means version conflict — adopt server's version.
         const c = await r.json();
-        versions[job.rowId] = c.currentVersion;
+        if (typeof c.currentVersion === "number") versions[job.rowId] = c.currentVersion;
         if (job.onConflict) try { job.onConflict(c); } catch {}
         writeQueue.shift();
         persistQueue();
@@ -189,6 +222,19 @@ async function drain() {
 export function resumePersistedWrites() {
   loadPersistedQueue();
   if (writeQueue.length > 0) drain();
+}
+
+// Tasks waiting in the queue (or in-flight) — used by the UI to display
+// optimistic creates that the server hasn't confirmed yet, so a user
+// reopening a tab doesn't see "their" task missing while the queue drains.
+export function getQueuedTaskData() {
+  const tasks = [];
+  for (const j of writeQueue) {
+    if (!j.body) continue;
+    if (j.path === "/tasks" && j.method === "POST" && j.body.data) tasks.push(j.body.data);
+    else if (j.path && j.path.startsWith("/tasks/") && j.method === "PUT" && j.body.data) tasks.push(j.body.data);
+  }
+  return tasks;
 }
 
 export function saveBlob(key, data, opts = {}) {

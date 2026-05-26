@@ -1,0 +1,4 @@
+[     659ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://work-heyads.ro/favicon.ico:0
+[    2168ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://work-heyads.ro/:0
+[ 2530643ms] [LOG] [AUTO-UPDATE] New version detected. Was: /assets/index-DE2AD-lC.js Now: /assets/index-BVTGaAFB.js @ https://work-heyads.ro/assets/index-DE2AD-lC.js:82
+[ 2536300ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/:0

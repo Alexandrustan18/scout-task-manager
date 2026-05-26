@@ -1,0 +1,1100 @@
+- generic [ref=e22]:
+  - complementary [ref=e23]:
+    - generic [ref=e24]:
+      - img "Logo" [ref=e25]
+      - generic [ref=e26]: TASK MANAGER
+    - button "New Task" [ref=e28] [cursor=pointer]:
+      - img [ref=e29]
+      - text: New Task
+    - navigation [ref=e30]:
+      - generic [ref=e31]:
+        - generic [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+          - generic [ref=e38]: Dashboard
+        - generic [ref=e39] [cursor=pointer]:
+          - img [ref=e40]
+          - generic [ref=e43]: Taskuri
+        - generic [ref=e44] [cursor=pointer]:
+          - img [ref=e45]
+          - generic [ref=e49]: Kanban Board
+      - generic [ref=e50]:
+        - generic [ref=e51] [cursor=pointer]:
+          - generic [ref=e52]: ▶
+          - generic [ref=e53]: Operational
+        - generic [ref=e54]:
+          - generic [ref=e55] [cursor=pointer]:
+            - img [ref=e56]
+            - generic [ref=e60]: Targets
+          - generic [ref=e61] [cursor=pointer]:
+            - img [ref=e62]
+            - generic [ref=e65]: Templates
+          - generic [ref=e66] [cursor=pointer]:
+            - img [ref=e67]
+            - generic [ref=e70]: Recurring
+          - generic [ref=e71] [cursor=pointer]:
+            - img [ref=e72]
+            - generic [ref=e74]: Concedii
+      - generic [ref=e75]:
+        - generic [ref=e76] [cursor=pointer]:
+          - generic [ref=e77]: ▶
+          - generic [ref=e78]: Echipa
+        - generic [ref=e79]:
+          - generic [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+            - generic [ref=e84]: Workload
+          - generic [ref=e85] [cursor=pointer]:
+            - img [ref=e86]
+            - generic [ref=e88]: Performance
+          - generic [ref=e89] [cursor=pointer]:
+            - img [ref=e90]
+            - generic [ref=e93]: Raport Echipa
+          - generic [ref=e94] [cursor=pointer]:
+            - img [ref=e95]
+            - generic [ref=e101]: Liga Saptamanii
+          - generic [ref=e102] [cursor=pointer]:
+            - img [ref=e103]
+            - generic [ref=e105]: Liga Lunara
+          - generic [ref=e106] [cursor=pointer]:
+            - img [ref=e107]
+            - generic [ref=e110]: Weekly Digest
+          - generic [ref=e111] [cursor=pointer]:
+            - img [ref=e112]
+            - generic [ref=e118]: Achievements
+          - generic [ref=e119] [cursor=pointer]:
+            - img [ref=e120]
+            - generic [ref=e122]: Wall of Fame
+          - generic [ref=e123] [cursor=pointer]:
+            - img [ref=e124]
+            - generic [ref=e127]: Brand Analytics
+      - generic [ref=e129] [cursor=pointer]:
+        - generic [ref=e130]: ▶
+        - generic [ref=e131]: Comunicare
+      - generic [ref=e133] [cursor=pointer]:
+        - generic [ref=e134]: ▶
+        - generic [ref=e135]: Configurare
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - generic [ref=e138]: S
+        - generic [ref=e139]: "1"
+      - generic [ref=e140]:
+        - generic [ref=e141]: Stan
+        - generic [ref=e142]: admin | Lv.1 Recrut
+        - generic [ref=e145]: 16 XP | 32% spre Lv.2
+    - button "Sign out" [ref=e147] [cursor=pointer]:
+      - img [ref=e148]
+      - text: Sign out
+  - main [ref=e151]:
+    - generic [ref=e152]:
+      - heading "Dashboard" [level=1] [ref=e153]
+      - 'generic "Se salveaza: sessions" [ref=e1375]': Se salveaza... (1)
+      - button "🔊" [ref=e156] [cursor=pointer]:
+        - generic [ref=e157]: 🔊
+      - generic [ref=e158]:
+        - button [ref=e159] [cursor=pointer]:
+          - img [ref=e160]
+        - generic [ref=e163]: "493"
+    - generic [ref=e165]:
+      - generic [ref=e166]:
+        - generic [ref=e167]:
+          - button "Azi" [ref=e168] [cursor=pointer]
+          - button "Ieri" [ref=e169] [cursor=pointer]
+          - button "7 zile" [ref=e170] [cursor=pointer]
+          - button "30 zile" [ref=e171] [cursor=pointer]
+          - button "Custom" [ref=e172] [cursor=pointer]
+          - textbox [ref=e173]: 2026-05-18
+          - textbox [ref=e174]: 2026-05-18
+        - button "Customizeaza" [ref=e176] [cursor=pointer]
+      - generic [ref=e178]:
+        - generic [ref=e179] [cursor=pointer]:
+          - generic [ref=e180]: "0"
+          - generic [ref=e181]: Total
+        - generic [ref=e182] [cursor=pointer]:
+          - generic [ref=e183]: "0"
+          - generic [ref=e184]: To Do
+        - generic [ref=e185] [cursor=pointer]:
+          - generic [ref=e186]: "0"
+          - generic [ref=e187]: In Progress
+        - generic [ref=e188] [cursor=pointer]:
+          - generic [ref=e189]: "0"
+          - generic [ref=e190]: Review
+        - generic [ref=e191] [cursor=pointer]:
+          - generic [ref=e192]: "0"
+          - generic [ref=e193]: Intarziate
+        - generic [ref=e194] [cursor=pointer]:
+          - generic [ref=e195]: "0"
+          - generic [ref=e196]: Done
+      - generic [ref=e198]:
+        - generic [ref=e199]: Azi vs Ieri
+        - generic [ref=e200]:
+          - generic [ref=e202]: AZI
+          - generic [ref=e203]: IERI
+          - generic [ref=e204]: DELTA
+          - generic [ref=e205]: Done
+          - generic [ref=e206]: "0"
+          - generic [ref=e207]: "4"
+          - generic [ref=e208]: "-4"
+          - generic [ref=e209]: Create
+          - generic [ref=e210]: "0"
+          - generic [ref=e211]: "33"
+          - generic [ref=e212]: "-33"
+          - generic [ref=e213]: Overdue
+          - generic [ref=e214]: "0"
+          - generic [ref=e215]: "0"
+          - generic [ref=e216]: "-"
+      - generic [ref=e218]:
+        - heading "Live (1)" [level=3] [ref=e219]: Live (1)
+        - generic [ref=e221]:
+          - generic [ref=e222]:
+            - generic [ref=e223]: A
+            - generic [ref=e224]: "21"
+          - generic [ref=e225]: Alexandra
+          - generic [ref=e226]: aparat lumina rosie pt calp - Foto Produs - LP
+          - generic [ref=e227]: MagDeal
+          - generic [ref=e228]: 02:08
+      - generic [ref=e230]:
+        - generic [ref=e231] [cursor=pointer]:
+          - generic [ref=e232]:
+            - generic [ref=e233]: Liga Membrilor
+            - generic [ref=e234]: Vezi tot ▶
+          - generic [ref=e235]: Cine implementeaza cel mai mult
+          - generic [ref=e236]:
+            - generic [ref=e237]: 💰
+            - generic [ref=e238]: "Premiu locul 1: 250 RON bonus extra"
+            - generic [ref=e239]: "| Se cumuleaza toata luna"
+          - generic [ref=e240]:
+            - generic [ref=e241]:
+              - generic [ref=e242]: 🥈
+              - generic [ref=e243]:
+                - generic [ref=e244]: M
+                - generic [ref=e245]: "16"
+              - generic [ref=e246]: Mara Poze
+              - generic [ref=e247]: 270 taskuri
+              - generic [ref=e248]: "2"
+            - generic [ref=e249]:
+              - generic [ref=e250]: 👑
+              - generic [ref=e251]:
+                - generic [ref=e252]: A
+                - generic [ref=e253]: "21"
+              - generic [ref=e254]: Alexandra
+              - generic [ref=e255]: 499 taskuri
+              - generic [ref=e256]: "1"
+            - generic [ref=e257]:
+              - generic [ref=e258]: 🥉
+              - generic [ref=e259]:
+                - generic [ref=e260]: A
+                - generic [ref=e261]: "11"
+              - generic [ref=e262]: Angi
+              - generic [ref=e263]: 258 taskuri
+              - generic [ref=e264]: "3"
+        - generic [ref=e265] [cursor=pointer]:
+          - generic [ref=e266]:
+            - generic [ref=e267]: Liga PM-ilor
+            - generic [ref=e268]: Vezi tot ▶
+          - generic [ref=e269]: Cine coordoneaza cel mai bine
+          - generic [ref=e270]:
+            - generic [ref=e271]:
+              - generic [ref=e272]: 🥈
+              - generic [ref=e273]:
+                - generic [ref=e274]: M
+                - generic [ref=e275]: "19"
+              - generic [ref=e276]: Mara
+              - generic [ref=e277]: 727 taskuri
+              - generic [ref=e278]: "2"
+            - generic [ref=e279]:
+              - generic [ref=e280]: 👑
+              - generic [ref=e281]:
+                - generic [ref=e282]: C
+                - generic [ref=e283]: "24"
+              - generic [ref=e284]: Carla
+              - generic [ref=e285]: 928 taskuri
+              - generic [ref=e286]: "1"
+      - generic [ref=e288]:
+        - generic [ref=e289]:
+          - generic [ref=e290]: Velocity (Done/zi - 30 zile)
+          - generic [ref=e291]:
+            - text: "Media:"
+            - generic [ref=e292]: 100.6/zi
+        - img [ref=e293]:
+          - generic [ref=e296]: "79"
+          - generic [ref=e303]: "119"
+          - generic [ref=e316]: "58"
+          - generic [ref=e323]: "24"
+          - generic [ref=e330]: "120"
+          - generic [ref=e337]: "238"
+          - generic [ref=e350]: "132"
+          - generic [ref=e357]: "60"
+      - generic [ref=e363]:
+        - generic [ref=e364]: Task Flow - 14 zile
+        - img [ref=e365]:
+          - generic [ref=e366]:
+            - generic [ref=e369]: "119"
+            - generic [ref=e370]: 5/5
+          - generic [ref=e371]:
+            - generic [ref=e374]: "250"
+            - generic [ref=e375]: 6/5
+          - generic [ref=e376]:
+            - generic [ref=e379]: "238"
+            - generic [ref=e380]: 7/5
+          - generic [ref=e381]:
+            - generic [ref=e384]: "153"
+            - generic [ref=e385]: 8/5
+          - generic [ref=e386]:
+            - generic [ref=e389]: "2"
+            - generic [ref=e390]: 9/5
+          - generic [ref=e394]: 10/5
+          - generic [ref=e395]:
+            - generic [ref=e398]: "166"
+            - generic [ref=e399]: 11/5
+          - generic [ref=e400]:
+            - generic [ref=e403]: "210"
+            - generic [ref=e404]: 12/5
+          - generic [ref=e405]:
+            - generic [ref=e408]: "132"
+            - generic [ref=e409]: 13/5
+          - generic [ref=e410]:
+            - generic [ref=e413]: "220"
+            - generic [ref=e414]: 14/5
+          - generic [ref=e415]:
+            - generic [ref=e418]: "201"
+            - generic [ref=e419]: 15/5
+          - generic [ref=e420]:
+            - generic [ref=e423]: "60"
+            - generic [ref=e424]: 16/5
+          - generic [ref=e425]:
+            - generic [ref=e428]: "4"
+            - generic [ref=e429]: 17/5
+          - generic [ref=e433]: 18/5
+        - generic [ref=e434]:
+          - generic [ref=e435]: Create
+          - generic [ref=e437]: Done
+      - generic [ref=e440]:
+        - generic [ref=e441]: Saptamana curenta vs anterioara
+        - generic [ref=e442]:
+          - generic [ref=e443]:
+            - generic [ref=e444]: Done
+            - generic [ref=e445]: "0"
+            - generic [ref=e446]: vs 989
+            - generic [ref=e447]: "-989"
+          - generic [ref=e448]:
+            - generic [ref=e449]: Create
+            - generic [ref=e450]: "0"
+            - generic [ref=e451]: vs 1013
+            - generic [ref=e452]: "-1013"
+          - generic [ref=e453]:
+            - generic [ref=e454]: Ritm
+            - generic [ref=e455]: ↓
+            - generic [ref=e456]: Scade
+      - generic [ref=e458]:
+        - generic [ref=e459]: Progres Luna (Mai)
+        - generic [ref=e460]:
+          - generic [ref=e461]:
+            - generic [ref=e462]: "1900"
+            - generic [ref=e463]: Done
+          - generic [ref=e464]:
+            - generic [ref=e465]: "3272"
+            - generic [ref=e466]: Proiectat
+          - generic [ref=e467]:
+            - generic [ref=e468]: "1062"
+            - generic [ref=e469]: Luna trec.
+          - generic [ref=e470]:
+            - generic [ref=e471]: 308%
+            - generic [ref=e472]: vs luna trec.
+        - generic [ref=e475]:
+          - generic [ref=e476]: Ziua 18
+          - generic [ref=e477]: 13 zile ramase
+      - generic [ref=e479]:
+        - generic [ref=e480]: Per Platforma
+        - generic [ref=e482]:
+          - generic [ref=e483]: Creativ
+          - generic [ref=e485]: 1574/1613 (98%)
+        - generic [ref=e489]:
+          - generic [ref=e490]: Meta Ads
+          - generic [ref=e492]: 859/859 (100%)
+        - generic [ref=e496]:
+          - generic [ref=e497]: Altele
+          - generic [ref=e499]: 417/442 (94%)
+        - generic [ref=e503]:
+          - generic [ref=e504]: TikTok Ads
+          - generic [ref=e506]: 160/160 (100%)
+        - generic [ref=e510]:
+          - generic [ref=e511]: Shopify
+          - generic [ref=e513]: 50/50 (100%)
+        - generic [ref=e517]:
+          - generic [ref=e518]: Foto Produs
+          - generic [ref=e520]: 15/15 (100%)
+        - generic [ref=e524]:
+          - generic [ref=e525]: UGC
+          - generic [ref=e527]: 5/5 (100%)
+      - generic [ref=e531]:
+        - generic [ref=e532]: Eficienta Echipa
+        - generic [ref=e533]: Timp mediu per task (cu timer)
+        - generic [ref=e534]:
+          - generic [ref=e535]:
+            - generic [ref=e536]: S
+            - generic [ref=e537]: "4"
+          - generic [ref=e538]: Sonia
+          - generic [ref=e541]: 00:10
+        - generic [ref=e542]:
+          - generic [ref=e543]:
+            - generic [ref=e544]: A
+            - generic [ref=e545]: "11"
+          - generic [ref=e546]: Angi
+          - generic [ref=e549]: 00:28
+        - generic [ref=e550]:
+          - generic [ref=e551]:
+            - generic [ref=e552]: M
+            - generic [ref=e553]: "19"
+          - generic [ref=e554]: Mara
+          - generic [ref=e557]: 05:13
+        - generic [ref=e558]:
+          - generic [ref=e559]:
+            - generic [ref=e560]: M
+            - generic [ref=e561]: "16"
+          - generic [ref=e562]: Mara Poze
+          - generic [ref=e565]: 07:35
+        - generic [ref=e566]:
+          - generic [ref=e567]:
+            - generic [ref=e568]: A
+            - generic [ref=e569]: "21"
+          - generic [ref=e570]: Alexandra
+          - generic [ref=e573]: 14:01
+        - generic [ref=e574]:
+          - generic [ref=e575]:
+            - generic [ref=e576]: D
+            - generic [ref=e577]: "17"
+          - generic [ref=e578]: Dana
+          - generic [ref=e581]: 17:06
+        - generic [ref=e582]:
+          - generic [ref=e583]:
+            - generic [ref=e584]: D
+            - generic [ref=e585]: "9"
+          - generic [ref=e586]: Denisa
+          - generic [ref=e589]: 24:55
+        - generic [ref=e590]:
+          - generic [ref=e591]:
+            - generic [ref=e592]: C
+            - generic [ref=e593]: "24"
+          - generic [ref=e594]: Carla
+          - generic [ref=e597]: 39:15
+        - generic [ref=e598]:
+          - generic [ref=e599]:
+            - generic [ref=e600]: T
+            - generic [ref=e601]: "1"
+          - generic [ref=e602]: Teodora
+          - generic [ref=e605]: 41:59
+      - generic [ref=e607]:
+        - generic [ref=e608]: Workload Echipa
+        - generic [ref=e609]:
+          - generic [ref=e610]:
+            - generic [ref=e611]:
+              - generic [ref=e612]:
+                - generic [ref=e613]: D
+                - generic [ref=e614]: "17"
+              - generic [ref=e615]: Dana
+              - generic [ref=e616]: Overloaded
+            - generic [ref=e617]:
+              - generic [ref=e618]: 25 active
+              - generic [ref=e619]: 0 azi
+          - generic [ref=e620]:
+            - generic [ref=e621]:
+              - generic [ref=e622]:
+                - generic [ref=e623]: A
+                - generic [ref=e624]: "21"
+              - generic [ref=e625]: Alexandra
+              - generic [ref=e626]: Overloaded
+            - generic [ref=e627]:
+              - generic [ref=e628]: 25 active
+              - generic [ref=e629]: 0 azi
+          - generic [ref=e630]:
+            - generic [ref=e631]:
+              - generic [ref=e632]:
+                - generic [ref=e633]: D
+                - generic [ref=e634]: "9"
+              - generic [ref=e635]: Denisa
+              - generic [ref=e636]: Overloaded
+            - generic [ref=e637]:
+              - generic [ref=e638]: 10 active
+              - generic [ref=e639]: 0 azi
+          - generic [ref=e640]:
+            - generic [ref=e641]:
+              - generic [ref=e642]:
+                - generic [ref=e643]: T
+                - generic [ref=e644]: "1"
+              - generic [ref=e645]: Teodora
+              - generic [ref=e646]: Normal
+            - generic [ref=e647]:
+              - generic [ref=e648]: 4 active
+              - generic [ref=e649]: 0 azi
+          - generic [ref=e650]:
+            - generic [ref=e651]:
+              - generic [ref=e652]:
+                - generic [ref=e653]: A
+                - generic [ref=e654]: "11"
+              - generic [ref=e655]: Angi
+              - generic [ref=e656]: Liber
+            - generic [ref=e657]:
+              - generic [ref=e658]: 0 active
+              - generic [ref=e659]: 0 azi
+          - generic [ref=e660]:
+            - generic [ref=e661]:
+              - generic [ref=e662]:
+                - generic [ref=e663]: M
+                - generic [ref=e664]: "19"
+              - generic [ref=e665]: Mara
+              - generic [ref=e666]: Liber
+            - generic [ref=e667]:
+              - generic [ref=e668]: 0 active
+              - generic [ref=e669]: 0 azi
+          - generic [ref=e670]:
+            - generic [ref=e671]:
+              - generic [ref=e672]:
+                - generic [ref=e673]: C
+                - generic [ref=e674]: "24"
+              - generic [ref=e675]: Carla
+              - generic [ref=e676]: Liber
+            - generic [ref=e677]:
+              - generic [ref=e678]: 0 active
+              - generic [ref=e679]: 0 azi
+          - generic [ref=e680]:
+            - generic [ref=e681]:
+              - generic [ref=e682]:
+                - generic [ref=e683]: S
+                - generic [ref=e684]: "4"
+              - generic [ref=e685]: Sonia
+              - generic [ref=e686]: Liber
+            - generic [ref=e687]:
+              - generic [ref=e688]: 0 active
+              - generic [ref=e689]: 0 azi
+          - generic [ref=e690]:
+            - generic [ref=e691]:
+              - generic [ref=e692]:
+                - generic [ref=e693]: M
+                - generic [ref=e694]: "16"
+              - generic [ref=e695]: Mara Poze
+              - generic [ref=e696]: Liber
+            - generic [ref=e697]:
+              - generic [ref=e698]: 0 active
+              - generic [ref=e699]: 0 azi
+      - generic [ref=e701]:
+        - generic [ref=e702]: SLA per Magazin
+        - generic [ref=e703]:
+          - generic [ref=e704]: MagDeal
+          - generic [ref=e707]: 95%
+          - generic [ref=e708]: 2032/2150
+        - generic [ref=e709]:
+          - generic [ref=e710]: Casa Ofertelor
+          - generic [ref=e713]: 95%
+          - generic [ref=e714]: 407/429
+        - generic [ref=e715]:
+          - generic [ref=e716]: Reduceri Bune
+          - generic [ref=e719]: 99%
+          - generic [ref=e720]: 230/232
+        - generic [ref=e721]:
+          - generic [ref=e722]: Ofertele zilei
+          - generic [ref=e725]: 98%
+          - generic [ref=e726]: 144/147
+        - generic [ref=e727]:
+          - generic [ref=e728]: Grandia
+          - generic [ref=e731]: 87%
+          - generic [ref=e732]: 46/53
+        - generic [ref=e733]:
+          - generic [ref=e734]: Bonhaus BG
+          - generic [ref=e737]: 100%
+          - generic [ref=e738]: 12/12
+        - generic [ref=e739]:
+          - generic [ref=e740]: Bonhaus PL
+          - generic [ref=e743]: 100%
+          - generic [ref=e744]: 12/12
+        - generic [ref=e745]:
+          - generic [ref=e746]: Bonhaus CZ
+          - generic [ref=e749]: 100%
+          - generic [ref=e750]: 9/9
+        - generic [ref=e751]:
+          - generic [ref=e752]: Gento
+          - generic [ref=e755]: 100%
+          - generic [ref=e756]: 8/8
+        - generic [ref=e757]:
+          - generic [ref=e758]: Apreciat
+          - generic [ref=e761]: 100%
+          - generic [ref=e762]: 2/2
+        - generic [ref=e763]:
+          - generic [ref=e764]: Esteban
+          - generic [ref=e767]: 50%
+          - generic [ref=e768]: 1/2
+        - generic [ref=e769]:
+          - generic [ref=e770]: George Talent
+          - generic [ref=e773]: 100%
+          - generic [ref=e774]: 1/1
+        - generic [ref=e775]:
+          - generic [ref=e776]: Nubra
+          - generic [ref=e779]: 100%
+          - generic [ref=e780]: 1/1
+      - generic [ref=e782]:
+        - generic [ref=e783]: Activity Feed
+        - generic [ref=e784]:
+          - generic [ref=e786]:
+            - generic [ref=e787]: "? Stan a intrat"
+            - generic [ref=e788]: Acum
+          - generic [ref=e789]: LOGIN
+        - generic [ref=e790]:
+          - generic [ref=e792]:
+            - generic [ref=e793]: Alexandra "aparat lumina rosie pt calp - Foto Produs - LP" -> In Progress
+            - generic [ref=e794]: 2m
+          - generic [ref=e795]: STATUS
+        - generic [ref=e796]:
+          - generic [ref=e798]:
+            - generic [ref=e799]: Teodora "Bandă de Lifting Facial-5 CREATIVE" -> Done
+            - generic [ref=e800]: 11h
+          - generic [ref=e801]: STATUS
+        - generic [ref=e802]:
+          - generic [ref=e804]:
+            - generic [ref=e805]: Teodora "Aparat de Masaj Facial cu Lumină LED-5 CREATIVE" -> Done
+            - generic [ref=e806]: 13h
+          - generic [ref=e807]: STATUS
+        - generic [ref=e808]:
+          - generic [ref=e810]:
+            - generic [ref=e811]: Teodora "Laveta Magica din Microfibra-5 CREATIVE" -> Done
+            - generic [ref=e812]: 14h
+          - generic [ref=e813]: STATUS
+        - generic [ref=e814]:
+          - generic [ref=e816]:
+            - generic [ref=e817]: Teodora "Laveta Magica din Microfibra-5 CREATIVE" -> In Progress
+            - generic [ref=e818]: 15h
+          - generic [ref=e819]: STATUS
+        - generic [ref=e820]:
+          - generic [ref=e822]:
+            - generic [ref=e823]: "? Teodora a intrat"
+            - generic [ref=e824]: 15h
+          - generic [ref=e825]: LOGIN
+        - generic [ref=e826]:
+          - generic [ref=e828]:
+            - generic [ref=e829]: Mara Sters "Oglinda Acrilică-5 CREATIVE"
+            - generic [ref=e830]: 16h
+          - generic [ref=e831]: DELETE
+        - generic [ref=e832]:
+          - generic [ref=e834]:
+            - generic [ref=e835]: Mara Sters "Mănusa Magică-5 CREATIVE"
+            - generic [ref=e836]: 17h
+          - generic [ref=e837]: DELETE
+        - generic [ref=e838]:
+          - generic [ref=e840]:
+            - generic [ref=e841]: Mara "JHGU" -> Done
+            - generic [ref=e842]: 17h
+          - generic [ref=e843]: STATUS
+        - generic [ref=e844]:
+          - generic [ref=e846]:
+            - generic [ref=e847]: Mara Mara -> "JHGU"
+            - generic [ref=e848]: 17h
+          - generic [ref=e849]: NEW
+        - generic [ref=e850]:
+          - generic [ref=e852]:
+            - generic [ref=e853]: Mara Mara a editat "Aparat de Masaj Facial cu Lumină LED-5 CREATIVE"
+            - generic [ref=e854]: 17h
+          - generic [ref=e855]: EDIT
+        - generic [ref=e856]:
+          - generic [ref=e858]:
+            - generic [ref=e859]: Mara Mara a editat "Bandă de Lifting Facial-5 CREATIVE"
+            - generic [ref=e860]: 17h
+          - generic [ref=e861]: EDIT
+        - generic [ref=e862]:
+          - generic [ref=e864]:
+            - generic [ref=e865]: Mara Mara a editat "Pensetă LED din Oțel-5 CREATIVE"
+            - generic [ref=e866]: 17h
+          - generic [ref=e867]: EDIT
+        - generic [ref=e868]:
+          - generic [ref=e870]:
+            - generic [ref=e871]: Mara Mara a editat "Oglinda Acrilică-5 CREATIVE"
+            - generic [ref=e872]: 17h
+          - generic [ref=e873]: EDIT
+        - generic [ref=e874]:
+          - generic [ref=e876]:
+            - generic [ref=e877]: Mara Mara a editat "Mănusa Magică-5 CREATIVE"
+            - generic [ref=e878]: 17h
+          - generic [ref=e879]: EDIT
+        - generic [ref=e880]:
+          - generic [ref=e882]:
+            - generic [ref=e883]: Mara Mara a editat "Laveta din Fibra Abraziva Pentru Vase-5 CREATIVE"
+            - generic [ref=e884]: 17h
+          - generic [ref=e885]: EDIT
+        - generic [ref=e886]:
+          - generic [ref=e888]:
+            - generic [ref=e889]: Mara Mara a editat "Laveta Magica din Microfibra-5 CREATIVE"
+            - generic [ref=e890]: 17h
+          - generic [ref=e891]: EDIT
+        - generic [ref=e892]:
+          - generic [ref=e894]:
+            - generic [ref=e895]: Mara Campaign "C" creat cu 4 produse
+            - generic [ref=e896]: 17h
+          - generic [ref=e897]: CAMPAIGN
+        - generic [ref=e898]:
+          - generic [ref=e900]:
+            - generic [ref=e901]: Mara Campaign "C" creat cu 3 produse
+            - generic [ref=e902]: 17h
+          - generic [ref=e903]: CAMPAIGN
+      - generic [ref=e905]:
+        - generic [ref=e907] [cursor=pointer]:
+          - generic [ref=e908]:
+            - generic [ref=e909]: BLOCAJE
+            - generic [ref=e910]: Click pentru detalii ▶
+          - generic [ref=e911]: "5"
+          - generic [ref=e912]: Fara miscare > 48h
+        - generic [ref=e913]:
+          - generic [ref=e914]:
+            - generic [ref=e915]:
+              - generic [ref=e916]:
+                - generic [ref=e917]: Productivitate ultimele 7 zile
+                - generic [ref=e918]: Done vs Creat pe zi
+              - generic [ref=e919]:
+                - generic [ref=e920]: "-100%"
+                - generic [ref=e921]: vs ieri
+            - img [ref=e922]:
+              - generic [ref=e923]: "0"
+              - generic [ref=e924]: "118"
+              - generic [ref=e925]: "236"
+              - generic [ref=e926]:
+                - generic [ref=e929]: 12 Mai
+                - generic [ref=e930]: "210"
+              - generic [ref=e931]:
+                - generic [ref=e934]: 13 Mai
+                - generic [ref=e935]: "132"
+              - generic [ref=e936]:
+                - generic [ref=e939]: 14 Mai
+                - generic [ref=e940]: "220"
+              - generic [ref=e941]:
+                - generic [ref=e944]: 15 Mai
+                - generic [ref=e945]: "201"
+              - generic [ref=e946]:
+                - generic [ref=e949]: 16 Mai
+                - generic [ref=e950]: "60"
+              - generic [ref=e951]:
+                - generic [ref=e954]: 17 Mai
+                - generic [ref=e955]: "4"
+              - generic [ref=e957]: 18 Mai
+            - generic [ref=e958]:
+              - generic [ref=e961]: Creat
+              - generic [ref=e964]: Done
+          - generic [ref=e965]:
+            - generic [ref=e966]: Platforma (active)
+            - generic [ref=e967]: 64 taskuri nefinalizate
+            - generic [ref=e968]:
+              - img [ref=e969]:
+                - generic [ref=e973]: "64"
+                - generic [ref=e974]: taskuri
+              - generic [ref=e975]:
+                - generic [ref=e976]:
+                  - generic [ref=e978]: Creativ
+                  - generic [ref=e979]: "39"
+                  - generic [ref=e980]: 61%
+                - generic [ref=e981]:
+                  - generic [ref=e983]: Altele
+                  - generic [ref=e984]: "25"
+                  - generic [ref=e985]: 39%
+        - generic [ref=e986]:
+          - generic [ref=e987]:
+            - generic [ref=e988]: Top performeri - saptamana
+            - generic [ref=e989]: Taskuri finalizate ultimele 7 zile
+            - generic [ref=e990]:
+              - generic [ref=e991]: "1"
+              - generic [ref=e993]: A
+              - generic [ref=e995]:
+                - generic [ref=e996]: Alexandra
+                - generic [ref=e997]: "249"
+            - generic [ref=e1000]:
+              - generic [ref=e1001]: "2"
+              - generic [ref=e1003]: A
+              - generic [ref=e1005]:
+                - generic [ref=e1006]: Angi
+                - generic [ref=e1007]: "231"
+            - generic [ref=e1010]:
+              - generic [ref=e1011]: "3"
+              - generic [ref=e1013]: M
+              - generic [ref=e1015]:
+                - generic [ref=e1016]: Mara Poze
+                - generic [ref=e1017]: "125"
+            - generic [ref=e1020]:
+              - generic [ref=e1021]: "4"
+              - generic [ref=e1023]: D
+              - generic [ref=e1025]:
+                - generic [ref=e1026]: Dana
+                - generic [ref=e1027]: "117"
+            - generic [ref=e1030]:
+              - generic [ref=e1031]: "5"
+              - generic [ref=e1033]: C
+              - generic [ref=e1035]:
+                - generic [ref=e1036]: Carla
+                - generic [ref=e1037]: "106"
+            - generic [ref=e1040]:
+              - generic [ref=e1041]: "6"
+              - generic [ref=e1043]: D
+              - generic [ref=e1045]:
+                - generic [ref=e1046]: Denisa
+                - generic [ref=e1047]: "89"
+            - generic [ref=e1050]:
+              - generic [ref=e1051]: "7"
+              - generic [ref=e1053]: S
+              - generic [ref=e1055]:
+                - generic [ref=e1056]: Sonia
+                - generic [ref=e1057]: "34"
+          - generic [ref=e1060]:
+            - generic [ref=e1061]: Magazine - activitate
+            - generic [ref=e1062]: Done (7zile) vs Active
+            - generic [ref=e1064]:
+              - generic [ref=e1065]: MagDeal
+              - generic [ref=e1066]: 677 done / 51 active
+            - generic [ref=e1071]:
+              - generic [ref=e1072]: Casa Ofertelor
+              - generic [ref=e1073]: 107 done / 3 active
+            - generic [ref=e1078]:
+              - generic [ref=e1079]: Reduceri Bune
+              - generic [ref=e1080]: 102 done / 0 active
+            - generic [ref=e1084]:
+              - generic [ref=e1085]: Ofertele zilei
+              - generic [ref=e1086]: 82 done / 0 active
+            - generic [ref=e1090]:
+              - generic [ref=e1091]: Grandia
+              - generic [ref=e1092]: 24 done / 10 active
+            - generic [ref=e1097]:
+              - generic [ref=e1098]: Bonhaus BG
+              - generic [ref=e1099]: 0 done / 0 active
+            - generic [ref=e1101]:
+              - generic [ref=e1102]: Bonhaus PL
+              - generic [ref=e1103]: 0 done / 0 active
+            - generic [ref=e1105]:
+              - generic [ref=e1106]: Apreciat
+              - generic [ref=e1107]: 0 done / 0 active
+        - generic [ref=e1108]:
+          - generic [ref=e1109]:
+            - generic [ref=e1110]: Timp mediu pe tip task
+            - generic [ref=e1111]: Pe baza timer-elor taskurilor finalizate
+            - generic [ref=e1113]:
+              - generic [ref=e1114]: Creative
+              - generic [ref=e1115]: 10:05:12
+            - generic [ref=e1119]:
+              - generic [ref=e1120]: Ad Creation
+              - generic [ref=e1121]: 1:41:52
+            - generic [ref=e1125]:
+              - generic [ref=e1126]: Product Launch
+              - generic [ref=e1127]: 1:20:18
+            - generic [ref=e1131]:
+              - generic [ref=e1132]: Creative video
+              - generic [ref=e1133]: 16:36
+            - generic [ref=e1137]:
+              - generic [ref=e1138]: Alte taskuri
+              - generic [ref=e1139]: 15:48
+          - generic [ref=e1142]:
+            - generic [ref=e1143]: Blocaje (nu s-au miscat > 48h)
+            - generic [ref=e1144]: Taskuri ramase fara progres
+            - generic [ref=e1145]:
+              - generic [ref=e1147]: A
+              - generic [ref=e1148]:
+                - generic [ref=e1149]: Tăietor de Căni | Tăietor de Căpșuni | Tăietor de Ouă | Tăietor-Salată, Procesor Manual Rapid și Ușor pentru Tăierea Fructelor, Gadget de Bucătărie cu Lame de Tăiat și Tăiat Cuburi, Mini Tăietor Cuburi cu Trei Accesorii - Foto Produs - LP
+                - generic [ref=e1150]: Alexandra | To Do
+              - generic [ref=e1151]: 2z
+            - generic [ref=e1152]:
+              - generic [ref=e1154]: A
+              - generic [ref=e1155]:
+                - generic [ref=e1156]: Pătură de vară ușoară și respirabilă - Te menține răcoros, respirabilă, foarte moale și confortabilă, oferind o senzație de răcoare. Ideală pentru utilizare în dormitor, birou, în aer liber și în mașină. Potrivită pentru toate anotimpurile. Pătură pentru aer condiționat - Foto Produs - LP
+                - generic [ref=e1157]: Alexandra | To Do
+              - generic [ref=e1158]: 2z
+            - generic [ref=e1159]:
+              - generic [ref=e1161]: A
+              - generic [ref=e1162]:
+                - generic [ref=e1163]: Tăietor Manual de Castraveți - Foto Produs - LP
+                - generic [ref=e1164]: Alexandra | To Do
+              - generic [ref=e1165]: 2z
+            - generic [ref=e1166]:
+              - generic [ref=e1168]: A
+              - generic [ref=e1169]:
+                - generic [ref=e1170]: Cremă de Ridicare a Gâtului cu Colagen și Venin de Albine | Hidratează Profund și Fermează Pielea Feței, Gâtului și Mâinilor | Formulă Blândă pentru Toate Tipurile de Piele, Inclusiv Pielea Sensibilă și Uscată - Foto Produs - LP
+                - generic [ref=e1171]: Alexandra | To Do
+              - generic [ref=e1172]: 2z
+            - generic [ref=e1173]:
+              - generic [ref=e1175]: A
+              - generic [ref=e1176]:
+                - generic [ref=e1177]: Compresă Caldă, Piatră Energetică, Masaj cu Pietre Fierbinți, Masaj pentru Cap, Corp, Picioare, Salon de Înfrumusețare, Utilizare Acasă - Foto Produs - LP
+                - generic [ref=e1178]: Alexandra | To Do
+              - generic [ref=e1179]: 2z
+      - generic [ref=e1181]:
+        - heading "Echipa" [level=3] [ref=e1182]
+        - generic [ref=e1183]:
+          - generic [ref=e1185] [cursor=pointer]:
+            - generic [ref=e1186]:
+              - generic [ref=e1188]:
+                - generic [ref=e1189]: A
+                - generic [ref=e1190]: "11"
+              - generic [ref=e1192]:
+                - generic [ref=e1193]: Angi
+                - generic [ref=e1194]: Member
+              - generic [ref=e1195]: 0%
+            - generic [ref=e1197]: Nu a intrat azi
+            - generic [ref=e1200]: ⚠ Fara taskuri active
+          - generic [ref=e1202] [cursor=pointer]:
+            - generic [ref=e1203]:
+              - generic [ref=e1205]:
+                - generic [ref=e1206]: D
+                - generic [ref=e1207]: "17"
+              - generic [ref=e1209]:
+                - generic [ref=e1210]: Dana
+                - generic [ref=e1211]: Member
+              - generic [ref=e1212]: 0%
+            - generic [ref=e1213]:
+              - generic [ref=e1214]: Activ azi
+              - generic [ref=e1215]: "Prima: 11:33"
+              - generic [ref=e1216]: "Ultima: 11:33"
+            - generic [ref=e1217]:
+              - generic [ref=e1218]:
+                - generic [ref=e1219]: Product Launch
+                - generic [ref=e1220]: 0/25
+              - generic [ref=e1222]: "Ramas azi: 25"
+            - generic [ref=e1225]: ⚠ Fara taskuri active
+          - generic [ref=e1227] [cursor=pointer]:
+            - generic [ref=e1228]:
+              - generic [ref=e1230]:
+                - generic [ref=e1231]: M
+                - generic [ref=e1232]: "19"
+              - generic [ref=e1234]:
+                - generic [ref=e1235]: Mara
+                - generic [ref=e1236]: PM
+              - generic [ref=e1237]: 25%
+            - generic [ref=e1239]: Nu a intrat azi
+            - generic [ref=e1242]: ⚠ Fara taskuri active
+          - generic [ref=e1244] [cursor=pointer]:
+            - generic [ref=e1245]:
+              - generic [ref=e1247]:
+                - generic [ref=e1248]: C
+                - generic [ref=e1249]: "24"
+              - generic [ref=e1251]:
+                - generic [ref=e1252]: Carla
+                - generic [ref=e1253]: PM
+              - generic [ref=e1254]: 0%
+            - generic [ref=e1256]: Nu a intrat azi
+            - generic [ref=e1257]:
+              - generic [ref=e1258]:
+                - generic [ref=e1259]: Ads Creation
+                - generic [ref=e1260]: 0/25
+              - generic [ref=e1262]: "Ramas azi: 25"
+            - generic [ref=e1263]:
+              - generic [ref=e1264]:
+                - generic [ref=e1265]: Landing Page
+                - generic [ref=e1266]: 0/25
+              - generic [ref=e1268]: "Ramas azi: 25"
+            - generic [ref=e1271]: ⚠ Fara taskuri active
+          - generic [ref=e1273] [cursor=pointer]:
+            - generic [ref=e1274]:
+              - generic [ref=e1276]:
+                - generic [ref=e1277]: S
+                - generic [ref=e1278]: "4"
+              - generic [ref=e1280]:
+                - generic [ref=e1281]: Sonia
+                - generic [ref=e1282]: Member
+              - generic [ref=e1283]: 9%
+            - generic [ref=e1285]: Nu a intrat azi
+            - generic [ref=e1288]: ⚠ Fara taskuri active
+          - generic [ref=e1290] [cursor=pointer]:
+            - generic [ref=e1291]:
+              - generic [ref=e1293]:
+                - generic [ref=e1294]: D
+                - generic [ref=e1295]: "9"
+              - generic [ref=e1297]:
+                - generic [ref=e1298]: Denisa
+                - generic [ref=e1299]: Member
+              - generic [ref=e1300]: 0%
+            - generic [ref=e1302]: Nu a intrat azi
+            - generic [ref=e1305]: ⚠ Fara taskuri active
+          - generic [ref=e1307] [cursor=pointer]:
+            - generic [ref=e1308]:
+              - generic [ref=e1310]:
+                - generic [ref=e1311]: T
+                - generic [ref=e1312]: "1"
+              - generic [ref=e1314]:
+                - generic [ref=e1315]: Teodora
+                - generic [ref=e1316]: Member
+              - generic [ref=e1317]: 9%
+            - generic [ref=e1319]: Nu a intrat azi
+            - generic [ref=e1322]: ⚠ Fara taskuri active
+          - generic [ref=e1324] [cursor=pointer]:
+            - generic [ref=e1325]:
+              - generic [ref=e1327]:
+                - generic [ref=e1328]: A
+                - generic [ref=e1329]: "21"
+              - generic [ref=e1331]:
+                - generic [ref=e1332]: Alexandra
+                - generic [ref=e1333]: Member
+              - generic [ref=e1334]: 35%
+            - generic [ref=e1336]: Nu a intrat azi
+            - generic [ref=e1337]:
+              - generic [ref=e1338]:
+                - generic [ref=e1340]: aparat lumina rosie pt calp - Foto Produs - LP
+                - generic [ref=e1341]: MagDeal
+                - generic [ref=e1342]: 02:08
+              - generic [ref=e1344]: ⚠ Fara taskuri active
+          - generic [ref=e1346] [cursor=pointer]:
+            - generic [ref=e1347]:
+              - generic [ref=e1349]:
+                - generic [ref=e1350]: M
+                - generic [ref=e1351]: "16"
+              - generic [ref=e1353]:
+                - generic [ref=e1354]: Mara Poze
+                - generic [ref=e1355]: Member
+              - generic [ref=e1356]: 51%
+            - generic [ref=e1358]: Nu a intrat azi
+            - generic [ref=e1359]:
+              - generic [ref=e1360]:
+                - generic [ref=e1361]: FOTO PRODUS
+                - generic [ref=e1362]: 0/25
+              - generic [ref=e1364]: "Ramas azi: 25"
+            - generic [ref=e1367]: ⚠ Fara taskuri active
+      - generic [ref=e1369]:
+        - generic [ref=e1371]:
+          - generic [ref=e1372]: Brand & Product Analytics
+          - generic [ref=e1373]: Azi | 0 taskuri
+        - generic [ref=e1374]: Niciun task in perioada selectata.
+  - generic [ref=e1378]:
+    - generic [ref=e1379]:
+      - heading "Task Nou" [level=2] [ref=e1380]
+      - button [ref=e1381] [cursor=pointer]:
+        - img [ref=e1382]
+    - generic [ref=e1385]: Titlu *
+    - textbox "Ce trebuie facut?" [active] [ref=e1386]
+    - generic [ref=e1387]:
+      - generic [ref=e1388]:
+        - generic [ref=e1389]: Persoana
+        - combobox [ref=e1390]:
+          - option "Angi" [selected]
+          - option "Dana"
+          - option "Mara"
+          - option "Stan"
+          - option "Carla"
+          - option "Sonia"
+          - option "Bogdan"
+          - option "Denisa"
+          - option "Teodora"
+          - option "Alexandra"
+          - option "Mara Poze"
+        - generic [ref=e1391]: Multi-assign (optional)
+        - generic [ref=e1392]:
+          - button "Angi" [ref=e1393] [cursor=pointer]
+          - button "Dana" [ref=e1394] [cursor=pointer]
+          - button "Mara" [ref=e1395] [cursor=pointer]
+          - button "Stan" [ref=e1396] [cursor=pointer]
+          - button "Carla" [ref=e1397] [cursor=pointer]
+          - button "Sonia" [ref=e1398] [cursor=pointer]
+          - button "Bogdan" [ref=e1399] [cursor=pointer]
+          - button "Denisa" [ref=e1400] [cursor=pointer]
+          - button "Teodora" [ref=e1401] [cursor=pointer]
+          - button "Alexandra" [ref=e1402] [cursor=pointer]
+          - button "Mara Poze" [ref=e1403] [cursor=pointer]
+      - generic [ref=e1404]:
+        - generic [ref=e1405]: Magazin
+        - combobox [ref=e1406]:
+          - option "--" [selected]
+          - option "Grandia"
+          - option "Bonhaus"
+          - option "Casa Ofertelor"
+          - option "Gento"
+          - option "MagDeal"
+          - option "Reduceri Bune"
+          - option "Apreciat"
+          - option "Bonhaus CZ"
+          - option "Esteban"
+          - option "George Talent"
+          - option "Ofertele zilei"
+          - option "Bonhaus BG"
+          - option "Bonhaus PL"
+          - option "Covoria"
+          - option "Belasil"
+          - option "Nubra"
+          - option "Rossi Nails"
+          - option "Nocturna"
+          - option "Ce pat ai"
+          - option "Carpetto"
+        - generic [ref=e1407]:
+          - generic [ref=e1408]: "Pipeline: urmatorul (foto produs)"
+          - combobox [ref=e1409]:
+            - option "Fara pipeline" [selected]
+            - option "Angi"
+            - option "Dana"
+            - option "Mara"
+            - option "Stan"
+            - option "Carla"
+            - option "Sonia"
+            - option "Bogdan"
+            - option "Denisa"
+            - option "Teodora"
+            - option "Alexandra"
+            - option "Mara Poze"
+    - generic [ref=e1410]:
+      - generic [ref=e1411]:
+        - generic [ref=e1412]: Platforma
+        - combobox [ref=e1413]:
+          - option "--" [selected]
+          - option "Meta Ads"
+          - option "TikTok Ads"
+          - option "Google Ads"
+          - option "Shopify"
+          - option "Creativ"
+          - option "UGC"
+          - option "Foto Produs"
+          - option "Altele"
+      - generic [ref=e1414]:
+        - generic [ref=e1415]: Tip Task
+        - combobox [ref=e1416]:
+          - option "--" [selected]
+          - option "Product Launch"
+          - option "Creative video"
+          - option "Ads Creation"
+          - option "Landing Page"
+          - option "Creative UGC"
+          - option "Raportare"
+          - option "Alte taskuri"
+        - generic [ref=e1417]:
+          - textbox "Tip nou..." [ref=e1418]
+          - button "+" [ref=e1419] [cursor=pointer]
+    - generic [ref=e1420]:
+      - generic [ref=e1421]:
+        - generic [ref=e1422]: Departament
+        - combobox [ref=e1423]:
+          - option "--" [selected]
+          - option "ADS"
+          - option "PRODUCT LAUNCH"
+          - option "CREATIVE VIDEO"
+          - option "UGC"
+          - option "CREATIVE VIDEO PRODUCT LAUNCH"
+          - option "FOTO PRODUS"
+          - option "LANDING PAGE"
+      - generic [ref=e1424]:
+        - generic [ref=e1425]: Prioritate
+        - combobox [ref=e1426]:
+          - option "Low"
+          - option "Normal" [selected]
+          - option "High"
+          - option "Urgent"
+    - generic [ref=e1427]:
+      - generic [ref=e1428]:
+        - generic [ref=e1429]: Status
+        - combobox [ref=e1430]:
+          - option "To Do" [selected]
+          - option "In Progress"
+          - option "Review"
+          - option "Done"
+      - generic [ref=e1431]:
+        - generic [ref=e1432]: Deadline
+        - textbox [ref=e1433]: 2026-05-18
+    - generic [ref=e1434]: Produs (manual)
+    - textbox "Nume produs" [ref=e1435]
+    - generic [ref=e1436]: Linkuri
+    - generic [ref=e1437]:
+      - textbox "https://..." [ref=e1438]
+      - button [ref=e1439] [cursor=pointer]:
+        - img [ref=e1440]
+    - generic [ref=e1441]: Produse Campaign (mega-task)
+    - generic [ref=e1442]: Adauga produse/items - la finalizare selectezi cate ai completat si se adauga la target.
+    - generic [ref=e1443]:
+      - textbox "Nume produs / item..." [ref=e1444]
+      - button [ref=e1445] [cursor=pointer]:
+        - img [ref=e1446]
+    - generic [ref=e1447]: Descriere
+    - textbox "Detalii..." [ref=e1448]
+    - generic [ref=e1449]:
+      - button "Anuleaza" [ref=e1450] [cursor=pointer]
+      - button "Creeaza" [ref=e1451] [cursor=pointer]

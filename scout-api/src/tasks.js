@@ -12,7 +12,16 @@ export function registerTaskRoutes(app, broadcast) {
       expectedVersion: 0,
       updatedBy: req.user.username,
     });
-    if (v == null) return reply.code(409).send({ error: "exists" });
+    if (v == null) {
+      // Row already exists — return its current state so the client can adopt
+      // and treat the create as idempotent (handles network retries safely).
+      const existing = await getRow(rowId);
+      return reply.code(409).send({
+        error: "exists",
+        currentVersion: existing?.version ?? 0,
+        currentData: existing?.data ?? null,
+      });
+    }
     broadcast({ type: "task_change", rowId, id: taskData.id, data: taskData, version: v, by: req.user.username, tabId: req.tabId });
     return { id: taskData.id, version: v };
   });

@@ -1,0 +1,2066 @@
+- generic [ref=e3]:
+  - complementary [ref=e7]:
+    - generic [ref=e8]:
+      - img "Logo" [ref=e9]
+      - generic [ref=e10]: TASK MANAGER
+    - button "New Task" [ref=e12] [cursor=pointer]:
+      - img [ref=e13]
+      - text: New Task
+    - navigation [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16] [cursor=pointer]:
+          - img [ref=e17]
+          - generic [ref=e22]: Dashboard
+        - generic [ref=e23] [cursor=pointer]:
+          - img [ref=e24]
+          - generic [ref=e27]: Taskuri
+        - generic [ref=e28] [cursor=pointer]:
+          - img [ref=e29]
+          - generic [ref=e33]: Kanban Board
+      - generic [ref=e34]:
+        - generic [ref=e35] [cursor=pointer]:
+          - generic [ref=e36]: ▶
+          - generic [ref=e37]: Operational
+        - generic [ref=e38]:
+          - generic [ref=e39] [cursor=pointer]:
+            - img [ref=e40]
+            - generic [ref=e44]: Targets
+          - generic [ref=e45] [cursor=pointer]:
+            - img [ref=e46]
+            - generic [ref=e49]: Templates
+          - generic [ref=e50] [cursor=pointer]:
+            - img [ref=e51]
+            - generic [ref=e54]: Recurring
+          - generic [ref=e55] [cursor=pointer]:
+            - img [ref=e56]
+            - generic [ref=e58]: Concedii
+      - generic [ref=e59]:
+        - generic [ref=e60] [cursor=pointer]:
+          - generic [ref=e61]: ▶
+          - generic [ref=e62]: Echipa
+        - generic [ref=e63]:
+          - generic [ref=e64] [cursor=pointer]:
+            - img [ref=e65]
+            - generic [ref=e68]: Workload
+          - generic [ref=e69] [cursor=pointer]:
+            - img [ref=e70]
+            - generic [ref=e72]: Performance
+          - generic [ref=e73] [cursor=pointer]:
+            - img [ref=e74]
+            - generic [ref=e77]: Raport Echipa
+          - generic [ref=e78] [cursor=pointer]:
+            - img [ref=e79]
+            - generic [ref=e85]: Liga Saptamanii
+          - generic [ref=e86] [cursor=pointer]:
+            - img [ref=e87]
+            - generic [ref=e89]: Liga Lunara
+          - generic [ref=e90] [cursor=pointer]:
+            - img [ref=e91]
+            - generic [ref=e94]: Weekly Digest
+          - generic [ref=e95] [cursor=pointer]:
+            - img [ref=e96]
+            - generic [ref=e102]: Achievements
+          - generic [ref=e103] [cursor=pointer]:
+            - img [ref=e104]
+            - generic [ref=e106]: Wall of Fame
+          - generic [ref=e107] [cursor=pointer]:
+            - img [ref=e108]
+            - generic [ref=e111]: Brand Analytics
+      - generic [ref=e113] [cursor=pointer]:
+        - generic [ref=e114]: ▶
+        - generic [ref=e115]: Comunicare
+      - generic [ref=e117] [cursor=pointer]:
+        - generic [ref=e118]: ▶
+        - generic [ref=e119]: Configurare
+    - generic [ref=e120]:
+      - generic [ref=e121]:
+        - generic [ref=e122]: S
+        - generic [ref=e123]: "1"
+      - generic [ref=e124]:
+        - generic [ref=e125]: Stan
+        - generic [ref=e126]: admin | Lv.1 Recrut
+        - generic [ref=e129]: 16 XP | 32% spre Lv.2
+    - button "Sign out" [ref=e131] [cursor=pointer]:
+      - img [ref=e132]
+      - text: Sign out
+  - main [ref=e135]:
+    - generic [ref=e136]:
+      - heading "Taskuri" [level=1] [ref=e2393]
+      - button "Bulk" [ref=e2394] [cursor=pointer]:
+        - img [ref=e2395]
+        - text: Bulk
+      - button "↩ Undo" [ref=e4430] [cursor=pointer]:
+        - generic [ref=e4431]: ↩
+        - generic [ref=e4432]: Undo
+      - button "🔊" [ref=e138] [cursor=pointer]:
+        - generic [ref=e139]: 🔊
+      - generic [ref=e140]:
+        - button [ref=e141] [cursor=pointer]:
+          - img [ref=e142]
+        - generic [ref=e145]: "62"
+      - button "New Task" [ref=e2400] [cursor=pointer]:
+        - img [ref=e2401]
+        - text: New Task
+    - generic [ref=e2402]:
+      - generic [ref=e2403]:
+        - generic [ref=e2404]:
+          - img [ref=e2406]
+          - generic [ref=e2409]:
+            - generic [ref=e2410]: "153"
+            - generic [ref=e2411]: Total
+        - generic [ref=e2412]:
+          - img [ref=e2414]
+          - generic [ref=e2417]:
+            - generic [ref=e2418]: "100"
+            - generic [ref=e2419]: Azi
+        - generic [ref=e2420]:
+          - img [ref=e2422]
+          - generic [ref=e2425]:
+            - generic [ref=e2426]: "0"
+            - generic [ref=e2427]: In Progress
+        - generic [ref=e2428]:
+          - img [ref=e2430]
+          - generic [ref=e2433]:
+            - generic [ref=e2434]: "0"
+            - generic [ref=e2435]: Intarziate
+        - generic [ref=e2436]:
+          - img [ref=e2438]
+          - generic [ref=e2441]:
+            - generic [ref=e2442]: "102"
+            - generic [ref=e2443]: Finalizate
+      - generic [ref=e2444]:
+        - generic [ref=e2445]:
+          - button "Toate" [ref=e2446] [cursor=pointer]
+          - button "Azi(100)" [ref=e2447] [cursor=pointer]:
+            - text: Azi
+            - generic [ref=e2448]: (100)
+          - button "Ieri" [ref=e2449] [cursor=pointer]
+          - button "Maine" [ref=e2450] [cursor=pointer]
+          - button "Intarziate" [ref=e2451] [cursor=pointer]
+          - button "Viitoare" [ref=e2452] [cursor=pointer]
+          - button "Fara data" [ref=e2453] [cursor=pointer]
+        - generic [ref=e2454]:
+          - combobox [ref=e2455]:
+            - 'option "Status: Toate" [selected]'
+            - option "To Do"
+            - option "In Progress"
+            - option "Review"
+            - option "Done"
+          - combobox [ref=e2456]:
+            - 'option "Prioritate: Toate" [selected]'
+            - option "Low"
+            - option "Normal"
+            - option "High"
+            - option "Urgent"
+          - combobox [ref=e2457]:
+            - 'option "Persoana: Toti" [selected]'
+            - option "Angi"
+            - option "Dana"
+            - option "Mara"
+            - option "Carla"
+            - option "Sonia"
+            - option "Bogdan"
+            - option "Denisa"
+            - option "Alexandra"
+            - option "Mara Poze"
+          - combobox [ref=e2458]:
+            - 'option "Magazin: Toate" [selected]'
+            - option "Grandia"
+            - option "Bonhaus"
+            - option "Casa Ofertelor"
+            - option "Gento"
+            - option "MagDeal"
+            - option "Reduceri Bune"
+            - option "Apreciat"
+            - option "Bonhaus CZ"
+            - option "Esteban"
+            - option "George Talent"
+            - option "Ofertele zilei"
+            - option "Bonhaus BG"
+            - option "Bonhaus PL"
+            - option "Covoria"
+            - option "Belasil"
+            - option "Nubra"
+            - option "Rossi Nails"
+            - option "Nocturna"
+            - option "Ce pat ai"
+            - option "Carpetto"
+          - combobox [ref=e2459]:
+            - 'option "Dept: Toate" [selected]'
+            - option "ADS"
+            - option "PRODUCT LAUNCH"
+            - option "CREATIVE VIDEO"
+            - option "UGC"
+            - option "CREATIVE VIDEO PRODUCT LAUNCH"
+            - option "FOTO PRODUS"
+            - option "LANDING PAGE"
+          - combobox [ref=e2460]:
+            - 'option "Platforma: Toate" [selected]'
+            - option "Meta Ads"
+            - option "TikTok Ads"
+            - option "Google Ads"
+            - option "Shopify"
+            - option "Creativ"
+            - option "UGC"
+            - option "Foto Produs"
+            - option "Altele"
+          - generic [ref=e2461]: 153 taskuri
+      - generic [ref=e2462]:
+        - generic [ref=e2464]:
+          - generic [ref=e2465]:
+            - img [ref=e2467]
+            - generic [ref=e2470]:
+              - generic [ref=e2471]: Taskurile mele
+              - generic [ref=e2472]: 0 taskuri active
+          - generic [ref=e2473]: Niciun task activ.
+        - generic [ref=e2475]:
+          - generic [ref=e2476]:
+            - img [ref=e2478]
+            - generic [ref=e2483]:
+              - generic [ref=e2484]: Taskurile echipei
+              - generic [ref=e2485]: 51 taskuri active | 102 finalizate
+          - generic [ref=e2486]:
+            - generic [ref=e2487]:
+              - generic [ref=e2488]: To Do
+              - generic [ref=e2490]: "51"
+            - generic [ref=e2526]:
+              - button "o" [ref=e2527] [cursor=pointer]
+              - generic [ref=e2528] [cursor=pointer]:
+                - generic [ref=e2529]:
+                  - generic [ref=e2530]: Umidificator 4-în-1 cu Lumini RGB, Boxă Bluetooth și Acvariu Decorativ
+                  - generic [ref=e2531]: Normal
+                - generic [ref=e2532]:
+                  - generic [ref=e2533]:
+                    - generic [ref=e2534]:
+                      - generic [ref=e2535]: D
+                      - generic [ref=e2536]: "16"
+                    - text: Dana
+                  - generic [ref=e2537]: MagDeal
+                  - generic [ref=e2538]: Creativ
+                  - generic [ref=e2539]: Creative video
+                  - generic [ref=e2540]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2541]: Umidificator 4-în-1 cu Lumini RGB, Boxă Bluetooth și Acvariu Decorativ
+                  - generic [ref=e2542]: 15 Mai
+                  - generic [ref=e2543]:
+                    - img [ref=e2544]
+                    - text: "1"
+              - generic [ref=e2547]:
+                - button "Start" [ref=e2548] [cursor=pointer]:
+                  - img [ref=e2549]
+                  - text: Start
+                - combobox [ref=e2551]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2552] [cursor=pointer]:
+                  - img [ref=e2553]
+                - button [ref=e2556] [cursor=pointer]:
+                  - img [ref=e2557]
+                - button [ref=e2560] [cursor=pointer]:
+                  - img [ref=e2561]
+            - generic [ref=e2563]:
+              - button "o" [ref=e2564] [cursor=pointer]
+              - generic [ref=e2565] [cursor=pointer]:
+                - generic [ref=e2566]:
+                  - generic [ref=e2567]: Aripi de Fluture cu LED-uri Colorate pentru Copii
+                  - generic [ref=e2568]: Normal
+                - generic [ref=e2569]:
+                  - generic [ref=e2570]:
+                    - generic [ref=e2571]:
+                      - generic [ref=e2572]: D
+                      - generic [ref=e2573]: "16"
+                    - text: Dana
+                  - generic [ref=e2574]: MagDeal
+                  - generic [ref=e2575]: Creativ
+                  - generic [ref=e2576]: Creative video
+                  - generic [ref=e2577]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2578]: Aripi de Fluture cu LED-uri Colorate pentru Copii
+                  - generic [ref=e2579]: 15 Mai
+                  - generic [ref=e2580]:
+                    - img [ref=e2581]
+                    - text: "1"
+              - generic [ref=e2584]:
+                - button "Start" [ref=e2585] [cursor=pointer]:
+                  - img [ref=e2586]
+                  - text: Start
+                - combobox [ref=e2588]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2589] [cursor=pointer]:
+                  - img [ref=e2590]
+                - button [ref=e2593] [cursor=pointer]:
+                  - img [ref=e2594]
+                - button [ref=e2597] [cursor=pointer]:
+                  - img [ref=e2598]
+            - generic [ref=e2600]:
+              - button "o" [ref=e2601] [cursor=pointer]
+              - generic [ref=e2602] [cursor=pointer]:
+                - generic [ref=e2603]:
+                  - generic [ref=e2604]: Căsuță de Păpuși pentru Copii cu 11 Camere, 4 Păpuși, Lumini LED și Accesorii Incluse
+                  - generic [ref=e2605]: Normal
+                - generic [ref=e2606]:
+                  - generic [ref=e2607]:
+                    - generic [ref=e2608]:
+                      - generic [ref=e2609]: D
+                      - generic [ref=e2610]: "16"
+                    - text: Dana
+                  - generic [ref=e2611]: MagDeal
+                  - generic [ref=e2612]: Creativ
+                  - generic [ref=e2613]: Creative video
+                  - generic [ref=e2614]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2615]: Căsuță de Păpuși pentru Copii cu 11 Camere, 4 Păpuși, Lumini LED și Accesorii Incluse
+                  - generic [ref=e2616]: 15 Mai
+                  - generic [ref=e2617]:
+                    - img [ref=e2618]
+                    - text: "1"
+              - generic [ref=e2621]:
+                - button "Start" [ref=e2622] [cursor=pointer]:
+                  - img [ref=e2623]
+                  - text: Start
+                - combobox [ref=e2625]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2626] [cursor=pointer]:
+                  - img [ref=e2627]
+                - button [ref=e2630] [cursor=pointer]:
+                  - img [ref=e2631]
+                - button [ref=e2634] [cursor=pointer]:
+                  - img [ref=e2635]
+            - generic [ref=e2637]:
+              - button "o" [ref=e2638] [cursor=pointer]
+              - generic [ref=e2639] [cursor=pointer]:
+                - generic [ref=e2640]:
+                  - generic [ref=e2641]: Mastic Impermeabil pentru Etanșarea Găurilor și Crăpăturilor cu Uscare Rapidă (2 Bucăți)
+                  - generic [ref=e2642]: Normal
+                - generic [ref=e2643]:
+                  - generic [ref=e2644]:
+                    - generic [ref=e2645]:
+                      - generic [ref=e2646]: D
+                      - generic [ref=e2647]: "16"
+                    - text: Dana
+                  - generic [ref=e2648]: MagDeal
+                  - generic [ref=e2649]: Creativ
+                  - generic [ref=e2650]: Creative video
+                  - generic [ref=e2651]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2652]: Mastic Impermeabil pentru Etanșarea Găurilor și Crăpăturilor cu Uscare Rapidă (2 Bucăți)
+                  - generic [ref=e2653]: 15 Mai
+                  - generic [ref=e2654]:
+                    - img [ref=e2655]
+                    - text: "1"
+              - generic [ref=e2658]:
+                - button "Start" [ref=e2659] [cursor=pointer]:
+                  - img [ref=e2660]
+                  - text: Start
+                - combobox [ref=e2662]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2663] [cursor=pointer]:
+                  - img [ref=e2664]
+                - button [ref=e2667] [cursor=pointer]:
+                  - img [ref=e2668]
+                - button [ref=e2671] [cursor=pointer]:
+                  - img [ref=e2672]
+            - generic [ref=e2674]:
+              - button "o" [ref=e2675] [cursor=pointer]
+              - generic [ref=e2676] [cursor=pointer]:
+                - generic [ref=e2677]:
+                  - generic [ref=e2678]: Cheie Universală Torx Din Oțel Chrom (8 mm la 22 mm)
+                  - generic [ref=e2679]: Normal
+                - generic [ref=e2680]:
+                  - generic [ref=e2681]:
+                    - generic [ref=e2682]:
+                      - generic [ref=e2683]: D
+                      - generic [ref=e2684]: "16"
+                    - text: Dana
+                  - generic [ref=e2685]: MagDeal
+                  - generic [ref=e2686]: Creativ
+                  - generic [ref=e2687]: Creative video
+                  - generic [ref=e2688]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2689]: Cheie Universală Torx Din Oțel Chrom (8 mm la 22 mm)
+                  - generic [ref=e2690]: 15 Mai
+                  - generic [ref=e2691]:
+                    - img [ref=e2692]
+                    - text: "1"
+              - generic [ref=e2695]:
+                - button "Start" [ref=e2696] [cursor=pointer]:
+                  - img [ref=e2697]
+                  - text: Start
+                - combobox [ref=e2699]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2700] [cursor=pointer]:
+                  - img [ref=e2701]
+                - button [ref=e2704] [cursor=pointer]:
+                  - img [ref=e2705]
+                - button [ref=e2708] [cursor=pointer]:
+                  - img [ref=e2709]
+            - generic [ref=e2711]:
+              - button "o" [ref=e2712] [cursor=pointer]
+              - generic [ref=e2713] [cursor=pointer]:
+                - generic [ref=e2714]:
+                  - generic [ref=e2715]: SET DE 5 Brățari Anti-Țânțari cu Uleiuri Naturale, Lungime Reglabilă, Protecție Îndelungată
+                  - generic [ref=e2716]: Normal
+                - generic [ref=e2717]:
+                  - generic [ref=e2718]:
+                    - generic [ref=e2719]:
+                      - generic [ref=e2720]: D
+                      - generic [ref=e2721]: "16"
+                    - text: Dana
+                  - generic [ref=e2722]: MagDeal
+                  - generic [ref=e2723]: Creativ
+                  - generic [ref=e2724]: Creative video
+                  - generic [ref=e2725]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2726]: SET DE 5 Brățari Anti-Țânțari cu Uleiuri Naturale, Lungime Reglabilă, Protecție Îndelungată
+                  - generic [ref=e2727]: 15 Mai
+                  - generic [ref=e2728]:
+                    - img [ref=e2729]
+                    - text: "1"
+              - generic [ref=e2732]:
+                - button "Start" [ref=e2733] [cursor=pointer]:
+                  - img [ref=e2734]
+                  - text: Start
+                - combobox [ref=e2736]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2737] [cursor=pointer]:
+                  - img [ref=e2738]
+                - button [ref=e2741] [cursor=pointer]:
+                  - img [ref=e2742]
+                - button [ref=e2745] [cursor=pointer]:
+                  - img [ref=e2746]
+            - generic [ref=e2748]:
+              - button "o" [ref=e2749] [cursor=pointer]
+              - generic [ref=e2750] [cursor=pointer]:
+                - generic [ref=e2751]:
+                  - generic [ref=e2752]: Patură Pufuoasă, Fosforescenta Cu Steluțe Care Luminează În Întuneric, Pentru Copii
+                  - generic [ref=e2753]: Normal
+                - generic [ref=e2754]:
+                  - generic [ref=e2755]:
+                    - generic [ref=e2756]:
+                      - generic [ref=e2757]: D
+                      - generic [ref=e2758]: "16"
+                    - text: Dana
+                  - generic [ref=e2759]: MagDeal
+                  - generic [ref=e2760]: Creativ
+                  - generic [ref=e2761]: Creative video
+                  - generic [ref=e2762]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2763]: Patură Pufuoasă, Fosforescenta Cu Steluțe Care Luminează În Întuneric, Pentru Copii
+                  - generic [ref=e2764]: 15 Mai
+                  - generic [ref=e2765]:
+                    - img [ref=e2766]
+                    - text: "1"
+              - generic [ref=e2769]:
+                - button "Start" [ref=e2770] [cursor=pointer]:
+                  - img [ref=e2771]
+                  - text: Start
+                - combobox [ref=e2773]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2774] [cursor=pointer]:
+                  - img [ref=e2775]
+                - button [ref=e2778] [cursor=pointer]:
+                  - img [ref=e2779]
+                - button [ref=e2782] [cursor=pointer]:
+                  - img [ref=e2783]
+            - generic [ref=e2785]:
+              - button "o" [ref=e2786] [cursor=pointer]
+              - generic [ref=e2787] [cursor=pointer]:
+                - generic [ref=e2788]:
+                  - generic [ref=e2789]: Set de 5 piese pentru îndepărtarea căpușelor în cutie
+                  - generic [ref=e2790]: Normal
+                - generic [ref=e2791]:
+                  - generic [ref=e2792]:
+                    - generic [ref=e2793]:
+                      - generic [ref=e2794]: D
+                      - generic [ref=e2795]: "16"
+                    - text: Dana
+                  - generic [ref=e2796]: MagDeal
+                  - generic [ref=e2797]: Creativ
+                  - generic [ref=e2798]: Creative video
+                  - generic [ref=e2799]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2800]: Set de 5 piese pentru îndepărtarea căpușelor în cutie
+                  - generic [ref=e2801]: 15 Mai
+                  - generic [ref=e2802]:
+                    - img [ref=e2803]
+                    - text: "1"
+              - generic [ref=e2806]:
+                - button "Start" [ref=e2807] [cursor=pointer]:
+                  - img [ref=e2808]
+                  - text: Start
+                - combobox [ref=e2810]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2811] [cursor=pointer]:
+                  - img [ref=e2812]
+                - button [ref=e2815] [cursor=pointer]:
+                  - img [ref=e2816]
+                - button [ref=e2819] [cursor=pointer]:
+                  - img [ref=e2820]
+            - generic [ref=e2822]:
+              - button "o" [ref=e2823] [cursor=pointer]
+              - generic [ref=e2824] [cursor=pointer]:
+                - generic [ref=e2825]:
+                  - generic [ref=e2826]: Aparat cu ultrasunete electronic pentru alungat șobolanii
+                  - generic [ref=e2827]: Normal
+                - generic [ref=e2828]:
+                  - generic [ref=e2829]:
+                    - generic [ref=e2830]:
+                      - generic [ref=e2831]: D
+                      - generic [ref=e2832]: "16"
+                    - text: Dana
+                  - generic [ref=e2833]: MagDeal
+                  - generic [ref=e2834]: Creativ
+                  - generic [ref=e2835]: Creative video
+                  - generic [ref=e2836]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2837]: Aparat cu ultrasunete electronic pentru alungat șobolanii
+                  - generic [ref=e2838]: 15 Mai
+                  - generic [ref=e2839]:
+                    - img [ref=e2840]
+                    - text: "1"
+              - generic [ref=e2843]:
+                - button "Start" [ref=e2844] [cursor=pointer]:
+                  - img [ref=e2845]
+                  - text: Start
+                - combobox [ref=e2847]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2848] [cursor=pointer]:
+                  - img [ref=e2849]
+                - button [ref=e2852] [cursor=pointer]:
+                  - img [ref=e2853]
+                - button [ref=e2856] [cursor=pointer]:
+                  - img [ref=e2857]
+            - generic [ref=e2859]:
+              - button "o" [ref=e2860] [cursor=pointer]
+              - generic [ref=e2861] [cursor=pointer]:
+                - generic [ref=e2862]:
+                  - generic [ref=e2863]: Încărcător nou cu clips pentru baterii tip pastilă
+                  - generic [ref=e2864]: Normal
+                - generic [ref=e2865]:
+                  - generic [ref=e2866]:
+                    - generic [ref=e2867]:
+                      - generic [ref=e2868]: D
+                      - generic [ref=e2869]: "16"
+                    - text: Dana
+                  - generic [ref=e2870]: MagDeal
+                  - generic [ref=e2871]: Creativ
+                  - generic [ref=e2872]: Creative video
+                  - generic [ref=e2873]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2874]: Încărcător nou cu clips pentru baterii tip pastilă
+                  - generic [ref=e2875]: 15 Mai
+                  - generic [ref=e2876]:
+                    - img [ref=e2877]
+                    - text: "1"
+              - generic [ref=e2880]:
+                - button "Start" [ref=e2881] [cursor=pointer]:
+                  - img [ref=e2882]
+                  - text: Start
+                - combobox [ref=e2884]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2885] [cursor=pointer]:
+                  - img [ref=e2886]
+                - button [ref=e2889] [cursor=pointer]:
+                  - img [ref=e2890]
+                - button [ref=e2893] [cursor=pointer]:
+                  - img [ref=e2894]
+            - generic [ref=e2896]:
+              - button "o" [ref=e2897] [cursor=pointer]
+              - generic [ref=e2898] [cursor=pointer]:
+                - generic [ref=e2899]:
+                  - generic [ref=e2900]: Stâlp de Siguranță Auto, Previne Compresia Toracică și Zgomotul de Impact
+                  - generic [ref=e2901]: Normal
+                - generic [ref=e2902]:
+                  - generic [ref=e2903]:
+                    - generic [ref=e2904]:
+                      - generic [ref=e2905]: D
+                      - generic [ref=e2906]: "16"
+                    - text: Dana
+                  - generic [ref=e2907]: MagDeal
+                  - generic [ref=e2908]: Creativ
+                  - generic [ref=e2909]: Creative video
+                  - generic [ref=e2910]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2911]: Stâlp de Siguranță Auto, Previne Compresia Toracică și Zgomotul de Impact
+                  - generic [ref=e2912]: 15 Mai
+                  - generic [ref=e2913]:
+                    - img [ref=e2914]
+                    - text: "1"
+              - generic [ref=e2917]:
+                - button "Start" [ref=e2918] [cursor=pointer]:
+                  - img [ref=e2919]
+                  - text: Start
+                - combobox [ref=e2921]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2922] [cursor=pointer]:
+                  - img [ref=e2923]
+                - button [ref=e2926] [cursor=pointer]:
+                  - img [ref=e2927]
+                - button [ref=e2930] [cursor=pointer]:
+                  - img [ref=e2931]
+            - generic [ref=e2933]:
+              - button "o" [ref=e2934] [cursor=pointer]
+              - generic [ref=e2935] [cursor=pointer]:
+                - generic [ref=e2936]:
+                  - generic [ref=e2937]: Set Ajutor pentru Întoarcerea Cheilor
+                  - generic [ref=e2938]: Normal
+                - generic [ref=e2939]:
+                  - generic [ref=e2940]:
+                    - generic [ref=e2941]:
+                      - generic [ref=e2942]: D
+                      - generic [ref=e2943]: "16"
+                    - text: Dana
+                  - generic [ref=e2944]: MagDeal
+                  - generic [ref=e2945]: Creativ
+                  - generic [ref=e2946]: Creative video
+                  - generic [ref=e2947]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2948]: Set Ajutor pentru Întoarcerea Cheilor
+                  - generic [ref=e2949]: 15 Mai
+                  - generic [ref=e2950]:
+                    - img [ref=e2951]
+                    - text: "1"
+              - generic [ref=e2954]:
+                - button "Start" [ref=e2955] [cursor=pointer]:
+                  - img [ref=e2956]
+                  - text: Start
+                - combobox [ref=e2958]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2959] [cursor=pointer]:
+                  - img [ref=e2960]
+                - button [ref=e2963] [cursor=pointer]:
+                  - img [ref=e2964]
+                - button [ref=e2967] [cursor=pointer]:
+                  - img [ref=e2968]
+            - generic [ref=e2970]:
+              - button "o" [ref=e2971] [cursor=pointer]
+              - generic [ref=e2972] [cursor=pointer]:
+                - generic [ref=e2973]:
+                  - generic [ref=e2974]: 65 buc. Plasture Senzor
+                  - generic [ref=e2975]: Normal
+                - generic [ref=e2976]:
+                  - generic [ref=e2977]:
+                    - generic [ref=e2978]:
+                      - generic [ref=e2979]: D
+                      - generic [ref=e2980]: "16"
+                    - text: Dana
+                  - generic [ref=e2981]: MagDeal
+                  - generic [ref=e2982]: Creativ
+                  - generic [ref=e2983]: Creative video
+                  - generic [ref=e2984]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e2985]: 65 buc. Plasture Senzor
+                  - generic [ref=e2986]: 15 Mai
+                  - generic [ref=e2987]:
+                    - img [ref=e2988]
+                    - text: "1"
+              - generic [ref=e2991]:
+                - button "Start" [ref=e2992] [cursor=pointer]:
+                  - img [ref=e2993]
+                  - text: Start
+                - combobox [ref=e2995]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e2996] [cursor=pointer]:
+                  - img [ref=e2997]
+                - button [ref=e3000] [cursor=pointer]:
+                  - img [ref=e3001]
+                - button [ref=e3004] [cursor=pointer]:
+                  - img [ref=e3005]
+            - generic [ref=e3007]:
+              - button "o" [ref=e3008] [cursor=pointer]
+              - generic [ref=e3009] [cursor=pointer]:
+                - generic [ref=e3010]:
+                  - generic [ref=e3011]: Geantă Răcitoare pentru Insulină TSA Aprobată
+                  - generic [ref=e3012]: Normal
+                - generic [ref=e3013]:
+                  - generic [ref=e3014]:
+                    - generic [ref=e3015]:
+                      - generic [ref=e3016]: D
+                      - generic [ref=e3017]: "16"
+                    - text: Dana
+                  - generic [ref=e3018]: MagDeal
+                  - generic [ref=e3019]: Creativ
+                  - generic [ref=e3020]: Creative video
+                  - generic [ref=e3021]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e3022]: Geantă Răcitoare pentru Insulină TSA Aprobată
+                  - generic [ref=e3023]: 15 Mai
+                  - generic [ref=e3024]:
+                    - img [ref=e3025]
+                    - text: "1"
+              - generic [ref=e3028]:
+                - button "Start" [ref=e3029] [cursor=pointer]:
+                  - img [ref=e3030]
+                  - text: Start
+                - combobox [ref=e3032]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3033] [cursor=pointer]:
+                  - img [ref=e3034]
+                - button [ref=e3037] [cursor=pointer]:
+                  - img [ref=e3038]
+                - button [ref=e3041] [cursor=pointer]:
+                  - img [ref=e3042]
+            - generic [ref=e3044]:
+              - button "o" [ref=e3045] [cursor=pointer]
+              - generic [ref=e3046] [cursor=pointer]:
+                - generic [ref=e3047]:
+                  - generic [ref=e3048]: Desfăcător de Sticle Ampulă pentru Asistent Medical
+                  - generic [ref=e3049]: Normal
+                - generic [ref=e3050]:
+                  - generic [ref=e3051]:
+                    - generic [ref=e3052]:
+                      - generic [ref=e3053]: D
+                      - generic [ref=e3054]: "16"
+                    - text: Dana
+                  - generic [ref=e3055]: MagDeal
+                  - generic [ref=e3056]: Creativ
+                  - generic [ref=e3057]: Creative video
+                  - generic [ref=e3058]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e3059]: Desfăcător de Sticle Ampulă pentru Asistent Medical
+                  - generic [ref=e3060]: 15 Mai
+                  - generic [ref=e3061]:
+                    - img [ref=e3062]
+                    - text: "1"
+              - generic [ref=e3065]:
+                - button "Start" [ref=e3066] [cursor=pointer]:
+                  - img [ref=e3067]
+                  - text: Start
+                - combobox [ref=e3069]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3070] [cursor=pointer]:
+                  - img [ref=e3071]
+                - button [ref=e3074] [cursor=pointer]:
+                  - img [ref=e3075]
+                - button [ref=e3078] [cursor=pointer]:
+                  - img [ref=e3079]
+            - generic [ref=e3081]:
+              - button "o" [ref=e3082] [cursor=pointer]
+              - generic [ref=e3083] [cursor=pointer]:
+                - generic [ref=e3084]:
+                  - generic [ref=e3085]: 30 Plasturi sportivi pre-tăiați, Bandă respirabilă hipoalergenică fără latex
+                  - generic [ref=e3086]: Normal
+                - generic [ref=e3087]:
+                  - generic [ref=e3088]:
+                    - generic [ref=e3089]:
+                      - generic [ref=e3090]: D
+                      - generic [ref=e3091]: "16"
+                    - text: Dana
+                  - generic [ref=e3092]: MagDeal
+                  - generic [ref=e3093]: Creativ
+                  - generic [ref=e3094]: Creative video
+                  - generic [ref=e3095]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e3096]: 30 Plasturi sportivi pre-tăiați, Bandă respirabilă hipoalergenică fără latex
+                  - generic [ref=e3097]: 15 Mai
+                  - generic [ref=e3098]:
+                    - img [ref=e3099]
+                    - text: "1"
+              - generic [ref=e3102]:
+                - button "Start" [ref=e3103] [cursor=pointer]:
+                  - img [ref=e3104]
+                  - text: Start
+                - combobox [ref=e3106]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3107] [cursor=pointer]:
+                  - img [ref=e3108]
+                - button [ref=e3111] [cursor=pointer]:
+                  - img [ref=e3112]
+                - button [ref=e3115] [cursor=pointer]:
+                  - img [ref=e3116]
+            - generic [ref=e3118]:
+              - button "o" [ref=e3119] [cursor=pointer]
+              - generic [ref=e3120] [cursor=pointer]:
+                - generic [ref=e3121]:
+                  - generic [ref=e3122]: Dispenser Manual de Băuturi cu Suport
+                  - generic [ref=e3123]: Normal
+                - generic [ref=e3124]:
+                  - generic [ref=e3125]:
+                    - generic [ref=e3126]:
+                      - generic [ref=e3127]: D
+                      - generic [ref=e3128]: "16"
+                    - text: Dana
+                  - generic [ref=e3129]: MagDeal
+                  - generic [ref=e3130]: Creativ
+                  - generic [ref=e3131]: Creative video
+                  - generic [ref=e3132]: CREATIVE VIDEO PRODUCT LAUNCH
+                  - generic [ref=e3133]: Dispenser Manual de Băuturi cu Suport
+                  - generic [ref=e3134]: 15 Mai
+                  - generic [ref=e3135]:
+                    - img [ref=e3136]
+                    - text: "1"
+              - generic [ref=e3139]:
+                - button "Start" [ref=e3140] [cursor=pointer]:
+                  - img [ref=e3141]
+                  - text: Start
+                - combobox [ref=e3143]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3144] [cursor=pointer]:
+                  - img [ref=e3145]
+                - button [ref=e3148] [cursor=pointer]:
+                  - img [ref=e3149]
+                - button [ref=e3152] [cursor=pointer]:
+                  - img [ref=e3153]
+            - generic [ref=e3155]:
+              - button "o" [ref=e3156] [cursor=pointer]
+              - generic [ref=e3157] [cursor=pointer]:
+                - generic [ref=e3158]:
+                  - generic [ref=e3159]: Ear Fix - Foto Produs
+                  - generic [ref=e3160]: Normal
+                - generic [ref=e3161]:
+                  - generic [ref=e3162]:
+                    - generic [ref=e3163]:
+                      - generic [ref=e3164]: M
+                      - generic [ref=e3165]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e3166]: MagDeal
+                  - generic [ref=e3167]: Creativ
+                  - generic [ref=e3168]: Foto Produs
+                  - generic [ref=e3169]: FOTO PRODUS
+                  - generic [ref=e3170]: Ear Fix
+                  - generic [ref=e3171]: 13 Mai
+                  - generic [ref=e3172]:
+                    - img [ref=e3173]
+                    - text: "1"
+              - generic [ref=e3176]:
+                - button "Start" [ref=e3177] [cursor=pointer]:
+                  - img [ref=e3178]
+                  - text: Start
+                - combobox [ref=e3180]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3181] [cursor=pointer]:
+                  - img [ref=e3182]
+                - button [ref=e3185] [cursor=pointer]:
+                  - img [ref=e3186]
+                - button [ref=e3189] [cursor=pointer]:
+                  - img [ref=e3190]
+            - generic [ref=e3192]:
+              - button "o" [ref=e3193] [cursor=pointer]
+              - generic [ref=e3194] [cursor=pointer]:
+                - generic [ref=e3195]:
+                  - generic [ref=e3196]: Perie electrică pentru grătar - Foto Produs
+                  - generic [ref=e3197]: Normal
+                - generic [ref=e3198]:
+                  - generic [ref=e3199]:
+                    - generic [ref=e3200]:
+                      - generic [ref=e3201]: M
+                      - generic [ref=e3202]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e3203]: MagDeal
+                  - generic [ref=e3204]: Creativ
+                  - generic [ref=e3205]: Foto Produs
+                  - generic [ref=e3206]: FOTO PRODUS
+                  - generic [ref=e3207]: Perie electrică pentru grătar
+                  - generic [ref=e3208]: 13 Mai
+                  - generic [ref=e3209]:
+                    - img [ref=e3210]
+                    - text: "1"
+              - generic [ref=e3213]:
+                - button "Start" [ref=e3214] [cursor=pointer]:
+                  - img [ref=e3215]
+                  - text: Start
+                - combobox [ref=e3217]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3218] [cursor=pointer]:
+                  - img [ref=e3219]
+                - button [ref=e3222] [cursor=pointer]:
+                  - img [ref=e3223]
+                - button [ref=e3226] [cursor=pointer]:
+                  - img [ref=e3227]
+            - generic [ref=e3229]:
+              - button "o" [ref=e3230] [cursor=pointer]
+              - generic [ref=e3231] [cursor=pointer]:
+                - generic [ref=e3232]:
+                  - generic [ref=e3233]: Triplu ștecher rotativ 180° - Foto Produs
+                  - generic [ref=e3234]: Normal
+                - generic [ref=e3235]:
+                  - generic [ref=e3236]:
+                    - generic [ref=e3237]:
+                      - generic [ref=e3238]: M
+                      - generic [ref=e3239]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e3240]: MagDeal
+                  - generic [ref=e3241]: Creativ
+                  - generic [ref=e3242]: Foto Produs
+                  - generic [ref=e3243]: FOTO PRODUS
+                  - generic [ref=e3244]: Triplu ștecher rotativ 180°
+                  - generic [ref=e3245]: 13 Mai
+                  - generic [ref=e3246]:
+                    - img [ref=e3247]
+                    - text: "1"
+              - generic [ref=e3250]:
+                - button "Start" [ref=e3251] [cursor=pointer]:
+                  - img [ref=e3252]
+                  - text: Start
+                - combobox [ref=e3254]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3255] [cursor=pointer]:
+                  - img [ref=e3256]
+                - button [ref=e3259] [cursor=pointer]:
+                  - img [ref=e3260]
+                - button [ref=e3263] [cursor=pointer]:
+                  - img [ref=e3264]
+            - generic [ref=e3266]:
+              - button "o" [ref=e3267] [cursor=pointer]
+              - generic [ref=e3268] [cursor=pointer]:
+                - generic [ref=e3269]:
+                  - generic [ref=e3270]: Bile de Congelare din Oțel Inoxidabil pentru Espresso - Foto Produs
+                  - generic [ref=e3271]: Normal
+                - generic [ref=e3272]:
+                  - generic [ref=e3273]:
+                    - generic [ref=e3274]:
+                      - generic [ref=e3275]: M
+                      - generic [ref=e3276]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e3277]: MagDeal
+                  - generic [ref=e3278]: Creativ
+                  - generic [ref=e3279]: Foto Produs
+                  - generic [ref=e3280]: FOTO PRODUS
+                  - generic [ref=e3281]: Bile de Congelare din Oțel Inoxidabil pentru Espresso
+                  - generic [ref=e3282]: 13 Mai
+                  - generic [ref=e3283]:
+                    - img [ref=e3284]
+                    - text: "1"
+              - generic [ref=e3287]:
+                - button "Start" [ref=e3288] [cursor=pointer]:
+                  - img [ref=e3289]
+                  - text: Start
+                - combobox [ref=e3291]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3292] [cursor=pointer]:
+                  - img [ref=e3293]
+                - button [ref=e3296] [cursor=pointer]:
+                  - img [ref=e3297]
+                - button [ref=e3300] [cursor=pointer]:
+                  - img [ref=e3301]
+            - generic [ref=e3303]:
+              - button "o" [ref=e3304] [cursor=pointer]
+              - generic [ref=e3305] [cursor=pointer]:
+                - generic [ref=e3306]:
+                  - generic [ref=e3307]: Suport de depozitare pentru cântar, montat pe perete - Foto Produs
+                  - generic [ref=e3308]: Normal
+                - generic [ref=e3309]:
+                  - generic [ref=e3310]:
+                    - generic [ref=e3311]:
+                      - generic [ref=e3312]: M
+                      - generic [ref=e3313]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e3314]: MagDeal
+                  - generic [ref=e3315]: Creativ
+                  - generic [ref=e3316]: Foto Produs
+                  - generic [ref=e3317]: FOTO PRODUS
+                  - generic [ref=e3318]: Suport de depozitare pentru cântar, montat pe perete
+                  - generic [ref=e3319]: 13 Mai
+                  - generic [ref=e3320]:
+                    - img [ref=e3321]
+                    - text: "1"
+              - generic [ref=e3324]:
+                - button "Start" [ref=e3325] [cursor=pointer]:
+                  - img [ref=e3326]
+                  - text: Start
+                - combobox [ref=e3328]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3329] [cursor=pointer]:
+                  - img [ref=e3330]
+                - button [ref=e3333] [cursor=pointer]:
+                  - img [ref=e3334]
+                - button [ref=e3337] [cursor=pointer]:
+                  - img [ref=e3338]
+            - generic [ref=e3340]:
+              - button "o" [ref=e3341] [cursor=pointer]
+              - generic [ref=e3342] [cursor=pointer]:
+                - generic [ref=e3343]:
+                  - generic [ref=e3344]: Elemente de Fixare pentru Pilote - Foto Produs
+                  - generic [ref=e3345]: Normal
+                - generic [ref=e3346]:
+                  - generic [ref=e3347]:
+                    - generic [ref=e3348]:
+                      - generic [ref=e3349]: M
+                      - generic [ref=e3350]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e3351]: MagDeal
+                  - generic [ref=e3352]: Creativ
+                  - generic [ref=e3353]: Foto Produs
+                  - generic [ref=e3354]: FOTO PRODUS
+                  - generic [ref=e3355]: Elemente de Fixare pentru Pilote
+                  - generic [ref=e3356]: 13 Mai
+                  - generic [ref=e3357]:
+                    - img [ref=e3358]
+                    - text: "1"
+              - generic [ref=e3361]:
+                - button "Start" [ref=e3362] [cursor=pointer]:
+                  - img [ref=e3363]
+                  - text: Start
+                - combobox [ref=e3365]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3366] [cursor=pointer]:
+                  - img [ref=e3367]
+                - button [ref=e3370] [cursor=pointer]:
+                  - img [ref=e3371]
+                - button [ref=e3374] [cursor=pointer]:
+                  - img [ref=e3375]
+            - generic [ref=e3377]:
+              - button "o" [ref=e3378] [cursor=pointer]
+              - generic [ref=e3379] [cursor=pointer]:
+                - generic [ref=e3380]:
+                  - generic [ref=e3381]: Bretele de siguranță din silicon reglabile - Foto Produs
+                  - generic [ref=e3382]: Normal
+                - generic [ref=e3383]:
+                  - generic [ref=e3384]:
+                    - generic [ref=e3385]:
+                      - generic [ref=e3386]: M
+                      - generic [ref=e3387]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e3388]: MagDeal
+                  - generic [ref=e3389]: Creativ
+                  - generic [ref=e3390]: Foto Produs
+                  - generic [ref=e3391]: FOTO PRODUS
+                  - generic [ref=e3392]: Bretele de siguranță din silicon reglabile
+                  - generic [ref=e3393]: 13 Mai
+                  - generic [ref=e3394]:
+                    - img [ref=e3395]
+                    - text: "1"
+              - generic [ref=e3398]:
+                - button "Start" [ref=e3399] [cursor=pointer]:
+                  - img [ref=e3400]
+                  - text: Start
+                - combobox [ref=e3402]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3403] [cursor=pointer]:
+                  - img [ref=e3404]
+                - button [ref=e3407] [cursor=pointer]:
+                  - img [ref=e3408]
+                - button [ref=e3411] [cursor=pointer]:
+                  - img [ref=e3412]
+            - generic [ref=e3414]:
+              - button "o" [ref=e3415] [cursor=pointer]
+              - generic [ref=e3416] [cursor=pointer]:
+                - generic [ref=e3417]:
+                  - generic [ref=e3418]: Set de Borcane de Fermentare din Sticlă de 24 Uncii
+                  - generic [ref=e3419]: Normal
+                - generic [ref=e3420]:
+                  - generic [ref=e3421]:
+                    - generic [ref=e3422]:
+                      - generic [ref=e3423]: A
+                      - generic [ref=e3424]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3425]: MagDeal
+                  - generic [ref=e3426]: Altele
+                  - generic [ref=e3427]: Landing Page
+                  - generic [ref=e3428]: LANDING PAGE
+                  - generic [ref=e3429]: Set de Borcane de Fermentare din Sticlă de 24 Uncii
+                  - generic [ref=e3430]: 14 Mai
+                  - generic [ref=e3431]:
+                    - img [ref=e3432]
+                    - text: "1"
+              - generic [ref=e3435]:
+                - button "Start" [ref=e3436] [cursor=pointer]:
+                  - img [ref=e3437]
+                  - text: Start
+                - combobox [ref=e3439]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3440] [cursor=pointer]:
+                  - img [ref=e3441]
+                - button [ref=e3444] [cursor=pointer]:
+                  - img [ref=e3445]
+                - button [ref=e3448] [cursor=pointer]:
+                  - img [ref=e3449]
+            - generic [ref=e3451]:
+              - button "o" [ref=e3452] [cursor=pointer]
+              - generic [ref=e3453] [cursor=pointer]:
+                - generic [ref=e3454]:
+                  - generic [ref=e3455]: husa picioare
+                  - generic [ref=e3456]: Normal
+                - generic [ref=e3457]:
+                  - generic [ref=e3458]:
+                    - generic [ref=e3459]:
+                      - generic [ref=e3460]: A
+                      - generic [ref=e3461]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3462]: MagDeal
+                  - generic [ref=e3463]: Altele
+                  - generic [ref=e3464]: Landing Page
+                  - generic [ref=e3465]: LANDING PAGE
+                  - generic [ref=e3466]: husa picioare
+                  - generic [ref=e3467]: 14 Mai
+                  - generic [ref=e3468]:
+                    - img [ref=e3469]
+                    - text: "1"
+              - generic [ref=e3472]:
+                - button "Start" [ref=e3473] [cursor=pointer]:
+                  - img [ref=e3474]
+                  - text: Start
+                - combobox [ref=e3476]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3477] [cursor=pointer]:
+                  - img [ref=e3478]
+                - button [ref=e3481] [cursor=pointer]:
+                  - img [ref=e3482]
+                - button [ref=e3485] [cursor=pointer]:
+                  - img [ref=e3486]
+            - generic [ref=e3488]:
+              - button "o" [ref=e3489] [cursor=pointer]
+              - generic [ref=e3490] [cursor=pointer]:
+                - generic [ref=e3491]:
+                  - generic [ref=e3492]: Capac pentru cuptor cu microunde, transparent verde, 26x10cm, rezistent la temperaturi de pana la 200C, cu orificii de ventilatie rotative
+                  - generic [ref=e3493]: Normal
+                - generic [ref=e3494]:
+                  - generic [ref=e3495]:
+                    - generic [ref=e3496]:
+                      - generic [ref=e3497]: A
+                      - generic [ref=e3498]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3499]: MagDeal
+                  - generic [ref=e3500]: Altele
+                  - generic [ref=e3501]: Landing Page
+                  - generic [ref=e3502]: LANDING PAGE
+                  - generic [ref=e3503]: Capac pentru cuptor cu microunde, transparent verde, 26x10cm, rezistent la temperaturi de pana la 200C, cu orificii de ventilatie rotative
+                  - generic [ref=e3504]: 14 Mai
+                  - generic [ref=e3505]:
+                    - img [ref=e3506]
+                    - text: "1"
+              - generic [ref=e3509]:
+                - button "Start" [ref=e3510] [cursor=pointer]:
+                  - img [ref=e3511]
+                  - text: Start
+                - combobox [ref=e3513]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3514] [cursor=pointer]:
+                  - img [ref=e3515]
+                - button [ref=e3518] [cursor=pointer]:
+                  - img [ref=e3519]
+                - button [ref=e3522] [cursor=pointer]:
+                  - img [ref=e3523]
+            - generic [ref=e3525]:
+              - button "o" [ref=e3526] [cursor=pointer]
+              - generic [ref=e3527] [cursor=pointer]:
+                - generic [ref=e3528]:
+                  - generic [ref=e3529]: Lumină de Noapte LED cu Senzor Automat și Control Tactil
+                  - generic [ref=e3530]: Normal
+                - generic [ref=e3531]:
+                  - generic [ref=e3532]:
+                    - generic [ref=e3533]:
+                      - generic [ref=e3534]: A
+                      - generic [ref=e3535]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3536]: MagDeal
+                  - generic [ref=e3537]: Altele
+                  - generic [ref=e3538]: Landing Page
+                  - generic [ref=e3539]: LANDING PAGE
+                  - generic [ref=e3540]: Lumină de Noapte LED cu Senzor Automat și Control Tactil
+                  - generic [ref=e3541]: 14 Mai
+                  - generic [ref=e3542]:
+                    - img [ref=e3543]
+                    - text: "1"
+              - generic [ref=e3546]:
+                - button "Start" [ref=e3547] [cursor=pointer]:
+                  - img [ref=e3548]
+                  - text: Start
+                - combobox [ref=e3550]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3551] [cursor=pointer]:
+                  - img [ref=e3552]
+                - button [ref=e3555] [cursor=pointer]:
+                  - img [ref=e3556]
+                - button [ref=e3559] [cursor=pointer]:
+                  - img [ref=e3560]
+            - generic [ref=e3562]:
+              - button "o" [ref=e3563] [cursor=pointer]
+              - generic [ref=e3564] [cursor=pointer]:
+                - generic [ref=e3565]:
+                  - generic [ref=e3566]: suport baie
+                  - generic [ref=e3567]: Normal
+                - generic [ref=e3568]:
+                  - generic [ref=e3569]:
+                    - generic [ref=e3570]:
+                      - generic [ref=e3571]: A
+                      - generic [ref=e3572]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3573]: MagDeal
+                  - generic [ref=e3574]: Altele
+                  - generic [ref=e3575]: Landing Page
+                  - generic [ref=e3576]: LANDING PAGE
+                  - generic [ref=e3577]: suport baie
+                  - generic [ref=e3578]: 14 Mai
+                  - generic [ref=e3579]:
+                    - img [ref=e3580]
+                    - text: "1"
+              - generic [ref=e3583]:
+                - button "Start" [ref=e3584] [cursor=pointer]:
+                  - img [ref=e3585]
+                  - text: Start
+                - combobox [ref=e3587]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3588] [cursor=pointer]:
+                  - img [ref=e3589]
+                - button [ref=e3592] [cursor=pointer]:
+                  - img [ref=e3593]
+                - button [ref=e3596] [cursor=pointer]:
+                  - img [ref=e3597]
+            - generic [ref=e3599]:
+              - button "o" [ref=e3600] [cursor=pointer]
+              - generic [ref=e3601] [cursor=pointer]:
+                - generic [ref=e3602]:
+                  - generic [ref=e3603]: Autocolant de protecție solară
+                  - generic [ref=e3604]: Normal
+                - generic [ref=e3605]:
+                  - generic [ref=e3606]:
+                    - generic [ref=e3607]:
+                      - generic [ref=e3608]: A
+                      - generic [ref=e3609]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3610]: MagDeal
+                  - generic [ref=e3611]: Altele
+                  - generic [ref=e3612]: Landing Page
+                  - generic [ref=e3613]: LANDING PAGE
+                  - generic [ref=e3614]: Autocolant de protecție solară
+                  - generic [ref=e3615]: 14 Mai
+                  - generic [ref=e3616]:
+                    - img [ref=e3617]
+                    - text: "1"
+              - generic [ref=e3620]:
+                - button "Start" [ref=e3621] [cursor=pointer]:
+                  - img [ref=e3622]
+                  - text: Start
+                - combobox [ref=e3624]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3625] [cursor=pointer]:
+                  - img [ref=e3626]
+                - button [ref=e3629] [cursor=pointer]:
+                  - img [ref=e3630]
+                - button [ref=e3633] [cursor=pointer]:
+                  - img [ref=e3634]
+            - generic [ref=e3636]:
+              - button "o" [ref=e3637] [cursor=pointer]
+              - generic [ref=e3638] [cursor=pointer]:
+                - generic [ref=e3639]:
+                  - generic [ref=e3640]: Set Dilatator Nazal Magnetic Salestore2® – Impotriva Sforaitului, 4 Marimi Diferite, Aplicator + 30 Plasturi, Ideal pentru Somn, Sport si Activitati Zilnice, Negru
+                  - generic [ref=e3641]: Normal
+                - generic [ref=e3642]:
+                  - generic [ref=e3643]:
+                    - generic [ref=e3644]:
+                      - generic [ref=e3645]: A
+                      - generic [ref=e3646]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3647]: MagDeal
+                  - generic [ref=e3648]: Altele
+                  - generic [ref=e3649]: Landing Page
+                  - generic [ref=e3650]: LANDING PAGE
+                  - generic [ref=e3651]: Set Dilatator Nazal Magnetic Salestore2® – Impotriva Sforaitului, 4 Marimi Diferite, Aplicator + 30 Plasturi, Ideal pentru Somn, Sport si Activitati Zilnice, Negru
+                  - generic [ref=e3652]: 14 Mai
+                  - generic [ref=e3653]:
+                    - img [ref=e3654]
+                    - text: "1"
+              - generic [ref=e3657]:
+                - button "Start" [ref=e3658] [cursor=pointer]:
+                  - img [ref=e3659]
+                  - text: Start
+                - combobox [ref=e3661]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3662] [cursor=pointer]:
+                  - img [ref=e3663]
+                - button [ref=e3666] [cursor=pointer]:
+                  - img [ref=e3667]
+                - button [ref=e3670] [cursor=pointer]:
+                  - img [ref=e3671]
+            - generic [ref=e3673]:
+              - button "o" [ref=e3674] [cursor=pointer]
+              - generic [ref=e3675] [cursor=pointer]:
+                - generic [ref=e3676]:
+                  - generic [ref=e3677]: EpilStar, epilator portabil pentru îndepărtarea părului facial
+                  - generic [ref=e3678]: Normal
+                - generic [ref=e3679]:
+                  - generic [ref=e3680]:
+                    - generic [ref=e3681]:
+                      - generic [ref=e3682]: A
+                      - generic [ref=e3683]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3684]: MagDeal
+                  - generic [ref=e3685]: Altele
+                  - generic [ref=e3686]: Landing Page
+                  - generic [ref=e3687]: LANDING PAGE
+                  - generic [ref=e3688]: EpilStar, epilator portabil pentru îndepărtarea părului facial
+                  - generic [ref=e3689]: 14 Mai
+                  - generic [ref=e3690]:
+                    - img [ref=e3691]
+                    - text: "1"
+              - generic [ref=e3694]:
+                - button "Start" [ref=e3695] [cursor=pointer]:
+                  - img [ref=e3696]
+                  - text: Start
+                - combobox [ref=e3698]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3699] [cursor=pointer]:
+                  - img [ref=e3700]
+                - button [ref=e3703] [cursor=pointer]:
+                  - img [ref=e3704]
+                - button [ref=e3707] [cursor=pointer]:
+                  - img [ref=e3708]
+            - generic [ref=e3710]:
+              - button "o" [ref=e3711] [cursor=pointer]
+              - generic [ref=e3712] [cursor=pointer]:
+                - generic [ref=e3713]:
+                  - generic [ref=e3714]: Formă de Tort din Silicon în formă de Mango
+                  - generic [ref=e3715]: Normal
+                - generic [ref=e3716]:
+                  - generic [ref=e3717]:
+                    - generic [ref=e3718]:
+                      - generic [ref=e3719]: A
+                      - generic [ref=e3720]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3721]: MagDeal
+                  - generic [ref=e3722]: Altele
+                  - generic [ref=e3723]: Landing Page
+                  - generic [ref=e3724]: LANDING PAGE
+                  - generic [ref=e3725]: Formă de Tort din Silicon în formă de Mango
+                  - generic [ref=e3726]: 14 Mai
+                  - generic [ref=e3727]:
+                    - img [ref=e3728]
+                    - text: "1"
+              - generic [ref=e3731]:
+                - button "Start" [ref=e3732] [cursor=pointer]:
+                  - img [ref=e3733]
+                  - text: Start
+                - combobox [ref=e3735]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3736] [cursor=pointer]:
+                  - img [ref=e3737]
+                - button [ref=e3740] [cursor=pointer]:
+                  - img [ref=e3741]
+                - button [ref=e3744] [cursor=pointer]:
+                  - img [ref=e3745]
+            - generic [ref=e3747]:
+              - button "o" [ref=e3748] [cursor=pointer]
+              - generic [ref=e3749] [cursor=pointer]:
+                - generic [ref=e3750]:
+                  - generic [ref=e3751]: Globuri de udare lalea pentru plante – Sistem automat de auto-udare, Eliberare lentă pentru plante de ghiveci de interior și exterior, Cactuși – Deco
+                  - generic [ref=e3752]: Normal
+                - generic [ref=e3753]:
+                  - generic [ref=e3754]:
+                    - generic [ref=e3755]:
+                      - generic [ref=e3756]: A
+                      - generic [ref=e3757]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3758]: MagDeal
+                  - generic [ref=e3759]: Altele
+                  - generic [ref=e3760]: Landing Page
+                  - generic [ref=e3761]: LANDING PAGE
+                  - generic [ref=e3762]: Globuri de udare lalea pentru plante – Sistem automat de auto-udare, Eliberare lentă pentru plante de ghiveci de interior și exterior, Cactuși – Deco
+                  - generic [ref=e3763]: 14 Mai
+                  - generic [ref=e3764]:
+                    - img [ref=e3765]
+                    - text: "1"
+              - generic [ref=e3768]:
+                - button "Start" [ref=e3769] [cursor=pointer]:
+                  - img [ref=e3770]
+                  - text: Start
+                - combobox [ref=e3772]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3773] [cursor=pointer]:
+                  - img [ref=e3774]
+                - button [ref=e3777] [cursor=pointer]:
+                  - img [ref=e3778]
+                - button [ref=e3781] [cursor=pointer]:
+                  - img [ref=e3782]
+            - generic [ref=e3784]:
+              - button "o" [ref=e3785] [cursor=pointer]
+              - generic [ref=e3786] [cursor=pointer]:
+                - generic [ref=e3787]:
+                  - generic [ref=e3788]: Set Unelte Metalice pentru Ramificare
+                  - generic [ref=e3789]: Normal
+                - generic [ref=e3790]:
+                  - generic [ref=e3791]:
+                    - generic [ref=e3792]:
+                      - generic [ref=e3793]: A
+                      - generic [ref=e3794]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3795]: MagDeal
+                  - generic [ref=e3796]: Altele
+                  - generic [ref=e3797]: Landing Page
+                  - generic [ref=e3798]: LANDING PAGE
+                  - generic [ref=e3799]: Set Unelte Metalice pentru Ramificare
+                  - generic [ref=e3800]: 14 Mai
+                  - generic [ref=e3801]:
+                    - img [ref=e3802]
+                    - text: "1"
+              - generic [ref=e3805]:
+                - button "Start" [ref=e3806] [cursor=pointer]:
+                  - img [ref=e3807]
+                  - text: Start
+                - combobox [ref=e3809]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3810] [cursor=pointer]:
+                  - img [ref=e3811]
+                - button [ref=e3814] [cursor=pointer]:
+                  - img [ref=e3815]
+                - button [ref=e3818] [cursor=pointer]:
+                  - img [ref=e3819]
+            - generic [ref=e3821]:
+              - button "o" [ref=e3822] [cursor=pointer]
+              - generic [ref=e3823] [cursor=pointer]:
+                - generic [ref=e3824]:
+                  - generic [ref=e3825]: cap cu presiune
+                  - generic [ref=e3826]: Normal
+                - generic [ref=e3827]:
+                  - generic [ref=e3828]:
+                    - generic [ref=e3829]:
+                      - generic [ref=e3830]: A
+                      - generic [ref=e3831]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3832]: MagDeal
+                  - generic [ref=e3833]: Altele
+                  - generic [ref=e3834]: Landing Page
+                  - generic [ref=e3835]: LANDING PAGE
+                  - generic [ref=e3836]: cap cu presiune
+                  - generic [ref=e3837]: 14 Mai
+                  - generic [ref=e3838]:
+                    - img [ref=e3839]
+                    - text: "1"
+              - generic [ref=e3842]:
+                - button "Start" [ref=e3843] [cursor=pointer]:
+                  - img [ref=e3844]
+                  - text: Start
+                - combobox [ref=e3846]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3847] [cursor=pointer]:
+                  - img [ref=e3848]
+                - button [ref=e3851] [cursor=pointer]:
+                  - img [ref=e3852]
+                - button [ref=e3855] [cursor=pointer]:
+                  - img [ref=e3856]
+            - generic [ref=e3858]:
+              - button "o" [ref=e3859] [cursor=pointer]
+              - generic [ref=e3860] [cursor=pointer]:
+                - generic [ref=e3861]:
+                  - generic [ref=e3862]: Hamac Triunghiular Portabil
+                  - generic [ref=e3863]: Normal
+                - generic [ref=e3864]:
+                  - generic [ref=e3865]:
+                    - generic [ref=e3866]:
+                      - generic [ref=e3867]: A
+                      - generic [ref=e3868]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3869]: MagDeal
+                  - generic [ref=e3870]: Altele
+                  - generic [ref=e3871]: Landing Page
+                  - generic [ref=e3872]: LANDING PAGE
+                  - generic [ref=e3873]: Hamac Triunghiular Portabil
+                  - generic [ref=e3874]: 14 Mai
+                  - generic [ref=e3875]:
+                    - img [ref=e3876]
+                    - text: "1"
+              - generic [ref=e3879]:
+                - button "Start" [ref=e3880] [cursor=pointer]:
+                  - img [ref=e3881]
+                  - text: Start
+                - combobox [ref=e3883]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3884] [cursor=pointer]:
+                  - img [ref=e3885]
+                - button [ref=e3888] [cursor=pointer]:
+                  - img [ref=e3889]
+                - button [ref=e3892] [cursor=pointer]:
+                  - img [ref=e3893]
+            - generic [ref=e3895]:
+              - button "o" [ref=e3896] [cursor=pointer]
+              - generic [ref=e3897] [cursor=pointer]:
+                - generic [ref=e3898]:
+                  - generic [ref=e3899]: Set 2 Branturi Sport sau Casual CloudFoam, cu absorbtie soc, marimea 44-45, ajustabile
+                  - generic [ref=e3900]: Normal
+                - generic [ref=e3901]:
+                  - generic [ref=e3902]:
+                    - generic [ref=e3903]:
+                      - generic [ref=e3904]: A
+                      - generic [ref=e3905]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3906]: MagDeal
+                  - generic [ref=e3907]: Altele
+                  - generic [ref=e3908]: Landing Page
+                  - generic [ref=e3909]: LANDING PAGE
+                  - generic [ref=e3910]: Set 2 Branturi Sport sau Casual CloudFoam, cu absorbtie soc, marimea 44-45, ajustabile
+                  - generic [ref=e3911]: 14 Mai
+                  - generic [ref=e3912]:
+                    - img [ref=e3913]
+                    - text: "1"
+              - generic [ref=e3916]:
+                - button "Start" [ref=e3917] [cursor=pointer]:
+                  - img [ref=e3918]
+                  - text: Start
+                - combobox [ref=e3920]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3921] [cursor=pointer]:
+                  - img [ref=e3922]
+                - button [ref=e3925] [cursor=pointer]:
+                  - img [ref=e3926]
+                - button [ref=e3929] [cursor=pointer]:
+                  - img [ref=e3930]
+            - generic [ref=e3932]:
+              - button "o" [ref=e3933] [cursor=pointer]
+              - generic [ref=e3934] [cursor=pointer]:
+                - generic [ref=e3935]:
+                  - generic [ref=e3936]: alcool test
+                  - generic [ref=e3937]: Normal
+                - generic [ref=e3938]:
+                  - generic [ref=e3939]:
+                    - generic [ref=e3940]:
+                      - generic [ref=e3941]: A
+                      - generic [ref=e3942]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3943]: MagDeal
+                  - generic [ref=e3944]: Altele
+                  - generic [ref=e3945]: Landing Page
+                  - generic [ref=e3946]: LANDING PAGE
+                  - generic [ref=e3947]: alcool test
+                  - generic [ref=e3948]: 14 Mai
+                  - generic [ref=e3949]:
+                    - img [ref=e3950]
+                    - text: "1"
+              - generic [ref=e3953]:
+                - button "Start" [ref=e3954] [cursor=pointer]:
+                  - img [ref=e3955]
+                  - text: Start
+                - combobox [ref=e3957]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3958] [cursor=pointer]:
+                  - img [ref=e3959]
+                - button [ref=e3962] [cursor=pointer]:
+                  - img [ref=e3963]
+                - button [ref=e3966] [cursor=pointer]:
+                  - img [ref=e3967]
+            - generic [ref=e3969]:
+              - button "o" [ref=e3970] [cursor=pointer]
+              - generic [ref=e3971] [cursor=pointer]:
+                - generic [ref=e3972]:
+                  - generic [ref=e3973]: Deschizător de ostrețe din lemn
+                  - generic [ref=e3974]: Normal
+                - generic [ref=e3975]:
+                  - generic [ref=e3976]:
+                    - generic [ref=e3977]:
+                      - generic [ref=e3978]: A
+                      - generic [ref=e3979]: "18"
+                    - text: Alexandra
+                  - generic [ref=e3980]: MagDeal
+                  - generic [ref=e3981]: Altele
+                  - generic [ref=e3982]: Landing Page
+                  - generic [ref=e3983]: LANDING PAGE
+                  - generic [ref=e3984]: Deschizător de ostrețe din lemn
+                  - generic [ref=e3985]: 14 Mai
+                  - generic [ref=e3986]:
+                    - img [ref=e3987]
+                    - text: "1"
+              - generic [ref=e3990]:
+                - button "Start" [ref=e3991] [cursor=pointer]:
+                  - img [ref=e3992]
+                  - text: Start
+                - combobox [ref=e3994]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e3995] [cursor=pointer]:
+                  - img [ref=e3996]
+                - button [ref=e3999] [cursor=pointer]:
+                  - img [ref=e4000]
+                - button [ref=e4003] [cursor=pointer]:
+                  - img [ref=e4004]
+            - generic [ref=e4006]:
+              - button "o" [ref=e4007] [cursor=pointer]
+              - generic [ref=e4008] [cursor=pointer]:
+                - generic [ref=e4009]:
+                  - generic [ref=e4010]: Cupa de masurare cu filtru, plastic, alb, 20x10.8x14.5cm, set
+                  - generic [ref=e4011]: Normal
+                - generic [ref=e4012]:
+                  - generic [ref=e4013]:
+                    - generic [ref=e4014]:
+                      - generic [ref=e4015]: A
+                      - generic [ref=e4016]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4017]: MagDeal
+                  - generic [ref=e4018]: Altele
+                  - generic [ref=e4019]: Landing Page
+                  - generic [ref=e4020]: LANDING PAGE
+                  - generic [ref=e4021]: Cupa de masurare cu filtru, plastic, alb, 20x10.8x14.5cm, set
+                  - generic [ref=e4022]: 14 Mai
+                  - generic [ref=e4023]:
+                    - img [ref=e4024]
+                    - text: "1"
+              - generic [ref=e4027]:
+                - button "Start" [ref=e4028] [cursor=pointer]:
+                  - img [ref=e4029]
+                  - text: Start
+                - combobox [ref=e4031]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4032] [cursor=pointer]:
+                  - img [ref=e4033]
+                - button [ref=e4036] [cursor=pointer]:
+                  - img [ref=e4037]
+                - button [ref=e4040] [cursor=pointer]:
+                  - img [ref=e4041]
+            - generic [ref=e4043]:
+              - button "o" [ref=e4044] [cursor=pointer]
+              - generic [ref=e4045] [cursor=pointer]:
+                - generic [ref=e4046]:
+                  - generic [ref=e4047]: Perna de calatorie gonflabila, Wepzsxo, Verde
+                  - generic [ref=e4048]: Normal
+                - generic [ref=e4049]:
+                  - generic [ref=e4050]:
+                    - generic [ref=e4051]:
+                      - generic [ref=e4052]: A
+                      - generic [ref=e4053]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4054]: MagDeal
+                  - generic [ref=e4055]: Altele
+                  - generic [ref=e4056]: Landing Page
+                  - generic [ref=e4057]: LANDING PAGE
+                  - generic [ref=e4058]: Perna de calatorie gonflabila, Wepzsxo, Verde
+                  - generic [ref=e4059]: 14 Mai
+                  - generic [ref=e4060]:
+                    - img [ref=e4061]
+                    - text: "1"
+              - generic [ref=e4064]:
+                - button "Start" [ref=e4065] [cursor=pointer]:
+                  - img [ref=e4066]
+                  - text: Start
+                - combobox [ref=e4068]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4069] [cursor=pointer]:
+                  - img [ref=e4070]
+                - button [ref=e4073] [cursor=pointer]:
+                  - img [ref=e4074]
+                - button [ref=e4077] [cursor=pointer]:
+                  - img [ref=e4078]
+            - generic [ref=e4080]:
+              - button "o" [ref=e4081] [cursor=pointer]
+              - generic [ref=e4082] [cursor=pointer]:
+                - generic [ref=e4083]:
+                  - generic [ref=e4084]: Mini tocator electric multifunctional fara fir, ideal pentru carne, legume, nuci, usturoi si sosuri, capacitate 300 ml, reincarcabil USB, design compact si portabil, control tactil, usor de curatat, perfect pentru bucatarie, albastru
+                  - generic [ref=e4085]: Normal
+                - generic [ref=e4086]:
+                  - generic [ref=e4087]:
+                    - generic [ref=e4088]:
+                      - generic [ref=e4089]: A
+                      - generic [ref=e4090]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4091]: MagDeal
+                  - generic [ref=e4092]: Altele
+                  - generic [ref=e4093]: Landing Page
+                  - generic [ref=e4094]: LANDING PAGE
+                  - generic [ref=e4095]: Mini tocator electric multifunctional fara fir, ideal pentru carne, legume, nuci, usturoi si sosuri, capacitate 300 ml, reincarcabil USB, design compact si portabil, control tactil, usor de curatat, perfect pentru bucatarie, albastru
+                  - generic [ref=e4096]: 14 Mai
+                  - generic [ref=e4097]:
+                    - img [ref=e4098]
+                    - text: "1"
+              - generic [ref=e4101]:
+                - button "Start" [ref=e4102] [cursor=pointer]:
+                  - img [ref=e4103]
+                  - text: Start
+                - combobox [ref=e4105]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4106] [cursor=pointer]:
+                  - img [ref=e4107]
+                - button [ref=e4110] [cursor=pointer]:
+                  - img [ref=e4111]
+                - button [ref=e4114] [cursor=pointer]:
+                  - img [ref=e4115]
+            - generic [ref=e4117]:
+              - button "o" [ref=e4118] [cursor=pointer]
+              - generic [ref=e4119] [cursor=pointer]:
+                - generic [ref=e4120]:
+                  - generic [ref=e4121]: Set 10 suporturi ortopedice QttvbTna, bumbac, tonul pielii, 9x8.5x0.3cm
+                  - generic [ref=e4122]: Normal
+                - generic [ref=e4123]:
+                  - generic [ref=e4124]:
+                    - generic [ref=e4125]:
+                      - generic [ref=e4126]: A
+                      - generic [ref=e4127]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4128]: MagDeal
+                  - generic [ref=e4129]: Altele
+                  - generic [ref=e4130]: Landing Page
+                  - generic [ref=e4131]: LANDING PAGE
+                  - generic [ref=e4132]: Set 10 suporturi ortopedice QttvbTna, bumbac, tonul pielii, 9x8.5x0.3cm
+                  - generic [ref=e4133]: 14 Mai
+                  - generic [ref=e4134]:
+                    - img [ref=e4135]
+                    - text: "1"
+              - generic [ref=e4138]:
+                - button "Start" [ref=e4139] [cursor=pointer]:
+                  - img [ref=e4140]
+                  - text: Start
+                - combobox [ref=e4142]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4143] [cursor=pointer]:
+                  - img [ref=e4144]
+                - button [ref=e4147] [cursor=pointer]:
+                  - img [ref=e4148]
+                - button [ref=e4151] [cursor=pointer]:
+                  - img [ref=e4152]
+            - generic [ref=e4154]:
+              - button "o" [ref=e4155] [cursor=pointer]
+              - generic [ref=e4156] [cursor=pointer]:
+                - generic [ref=e4157]:
+                  - generic [ref=e4158]: Casti Wireless Q11 casca Bluetooth wireless 5.4ENC reducerea zgomotului, cu baterie de viata lunga, Latenta Wireless 40 ms， Sunet Dolby Stereo de inalta calitate, microfon audio HD, control tactil pentru a asculta muzica, afaceri si sport Bej
+                  - generic [ref=e4159]: Normal
+                - generic [ref=e4160]:
+                  - generic [ref=e4161]:
+                    - generic [ref=e4162]:
+                      - generic [ref=e4163]: A
+                      - generic [ref=e4164]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4165]: MagDeal
+                  - generic [ref=e4166]: Altele
+                  - generic [ref=e4167]: Landing Page
+                  - generic [ref=e4168]: LANDING PAGE
+                  - generic [ref=e4169]: Casti Wireless Q11 casca Bluetooth wireless 5.4ENC reducerea zgomotului, cu baterie de viata lunga, Latenta Wireless 40 ms， Sunet Dolby Stereo de inalta calitate, microfon audio HD, control tactil pentru a asculta muzica, afaceri si sport Bej
+                  - generic [ref=e4170]: 14 Mai
+                  - generic [ref=e4171]:
+                    - img [ref=e4172]
+                    - text: "1"
+              - generic [ref=e4175]:
+                - button "Start" [ref=e4176] [cursor=pointer]:
+                  - img [ref=e4177]
+                  - text: Start
+                - combobox [ref=e4179]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4180] [cursor=pointer]:
+                  - img [ref=e4181]
+                - button [ref=e4184] [cursor=pointer]:
+                  - img [ref=e4185]
+                - button [ref=e4188] [cursor=pointer]:
+                  - img [ref=e4189]
+            - generic [ref=e4191]:
+              - button "o" [ref=e4192] [cursor=pointer]
+              - generic [ref=e4193] [cursor=pointer]:
+                - generic [ref=e4194]:
+                  - generic [ref=e4195]: Pernă de masaj pentru gât
+                  - generic [ref=e4196]: Normal
+                - generic [ref=e4197]:
+                  - generic [ref=e4198]:
+                    - generic [ref=e4199]:
+                      - generic [ref=e4200]: A
+                      - generic [ref=e4201]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4202]: MagDeal
+                  - generic [ref=e4203]: Altele
+                  - generic [ref=e4204]: Landing Page
+                  - generic [ref=e4205]: LANDING PAGE
+                  - generic [ref=e4206]: Pernă de masaj pentru gât
+                  - generic [ref=e4207]: 14 Mai
+                  - generic [ref=e4208]:
+                    - img [ref=e4209]
+                    - text: "1"
+              - generic [ref=e4212]:
+                - button "Start" [ref=e4213] [cursor=pointer]:
+                  - img [ref=e4214]
+                  - text: Start
+                - combobox [ref=e4216]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4217] [cursor=pointer]:
+                  - img [ref=e4218]
+                - button [ref=e4221] [cursor=pointer]:
+                  - img [ref=e4222]
+                - button [ref=e4225] [cursor=pointer]:
+                  - img [ref=e4226]
+            - generic [ref=e4228]:
+              - button "o" [ref=e4229] [cursor=pointer]
+              - generic [ref=e4230] [cursor=pointer]:
+                - generic [ref=e4231]:
+                  - generic [ref=e4232]: Set de 3 piese (2 Tăvi + 1 Cutie) Kit Eficient de Plantare Acasă
+                  - generic [ref=e4233]: Normal
+                - generic [ref=e4234]:
+                  - generic [ref=e4235]:
+                    - generic [ref=e4236]:
+                      - generic [ref=e4237]: A
+                      - generic [ref=e4238]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4239]: MagDeal
+                  - generic [ref=e4240]: Altele
+                  - generic [ref=e4241]: Landing Page
+                  - generic [ref=e4242]: LANDING PAGE
+                  - generic [ref=e4243]: Set de 3 piese (2 Tăvi + 1 Cutie) Kit Eficient de Plantare Acasă
+                  - generic [ref=e4244]: 14 Mai
+                  - generic [ref=e4245]:
+                    - img [ref=e4246]
+                    - text: "1"
+              - generic [ref=e4249]:
+                - button "Start" [ref=e4250] [cursor=pointer]:
+                  - img [ref=e4251]
+                  - text: Start
+                - combobox [ref=e4253]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4254] [cursor=pointer]:
+                  - img [ref=e4255]
+                - button [ref=e4258] [cursor=pointer]:
+                  - img [ref=e4259]
+                - button [ref=e4262] [cursor=pointer]:
+                  - img [ref=e4263]
+            - generic [ref=e4265]:
+              - button "o" [ref=e4266] [cursor=pointer]
+              - generic [ref=e4267] [cursor=pointer]:
+                - generic [ref=e4268]:
+                  - generic [ref=e4269]: aparat masaj picioare
+                  - generic [ref=e4270]: Normal
+                - generic [ref=e4271]:
+                  - generic [ref=e4272]:
+                    - generic [ref=e4273]:
+                      - generic [ref=e4274]: A
+                      - generic [ref=e4275]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4276]: MagDeal
+                  - generic [ref=e4277]: Altele
+                  - generic [ref=e4278]: Landing Page
+                  - generic [ref=e4279]: LANDING PAGE
+                  - generic [ref=e4280]: aparat masaj picioare
+                  - generic [ref=e4281]: 14 Mai
+                  - generic [ref=e4282]:
+                    - img [ref=e4283]
+                    - text: "1"
+              - generic [ref=e4286]:
+                - button "Start" [ref=e4287] [cursor=pointer]:
+                  - img [ref=e4288]
+                  - text: Start
+                - combobox [ref=e4290]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4291] [cursor=pointer]:
+                  - img [ref=e4292]
+                - button [ref=e4295] [cursor=pointer]:
+                  - img [ref=e4296]
+                - button [ref=e4299] [cursor=pointer]:
+                  - img [ref=e4300]
+            - generic [ref=e4302]:
+              - button "o" [ref=e4303] [cursor=pointer]
+              - generic [ref=e4304] [cursor=pointer]:
+                - generic [ref=e4305]:
+                  - generic [ref=e4306]: Pachete de gheață reutilizabile pentru cald și rece
+                  - generic [ref=e4307]: Normal
+                - generic [ref=e4308]:
+                  - generic [ref=e4309]:
+                    - generic [ref=e4310]:
+                      - generic [ref=e4311]: A
+                      - generic [ref=e4312]: "18"
+                    - text: Alexandra
+                  - generic [ref=e4313]: MagDeal
+                  - generic [ref=e4314]: Altele
+                  - generic [ref=e4315]: Landing Page
+                  - generic [ref=e4316]: LANDING PAGE
+                  - generic [ref=e4317]: Pachete de gheață reutilizabile pentru cald și rece
+                  - generic [ref=e4318]: 14 Mai
+                  - generic [ref=e4319]:
+                    - img [ref=e4320]
+                    - text: "1"
+              - generic [ref=e4323]:
+                - button "Start" [ref=e4324] [cursor=pointer]:
+                  - img [ref=e4325]
+                  - text: Start
+                - combobox [ref=e4327]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4328] [cursor=pointer]:
+                  - img [ref=e4329]
+                - button [ref=e4332] [cursor=pointer]:
+                  - img [ref=e4333]
+                - button [ref=e4336] [cursor=pointer]:
+                  - img [ref=e4337]
+            - generic [ref=e4339]:
+              - button "o" [ref=e4340] [cursor=pointer]
+              - generic [ref=e4341] [cursor=pointer]:
+                - generic [ref=e4342]:
+                  - generic [ref=e4343]: Placă Electrică pentru Încălzirea Mâncării pe Masă din Silicon Impermeabil cu Temperatură Reglabilă - Foto Produs
+                  - generic [ref=e4344]: Normal
+                - generic [ref=e4345]:
+                  - generic [ref=e4346]:
+                    - generic [ref=e4347]:
+                      - generic [ref=e4348]: M
+                      - generic [ref=e4349]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e4350]: MagDeal
+                  - generic [ref=e4351]: Creativ
+                  - generic [ref=e4352]: Foto Produs
+                  - generic [ref=e4353]: FOTO PRODUS
+                  - generic [ref=e4354]: Placă Electrică pentru Încălzirea Mâncării pe Masă din Silicon Impermeabil cu Temperatură Reglabilă
+                  - generic [ref=e4355]: 13 Mai
+                  - generic [ref=e4356]:
+                    - img [ref=e4357]
+                    - text: "1"
+              - generic [ref=e4360]:
+                - button "Start" [ref=e4361] [cursor=pointer]:
+                  - img [ref=e4362]
+                  - text: Start
+                - combobox [ref=e4364]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4365] [cursor=pointer]:
+                  - img [ref=e4366]
+                - button [ref=e4369] [cursor=pointer]:
+                  - img [ref=e4370]
+                - button [ref=e4373] [cursor=pointer]:
+                  - img [ref=e4374]
+            - generic [ref=e4376]:
+              - button "o" [ref=e4377] [cursor=pointer]
+              - generic [ref=e4378] [cursor=pointer]:
+                - generic [ref=e4379]:
+                  - generic [ref=e4380]: bla bla bla - Foto Produs
+                  - generic [ref=e4381]: Normal
+                - generic [ref=e4382]:
+                  - generic [ref=e4383]:
+                    - generic [ref=e4384]:
+                      - generic [ref=e4385]: M
+                      - generic [ref=e4386]: "15"
+                    - text: Mara Poze
+                  - generic [ref=e4387]: MagDeal
+                  - generic [ref=e4388]: Creativ
+                  - generic [ref=e4389]: Foto Produs
+                  - generic [ref=e4390]: FOTO PRODUS
+                  - generic [ref=e4391]: bla bla bla
+                  - generic [ref=e4392]: 13 Mai
+                  - generic [ref=e4393]:
+                    - img [ref=e4394]
+                    - text: "1"
+              - generic [ref=e4397]:
+                - button "Start" [ref=e4398] [cursor=pointer]:
+                  - img [ref=e4399]
+                  - text: Start
+                - combobox [ref=e4401]:
+                  - option "To Do" [selected]
+                  - option "In Progress"
+                  - option "Review"
+                  - option "Done"
+                - button [ref=e4402] [cursor=pointer]:
+                  - img [ref=e4403]
+                - button [ref=e4406] [cursor=pointer]:
+                  - img [ref=e4407]
+                - button [ref=e4410] [cursor=pointer]:
+                  - img [ref=e4411]
+          - generic [ref=e4414] [cursor=pointer]:
+            - generic [ref=e4415]:
+              - generic [ref=e4417]: Finalizate
+              - generic [ref=e4418]: 102 taskuri
+            - generic [ref=e4419]: Vezi toate ▼

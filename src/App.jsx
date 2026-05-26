@@ -1100,6 +1100,19 @@ export default function App() {
           API.openEvents();
           API.startHeartbeat();
           // Resume any writes that were queued but not sent before the last tab closed.
+          // Merge any queued task data into local state so the UI shows tasks the
+          // server hasn't confirmed yet — user sees their work, queue saves it for real.
+          var pending = API.getQueuedTaskData();
+          if (pending.length > 0) {
+            _setTasks(function(p) {
+              var byId = {};
+              p.forEach(function(t) { byId[t.id] = t; });
+              pending.forEach(function(qt) { if (qt && qt.id) byId[qt.id] = Object.assign({}, byId[qt.id] || {}, qt); });
+              var merged = Object.keys(byId).map(function(k) { return byId[k]; });
+              tasksRef.current = merged;
+              return merged;
+            });
+          }
           API.resumePersistedWrites();
         } catch (e) {
           console.error("bootstrap failed", e);
@@ -2241,6 +2254,17 @@ export default function App() {
         _applyBootstrap(boot);
         API.openEvents();
         API.startHeartbeat();
+        var pendingLogin = API.getQueuedTaskData();
+        if (pendingLogin.length > 0) {
+          _setTasks(function(p) {
+            var byId = {};
+            p.forEach(function(t) { byId[t.id] = t; });
+            pendingLogin.forEach(function(qt) { if (qt && qt.id) byId[qt.id] = Object.assign({}, byId[qt.id] || {}, qt); });
+            var merged = Object.keys(byId).map(function(k) { return byId[k]; });
+            tasksRef.current = merged;
+            return merged;
+          });
+        }
         API.resumePersistedWrites();
         return true;
       } catch (e) {

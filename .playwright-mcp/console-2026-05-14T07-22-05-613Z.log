@@ -1,0 +1,19 @@
+[    2830ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://work-heyads.ro/?_v=teodora_login:0
+[103593819ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ https://work-heyads.ro/?_v=1778846915208:0
+[103593973ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id:0
+[103593983ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE Eroare salvare "sessions" (retry 0/2) TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-t5WALh9L.js:82
+[103594648ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id:0
+[103594649ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE Eroare salvare "sessions" (retry 0/2) TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-t5WALh9L.js:82
+[103596700ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id:0
+[103596700ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE Eroare salvare "sessions" (retry 1/2) TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-t5WALh9L.js:82
+[103596852ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id:0
+[103596852ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE Eroare salvare "sessions" (retry 1/2) TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-t5WALh9L.js:82
+[103596857ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id:0
+[103600926ms] [ERROR] WebSocket connection to 'wss://ploucecgizjwyumzmhmo.supabase.co/realtime/v1/websocket?apikey=sb_publishable_FoAoSy7d052B3oVbcxiuyg_iLlTLiSh&vsn=2.0.0' failed: Error in connection establishment: net::ERR_SOCKET_NOT_CONNECTED @ https://work-heyads.ro/assets/index-t5WALh9L.js:47
+[103600928ms] [ERROR] Failed to load resource: net::ERR_SOCKET_NOT_CONNECTED @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id:0
+[103600928ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE Eroare salvare "sessions" (retry 2/2) TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-t5WALh9L.js:82
+[103600928ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE_FAIL FINAL FAIL salvare "sessions" dupa 3 incercari! Datele sunt DOAR in localStorage. TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-t5WALh9L.js:82
+[103600929ms] [ERROR] Failed to load resource: net::ERR_SOCKET_NOT_CONNECTED @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id:0
+[103600929ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE Eroare salvare "sessions" (retry 2/2) TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-t5WALh9L.js:82
+[103600929ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE_FAIL FINAL FAIL salvare "sessions" dupa 3 incercari! Datele sunt DOAR in localStorage. TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-t5WALh9L.js:82
+[103600931ms] [ERROR] Failed to load resource: net::ERR_SOCKET_NOT_CONNECTED @ https://ploucecgizjwyumzmhmo.supabase.co/rest/v1/app_data?on_conflict=id:0

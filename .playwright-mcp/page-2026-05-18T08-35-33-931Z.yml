@@ -1,0 +1,12 @@
+- generic [ref=e8]:
+  - generic [ref=e9]:
+    - generic [ref=e10]: HeyAds
+    - generic [ref=e11]: Task Manager
+  - generic [ref=e12]: Username
+  - textbox "User" [ref=e13]
+  - generic [ref=e14]: Parola
+  - generic [ref=e15]:
+    - textbox "Introdu parola" [ref=e16]
+    - button [ref=e17] [cursor=pointer]:
+      - img [ref=e18]
+  - button "Intra in platforma" [ref=e21] [cursor=pointer]
