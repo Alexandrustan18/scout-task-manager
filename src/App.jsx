@@ -951,42 +951,94 @@ export default function App() {
 
   var _applyBootstrap = function(boot) {
     var b = boot.blobs || {};
-    if (b.team) setTeam(b.team.data);
-    if (b.logs) setLogs(b.logs.data);
-    if (b.sessions) setSessions(b.sessions.data);
-    if (b.shops) setShops(b.shops.data);
-    if (b.products) setProducts(b.products.data);
-    if (b.timers) setTimers(b.timers.data);
-    if (b.templates) setTemplates(b.templates.data);
-    if (b.targets) setTargets(b.targets.data);
-    if (b.sheets) setSheets(b.sheets.data);
-    if (b.notifs) setNotifications(b.notifs.data || []);
-    if (b.taskTypes) setTaskTypes(b.taskTypes.data);
-    if (b.departments) setDepartments(b.departments.data);
-    if (b.platforms) setPlatforms(b.platforms.data);
-    if (b.loginTrack) setLoginTrack(b.loginTrack.data);
-    if (b.recurringTasks) setRecurringTasks(b.recurringTasks.data);
-    if (b.statusHistory) setStatusHistory(b.statusHistory.data);
-    if (b.productAudit) setProductAudit(b.productAudit.data);
-    if (b.allTags) setAllTags(b.allTags.data);
-    if (b.achievements) setAchievements(b.achievements.data);
-    if (b.dailyChallenge) setDailyChallenge(b.dailyChallenge.data);
-    if (b.loginHistory) setLoginHistory(b.loginHistory.data);
-    if (b.announcements) setAnnouncements(b.announcements.data);
-    if (b.slas) setSlas(b.slas.data);
-    if (b.leaves) setLeaves(b.leaves.data);
-    if (b.leaveRequests) setLeaveRequests(b.leaveRequests.data);
+    // Helper: read blob data, default fallback if missing
+    var bd = function(k, fallback) { return (b[k] && b[k].data !== undefined && b[k].data !== null) ? b[k].data : fallback; };
+
+    // Team — seed defaults if empty (first-time setup)
+    var teamData = bd("team", null);
+    if (teamData && Object.keys(teamData).length > 0) setTeam(teamData);
+    else { setTeam(DEF_TEAM); API.saveBlob("team", DEF_TEAM); teamData = DEF_TEAM; }
+
+    setLogs((bd("logs", []) || []).slice(0, 500));
+    setSessions(bd("sessions", {}) || {});
+
+    var shopsData = bd("shops", null);
+    if (shopsData && shopsData.length > 0) setShops(shopsData);
+    else { setShops(DEF_SHOPS); API.saveBlob("shops", DEF_SHOPS); }
+
+    setProducts(bd("products", []) || []);
+
+    // Timers — sweep abandoned running timers (Bug 4 fix)
+    var sweptTimers = bd("timers", {}) || {};
+    var sweepNow = nowMs();
+    var sweptCount = 0;
+    Object.keys(sweptTimers).forEach(function(stid) {
+      var stm = sweptTimers[stid];
+      if (stm && stm.running && stm.startedAt) {
+        var ageSec = Math.floor((sweepNow - new Date(stm.startedAt).getTime()) / 1000);
+        if (ageSec > 28800 || ageSec < 0) {
+          sweptTimers[stid] = { running: false, total: stm.total || 0, startedAt: null };
+          sweptCount++;
+        }
+      }
+    });
+    if (sweptCount > 0) console.warn("[TIMER SWEEP] Stopped " + sweptCount + " abandoned timer(s) at load.");
+    setTimers(sweptTimers);
+
+    var tplData = bd("templates", null);
+    if (tplData && tplData.length > 0) setTemplates(tplData);
+    else { setTemplates(DEF_TEMPLATES); API.saveBlob("templates", DEF_TEMPLATES); }
+
+    setTargets(bd("targets", []) || []);
+    setSheets(bd("sheets", []) || []);
+    setNotifications(_trimNotifs(bd("notifs", []) || []));
+
+    var ttData = bd("taskTypes", null);
+    if (ttData && ttData.length > 0) setTaskTypes(ttData);
+    else { setTaskTypes(DEF_TASK_TYPES); API.saveBlob("taskTypes", DEF_TASK_TYPES); }
+
+    var dpData = bd("departments", null);
+    if (dpData && dpData.length > 0) setDepartments(dpData);
+    else { setDepartments(DEF_DEPARTMENTS); API.saveBlob("departments", DEF_DEPARTMENTS); }
+
+    var plfData = bd("platforms", null);
+    if (plfData && plfData.length > 0) setPlatforms(plfData);
+    else { setPlatforms(DEF_PLATFORMS); API.saveBlob("platforms", DEF_PLATFORMS); }
+
+    setLoginTrack(bd("loginTrack", {}) || {});
+    setRecurringTasks(bd("recurringTasks", []) || []);
+    setStatusHistory(bd("statusHistory", {}) || {});
+    setProductAudit(bd("productAudit", []) || []);
+    setAllTags(bd("allTags", []) || []);
+    setAchievements(bd("achievements", {}) || {});
+    setDailyChallenge(bd("dailyChallenge", null));
+    setLoginHistory(bd("loginHistory", []) || []);
+    setAnnouncements(bd("announcements", []) || []);
+    setSlas(bd("slas", {}) || {});
+    setLeaves(bd("leaves", {}) || {});
+    setLeaveRequests(bd("leaveRequests", []) || []);
     if (b.branding) setBranding(b.branding.data);
-    if (b.pipelineRules) setPipelineRules(b.pipelineRules.data);
-    if (b.userXP) setUserXP(b.userXP.data);
-    if (b.monthlyBonus) setMonthlyBonus(b.monthlyBonus.data);
+    setPipelineRules(bd("pipelineRules", []) || []);
+    setUserXP(bd("userXP", {}) || {});
+
+    // MonthlyBonus shape migration
+    var mb = bd("monthlyBonus", null);
+    if (mb) {
+      if (mb.amount !== undefined && mb.memberAmount === undefined) {
+        mb.memberAmount = mb.amount; mb.memberCurrency = mb.currency || "RON";
+        mb.pmAmount = 0; mb.pmCurrency = "RON";
+      }
+      setMonthlyBonus(mb);
+    }
+
     if (b.wheelConfig) setWheelConfig(b.wheelConfig.data);
-    if (b.wheelHistory) setWheelHistory(b.wheelHistory.data);
-    if (b.penalties) setPenalties(b.penalties.data);
+    setWheelHistory(bd("wheelHistory", []) || []);
+    setPenalties(bd("penalties", []) || []);
     if (b.penaltyConfig) setPenaltyConfig(b.penaltyConfig.data);
-    if (b.taskActivity) setTaskActivity(b.taskActivity.data);
-    if (b.leagueArchive) setLeagueArchive(b.leagueArchive.data);
-    if (b.taskEditors) setTaskEditors(b.taskEditors.data);
+    setTaskActivity(_trimTaskActivity(bd("taskActivity", []) || []));
+    setLeagueArchive(bd("leagueArchive", []) || []);
+    setTaskEditors(bd("taskEditors", {}) || {});
+
     // Tasks
     var taskArr = (boot.tasks || []).map(function(t) { return t.data; });
     for (var k in _shadowBlobs.current) delete _shadowBlobs.current[k];
@@ -994,6 +1046,18 @@ export default function App() {
     _lastApiTaskState.current = taskArr.slice();
     _setTasks(taskArr);
     tasksRef.current = taskArr;
+
+    // Daily wheel trigger — fires for members on their first load of the day
+    var savedUserForWheel = localStorage.getItem("s7_user");
+    if (savedUserForWheel) {
+      try {
+        var suw = JSON.parse(savedUserForWheel);
+        var wheelKey = "s7_wheel_" + suw + "_" + TD;
+        if (!localStorage.getItem(wheelKey) && suw !== "admin" && teamData && teamData[suw] && teamData[suw].role === "member") {
+          setTimeout(function() { setDailyWheelResult({ user: suw, show: true }); }, 1500);
+        }
+      } catch(e) {}
+    }
   };
 
   var persist = function(key, value, delay) {
@@ -1016,6 +1080,15 @@ export default function App() {
           setLoading(false);
           return;
         }
+        // Restore user identity from localStorage BEFORE loading data,
+        // otherwise React renders <LoginScreen> for a frame and user has to re-login.
+        try {
+          var savedUserApi = localStorage.getItem("s7_user");
+          if (savedUserApi) {
+            var su = JSON.parse(savedUserApi);
+            setUser(su);
+          }
+        } catch(e) { console.warn("could not restore user from localStorage", e); }
         var cached = API.loadCachedBootstrap();
         if (cached) _applyBootstrap(cached);
         try {
@@ -1025,6 +1098,8 @@ export default function App() {
           API.startHeartbeat();
         } catch (e) {
           console.error("bootstrap failed", e);
+          // If bootstrap fails because token is invalid/expired, drop session.
+          // apiFetch already handles 401 by reload — this catches other failures.
         }
         setLoading(false);
         return;
