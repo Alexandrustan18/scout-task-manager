@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { pool } from "./db.js";
 import { registerAuthRoutes } from "./auth.js";
 import { registerBootstrapRoutes } from "./bootstrap.js";
+import { registerBlobRoutes } from "./blobs.js";
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || "info" } });
 
@@ -16,6 +17,8 @@ await app.register(cors, {
 
 registerAuthRoutes(app);
 registerBootstrapRoutes(app);
+const noopBroadcast = () => {};
+registerBlobRoutes(app, noopBroadcast);
 
 app.get("/api/healthz", async () => {
   const t0 = Date.now();
