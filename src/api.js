@@ -201,28 +201,33 @@ export function deleteTask(id, opts = {}) {
 let heartbeatOK = true;
 let heartbeatMisses = 0;
 let heartbeatTimer = null;
-export function startHeartbeat() {
-  if (heartbeatTimer) return;
-  const tick = async () => {
-    try {
-      const r = await apiFetch("/heartbeat", { method: "POST" });
-      if (r.ok) {
-        heartbeatOK = true;
-        heartbeatMisses = 0;
-        if (saveStatus.state === "offline" && writeQueue.length === 0) setStatus({ state: "synced" });
-      } else {
-        heartbeatMisses += 1;
-      }
-    } catch {
+const tickHeartbeat = async () => {
+  try {
+    const r = await apiFetch("/heartbeat", { method: "POST" });
+    if (r.ok) {
+      heartbeatOK = true;
+      heartbeatMisses = 0;
+      if (saveStatus.state === "offline" && writeQueue.length === 0) setStatus({ state: "synced" });
+    } else {
       heartbeatMisses += 1;
     }
-    if (heartbeatMisses >= 3) {
-      heartbeatOK = false;
-      setStatus({ state: "offline" });
-    }
-  };
-  tick();
-  heartbeatTimer = setInterval(tick, 30000);
+  } catch {
+    heartbeatMisses += 1;
+  }
+  if (heartbeatMisses >= 3) {
+    heartbeatOK = false;
+    setStatus({ state: "offline" });
+  }
+};
+export function startHeartbeat() {
+  if (heartbeatTimer) return;
+  tickHeartbeat();
+  // 10s interval — recovers from transient SSE/network blips in ~10s instead of 30s
+  heartbeatTimer = setInterval(tickHeartbeat, 10000);
+  // Trigger immediate recovery when the tab/network returns
+  const wakeup = () => { tickHeartbeat(); openEvents(); };
+  window.addEventListener("online", wakeup);
+  window.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") wakeup(); });
 }
 
 // ---------- SSE ----------
