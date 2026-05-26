@@ -26,19 +26,23 @@ function setStatus(patch) {
 export function onStatus(fn) { statusSubscribers.add(fn); return () => statusSubscribers.delete(fn); }
 export function getStatus() { return saveStatus; }
 
-function authHeaders() {
-  return {
+function authHeaders(hasBody) {
+  const h = {
     "Authorization": "Bearer " + _token,
     "X-Scout-Tab-Id": _tabId,
-    "Content-Type": "application/json",
   };
+  // Only set Content-Type when there's actually a body — Fastify rejects empty JSON body
+  // with FST_ERR_CTP_EMPTY_JSON_BODY when Content-Type: application/json is set without a body.
+  if (hasBody) h["Content-Type"] = "application/json";
+  return h;
 }
 
 async function apiFetch(path, opts = {}) {
+  const hasBody = opts.body !== undefined && opts.body !== null;
   const r = await fetch(API + path, {
     method: opts.method || "GET",
-    headers: { ...authHeaders(), ...(opts.headers || {}) },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    headers: { ...authHeaders(hasBody), ...(opts.headers || {}) },
+    body: hasBody ? JSON.stringify(opts.body) : undefined,
   });
   if (r.status === 401) {
     localStorage.removeItem(TOKEN_KEY);
