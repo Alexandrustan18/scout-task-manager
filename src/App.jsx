@@ -1,11 +1,17 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import * as API from "./api.js";
 
 // ═══ SUPABASE ═══
 var supabase = createClient(
   "https://34-62-56-73.nip.io",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc5MDg4MzIwLCJleHAiOjE5MzY3NjgzMjB9.056KX70qmlxhlDh0W_jm6R4mbdoLb2gk_qqaf39GROU"
 );
+
+// Feature flag: when true, all data ops go through the new Node API.
+// When false (legacy), the existing supabase-js + raw fetch paths are used.
+// DEFAULT FALSE — flipped to true in cutover task (T15).
+var USE_API = false;
 
 async function cloudLoad(key, fallback) {
   // Phase 3: tasks loads from per-row format (id LIKE 'task_%') rather than single blob row.
@@ -772,22 +778,38 @@ export default function App() {
   var setTasks = useCallback(function(updater) {
     _setTasks(function(prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
-      tasksRef.current = next;
-      // Only auto-save if we're not in initial load (first render done)
-      if (_firstRenderDoneRef.current) {
-        // Save immediately with MERGE to prevent concurrent user overwrites
-        immediateSave("tasks", next).then(function(merged) {
-          // If server had changes we didn't know about, merged may differ from next
-          // Update local state to reflect the true merged state
-          if (merged && Array.isArray(merged) && merged.length !== next.length) {
-            _setTasks(merged);
-            tasksRef.current = merged;
-          }
-        }).catch(function(err) {
-          console.error("[CRITICAL] Auto-save tasks failed:", err);
-          logError("SUPABASE_SAVE_FAIL", "Auto-save tasks fail in setTasks wrapper", err && err.message ? err.message : String(err));
-        });
+      if (USE_API) {
+        var pState = _lastApiTaskState.current || [];
+        var pById = {}; for (var i = 0; i < pState.length; i++) pById[pState[i].id] = pState[i];
+        var nById = {}; for (var j = 0; j < next.length; j++) nById[next[j].id] = next[j];
+        for (var k = 0; k < next.length; k++) {
+          var nt = next[k];
+          var pt = pById[nt.id];
+          if (!pt) { API.saveTask(nt); }
+          else if (pt.updatedAt !== nt.updatedAt || pt._deleted !== nt._deleted) { API.saveTask(nt); }
+        }
+        for (var l = 0; l < pState.length; l++) {
+          if (!nById[pState[l].id] && !pState[l]._deleted) { API.deleteTask(pState[l].id); }
+        }
+        _lastApiTaskState.current = next.slice();
+      } else {
+        // Only auto-save if we're not in initial load (first render done)
+        if (_firstRenderDoneRef.current) {
+          // Save immediately with MERGE to prevent concurrent user overwrites
+          immediateSave("tasks", next).then(function(merged) {
+            // If server had changes we didn't know about, merged may differ from next
+            // Update local state to reflect the true merged state
+            if (merged && Array.isArray(merged) && merged.length !== next.length) {
+              _setTasks(merged);
+              tasksRef.current = merged;
+            }
+          }).catch(function(err) {
+            console.error("[CRITICAL] Auto-save tasks failed:", err);
+            logError("SUPABASE_SAVE_FAIL", "Auto-save tasks fail in setTasks wrapper", err && err.message ? err.message : String(err));
+          });
+        }
       }
+      tasksRef.current = next;
       return next;
     });
   }, []);
@@ -894,8 +916,90 @@ export default function App() {
     return { "Operational": true, "Echipa": true, "Comunicare": false, "Configurare": false };
   });
 
+  // ═══ API client refs (Task 12) ═══
+  var _shadowBlobs = useRef({});           // {key: data from server} — suppress SSE-echo writes
+  var _lastApiTaskState = useRef([]);      // diff baseline for per-row task writes
+
+  var _applyBootstrap = function(boot) {
+    var b = boot.blobs || {};
+    if (b.team) setTeam(b.team.data);
+    if (b.logs) setLogs(b.logs.data);
+    if (b.sessions) setSessions(b.sessions.data);
+    if (b.shops) setShops(b.shops.data);
+    if (b.products) setProducts(b.products.data);
+    if (b.timers) setTimers(b.timers.data);
+    if (b.templates) setTemplates(b.templates.data);
+    if (b.targets) setTargets(b.targets.data);
+    if (b.sheets) setSheets(b.sheets.data);
+    if (b.notifs) setNotifications(b.notifs.data || []);
+    if (b.taskTypes) setTaskTypes(b.taskTypes.data);
+    if (b.departments) setDepartments(b.departments.data);
+    if (b.platforms) setPlatforms(b.platforms.data);
+    if (b.loginTrack) setLoginTrack(b.loginTrack.data);
+    if (b.recurringTasks) setRecurringTasks(b.recurringTasks.data);
+    if (b.statusHistory) setStatusHistory(b.statusHistory.data);
+    if (b.productAudit) setProductAudit(b.productAudit.data);
+    if (b.allTags) setAllTags(b.allTags.data);
+    if (b.achievements) setAchievements(b.achievements.data);
+    if (b.dailyChallenge) setDailyChallenge(b.dailyChallenge.data);
+    if (b.loginHistory) setLoginHistory(b.loginHistory.data);
+    if (b.announcements) setAnnouncements(b.announcements.data);
+    if (b.slas) setSlas(b.slas.data);
+    if (b.leaves) setLeaves(b.leaves.data);
+    if (b.leaveRequests) setLeaveRequests(b.leaveRequests.data);
+    if (b.branding) setBranding(b.branding.data);
+    if (b.pipelineRules) setPipelineRules(b.pipelineRules.data);
+    if (b.userXP) setUserXP(b.userXP.data);
+    if (b.monthlyBonus) setMonthlyBonus(b.monthlyBonus.data);
+    if (b.wheelConfig) setWheelConfig(b.wheelConfig.data);
+    if (b.wheelHistory) setWheelHistory(b.wheelHistory.data);
+    if (b.penalties) setPenalties(b.penalties.data);
+    if (b.penaltyConfig) setPenaltyConfig(b.penaltyConfig.data);
+    if (b.taskActivity) setTaskActivity(b.taskActivity.data);
+    if (b.leagueArchive) setLeagueArchive(b.leagueArchive.data);
+    if (b.taskEditors) setTaskEditors(b.taskEditors.data);
+    // Tasks
+    var taskArr = (boot.tasks || []).map(function(t) { return t.data; });
+    for (var k in _shadowBlobs.current) delete _shadowBlobs.current[k];
+    Object.keys(b).forEach(function(kk) { _shadowBlobs.current[kk] = b[kk].data; });
+    _lastApiTaskState.current = taskArr.slice();
+    _setTasks(taskArr);
+    tasksRef.current = taskArr;
+  };
+
+  var persist = function(key, value, delay) {
+    if (USE_API) {
+      if (_shadowBlobs.current[key] !== undefined &&
+          JSON.stringify(_shadowBlobs.current[key]) === JSON.stringify(value)) {
+        return;
+      }
+      _shadowBlobs.current[key] = value;
+      API.saveBlob(key, value);
+    } else {
+      debouncedSave(key, value, delay);
+    }
+  };
+
   useEffect(function() {
     async function loadAll() {
+      if (USE_API) {
+        if (!API.hasToken()) {
+          setLoading(false);
+          return;
+        }
+        var cached = API.loadCachedBootstrap();
+        if (cached) _applyBootstrap(cached);
+        try {
+          var fresh = await API.bootstrap();
+          _applyBootstrap(fresh);
+          API.openEvents();
+          API.startHeartbeat();
+        } catch (e) {
+          console.error("bootstrap failed", e);
+        }
+        setLoading(false);
+        return;
+      }
       // ═══ Sync server clock (Bug 4 hardening) ═══
       // Done before any Supabase work so all subsequent timestamps use the correct clock.
       // Bounded by a 5s timeout so a slow/down Supabase never blocks app startup —
@@ -1041,6 +1145,7 @@ export default function App() {
 
   // Realtime subscription
   useEffect(function() {
+    if (USE_API) return;
     var channel = supabase.channel("app_data_changes").on("postgres_changes", { event: "*", schema: "public", table: "app_data" }, function(payload) {
       if (!payload.new || !payload.new.id || !payload.new.data) return;
       var key = payload.new.id;
@@ -1157,6 +1262,80 @@ export default function App() {
       }
     }).subscribe();
     return function() { supabase.removeChannel(channel); };
+  }, []);
+
+  // ═══ API SSE handler (Task 12) ═══
+  useEffect(function() {
+    if (!USE_API) return;
+    var unsubChange = API.onRowChange(function(ev) {
+      if (ev.type === "task_change") {
+        _setTasks(function(prev) {
+          var found = false;
+          var next = prev.map(function(t) {
+            if (t.id === ev.id) { found = true; return ev.data; }
+            return t;
+          });
+          if (!found) next = [ev.data].concat(next);
+          tasksRef.current = next;
+          if (_lastApiTaskState && _lastApiTaskState.current) {
+            var foundB = false;
+            var baseline = _lastApiTaskState.current.map(function(t) {
+              if (t.id === ev.id) { foundB = true; return ev.data; }
+              return t;
+            });
+            if (!foundB) baseline = [ev.data].concat(baseline);
+            _lastApiTaskState.current = baseline;
+          }
+          return next;
+        });
+        return;
+      }
+      if (ev.type === "blob_change") {
+        var k = ev.id; var d = ev.data;
+        if (k === "team") setTeam(d);
+        else if (k === "logs") setLogs(d);
+        else if (k === "sessions") setSessions(d);
+        else if (k === "shops") setShops(d);
+        else if (k === "products") setProducts(d);
+        else if (k === "timers") setTimers(d);
+        else if (k === "templates") setTemplates(d);
+        else if (k === "targets") setTargets(d);
+        else if (k === "sheets") setSheets(d);
+        else if (k === "notifs") setNotifications(d || []);
+        else if (k === "taskTypes") setTaskTypes(d);
+        else if (k === "departments") setDepartments(d);
+        else if (k === "platforms") setPlatforms(d);
+        else if (k === "loginTrack") setLoginTrack(d);
+        else if (k === "recurringTasks") setRecurringTasks(d);
+        else if (k === "statusHistory") setStatusHistory(d);
+        else if (k === "productAudit") setProductAudit(d);
+        else if (k === "allTags") setAllTags(d);
+        else if (k === "achievements") setAchievements(d);
+        else if (k === "dailyChallenge") setDailyChallenge(d);
+        else if (k === "loginHistory") setLoginHistory(d);
+        else if (k === "announcements") setAnnouncements(d);
+        else if (k === "slas") setSlas(d);
+        else if (k === "leaves") setLeaves(d);
+        else if (k === "leaveRequests") setLeaveRequests(d);
+        else if (k === "branding") setBranding(d);
+        else if (k === "pipelineRules") setPipelineRules(d);
+        else if (k === "userXP") setUserXP(d);
+        else if (k === "monthlyBonus") setMonthlyBonus(d);
+        else if (k === "wheelConfig") setWheelConfig(d);
+        else if (k === "wheelHistory") setWheelHistory(d);
+        else if (k === "penalties") setPenalties(d);
+        else if (k === "penaltyConfig") setPenaltyConfig(d);
+        else if (k === "taskActivity") setTaskActivity(d);
+        else if (k === "leagueArchive") setLeagueArchive(d);
+        else if (k === "taskEditors") setTaskEditors(d);
+        _shadowBlobs.current[k] = d;
+        return;
+      }
+      if (ev.type === "full_resync") {
+        _applyBootstrap(ev.bootstrap);
+      }
+    });
+    return function() { unsubChange(); };
   }, []);
 
   // Periodic clock re-sync (Bug 4 hardening) — keeps offset accurate during long sessions.
@@ -1397,12 +1576,12 @@ export default function App() {
 
   // Auto-saves (skip the initial render after load to avoid 30+ noise saves)
   // Note: `tasks` auto-saves via setTasks wrapper, no useEffect needed for it
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("team", team, 1000); }, [team]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("logs", logs, 2000); }, [logs]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("sessions", sessions, 5000); }, [sessions]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("shops", shops, 1000); }, [shops]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("products", products, 1000); }, [products]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("timers", timers, 1000); }, [timers]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("team", team, 1000); }, [team]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("logs", logs, 2000); }, [logs]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("sessions", sessions, 5000); }, [sessions]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("shops", shops, 1000); }, [shops]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("products", products, 1000); }, [products]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("timers", timers, 1000); }, [timers]);
   // Mark first render as done AFTER all state has settled from initial load
   useEffect(function() {
     if (!loading) {
@@ -1490,44 +1669,44 @@ export default function App() {
       return needsUpdate ? newTimers : prevTimers;
     });
   }, [tasks, loading]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("templates", templates, 1000); }, [templates]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("targets", targets, 1000); }, [targets]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("sheets", sheets, 1000); }, [sheets]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("notifs", notifications, 2000); }, [notifications]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("taskTypes", taskTypes, 1000); }, [taskTypes]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("departments", departments, 1000); }, [departments]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("platforms", platforms, 1000); }, [platforms]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
-  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && _firstRenderDoneRef.current && userXP && Object.keys(userXP).length > 0) debouncedSave("userXP", userXP, 1500); }, [userXP]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("templates", templates, 1000); }, [templates]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("targets", targets, 1000); }, [targets]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("sheets", sheets, 1000); }, [sheets]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("notifs", notifications, 2000); }, [notifications]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("taskTypes", taskTypes, 1000); }, [taskTypes]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("departments", departments, 1000); }, [departments]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("platforms", platforms, 1000); }, [platforms]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("pipelineRules", pipelineRules, 1000); }, [pipelineRules]);
+  useEffect(function() { _globalUserXP = userXP || {}; if (!loading && _firstRenderDoneRef.current && userXP && Object.keys(userXP).length > 0) persist("userXP", userXP, 1500); }, [userXP]);
   // monthlyBonus auto-save backup
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("monthlyBonus", monthlyBonus, 2000); }, [monthlyBonus]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("monthlyBonus", monthlyBonus, 2000); }, [monthlyBonus]);
   useEffect(function() { try { localStorage.setItem("s7_sound", soundEnabled ? "on" : "off"); } catch(e) {} }, [soundEnabled]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("loginTrack", loginTrack, 2000); }, [loginTrack]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("statusHistory", statusHistory, 1000); }, [statusHistory]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("productAudit", productAudit, 1000); }, [productAudit]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("allTags", allTags, 1000); }, [allTags]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("achievements", achievements, 1000); }, [achievements]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("loginTrack", loginTrack, 2000); }, [loginTrack]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("recurringTasks", recurringTasks, 1000); }, [recurringTasks]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("statusHistory", statusHistory, 1000); }, [statusHistory]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("productAudit", productAudit, 1000); }, [productAudit]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("allTags", allTags, 1000); }, [allTags]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("achievements", achievements, 1000); }, [achievements]);
   useEffect(function() {
     if (loading || !_firstRenderDoneRef.current) return;
     // Phase 1 fix: never save null/undefined to dailyChallenge — Supabase column is NOT NULL.
     // Previously this triggered ~68 SUPABASE_SAVE errors per session on startup before the
     // daily-reset hydrated the value.
     if (dailyChallenge === null || dailyChallenge === undefined) return;
-    debouncedSave("dailyChallenge", dailyChallenge, 1000);
+    persist("dailyChallenge", dailyChallenge, 1000);
   }, [dailyChallenge]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("loginHistory", loginHistory, 2000); }, [loginHistory]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("announcements", announcements, 1000); }, [announcements]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("slas", slas, 1000); }, [slas]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("leaves", leaves, 1000); }, [leaves]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("loginHistory", loginHistory, 2000); }, [loginHistory]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("announcements", announcements, 1000); }, [announcements]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("slas", slas, 1000); }, [slas]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("leaves", leaves, 1000); }, [leaves]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("leaveRequests", leaveRequests, 1000); }, [leaveRequests]);
   // branding auto-save backup
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current) debouncedSave("branding", branding, 2000); }, [branding]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current && wheelHistory.length > 0) debouncedSave("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current && penalties.length > 0) debouncedSave("penalties", penalties, 1000); }, [penalties]);
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current && taskActivity.length > 0) debouncedSave("taskActivity", taskActivity, 1500); }, [taskActivity]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current) persist("branding", branding, 2000); }, [branding]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current && wheelHistory.length > 0) persist("wheelHistory", wheelHistory, 1000); }, [wheelHistory]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current && penalties.length > 0) persist("penalties", penalties, 1000); }, [penalties]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current && taskActivity.length > 0) persist("taskActivity", taskActivity, 1500); }, [taskActivity]);
   // ═══ MODIF 2: Auto-save leagueArchive ═══
-  useEffect(function() { if (!loading && _firstRenderDoneRef.current && leagueArchive.length > 0) debouncedSave("leagueArchive", leagueArchive, 1500); }, [leagueArchive]);
+  useEffect(function() { if (!loading && _firstRenderDoneRef.current && leagueArchive.length > 0) persist("leagueArchive", leagueArchive, 1500); }, [leagueArchive]);
 
   // ═══ MODIF 2: Auto-arhivare luna anterioara (rulează la mount după loading) ═══
   // Verifică dacă luna anterioară a fost deja arhivată; dacă nu, creează snapshot.
@@ -1783,7 +1962,7 @@ export default function App() {
       if (!taskId) return;
       var updated = Object.assign({}, taskEditors);
       updated[taskId] = { userId: user, name: (team[user] || {}).name, at: ts() };
-      debouncedSave("taskEditors", updated, 300);
+      persist("taskEditors", updated, 300);
     };
     // cleanup stale editors older than 2min
     var clean = setInterval(function() {
@@ -1799,7 +1978,15 @@ export default function App() {
   }, [user, loading, taskEditors, team]);
 
   useEffect(function() { var iv = setInterval(function() { setTick(function(t) { return t + 1; }); }, 1000); return function() { clearInterval(iv); }; }, []);
-  useEffect(function() { if (!user) return; var fn = function() { setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); return n; }); }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
+  useEffect(function() { if (!user) return; var fn = function() {
+    if (USE_API) {
+      API.patchBlob("sessions", { op: "set_field", path: [user], value: ts() });
+      setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); return n; });
+      _shadowBlobs.current["sessions"] = Object.assign({}, _shadowBlobs.current["sessions"] || {}, { [user]: ts() });
+    } else {
+      setSessions(function(p) { var n = Object.assign({}, p); n[user] = ts(); return n; });
+    }
+  }; fn(); var iv = setInterval(fn, 30000); return function() { clearInterval(iv); }; }, [user]);
 
   var addLog = useCallback(function(a, d) { setLogs(function(p) { return [{ id: gid(), user: user || "?", action: a, detail: d, time: ts() }].concat(p).slice(0, 500); }); }, [user]);
   var addActivity = useCallback(function(taskId, taskTitle, action, details) {
@@ -1931,7 +2118,24 @@ export default function App() {
     addLog("SYSTEM", "XP recalculat pentru toti userii");
   };
 
-  var handleLogin = function(u, pw) {
+  var handleLogin = async function(u, pw) {
+    if (USE_API) {
+      try {
+        var out = await API.login(u, pw);
+        setUser(out.user.username);
+        localStorage.setItem("s7_user", JSON.stringify(out.user.username));
+        addLog("LOGIN", (out.user.name || u) + " a intrat");
+        var boot = await API.bootstrap();
+        _applyBootstrap(boot);
+        API.openEvents();
+        API.startHeartbeat();
+        return true;
+      } catch (e) {
+        console.error("API login failed", e);
+        return false;
+      }
+    }
+    // Legacy path
     var t = team[u];
     if (!t || t.password !== pw) return false;
     setUser(u);
