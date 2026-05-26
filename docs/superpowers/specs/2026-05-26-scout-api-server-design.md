@@ -391,9 +391,10 @@ Bogdan can curl this from the existing admin Error Log page (extend it with a ne
 
 ### Phase 3 (day 3): Switch flag to true for everyone
 
-- Flip the flag, deploy. Tell the team to hard-refresh.
+- Flip `USE_API = true`, push to main, Vercel rebuilds.
+- **Trigger auto-reload via the existing `_forceRefresh` mechanism:** write a row to `app_data` with `id="_forceRefresh"`, `data={at: now, by: "deploy"}`. Old browsers (still on Supabase Realtime) receive the postgres_changes event, show toast "Aplicatia se actualizeaza in 5 secunde…", reload after 5 s, fetch the new bundle from Vercel, and come up on the new API. **No user action required.**
 - Monitor `/api/admin/healthcheck` for 24h.
-- Keep PostgREST and Supabase Realtime running as a safety net.
+- Keep PostgREST and Supabase Realtime running as a safety net during this window.
 
 ### Phase 4 (day 4-7): Burn the bridges
 
@@ -439,8 +440,8 @@ Rollback: if the API has a fatal bug at any phase, flip `USE_API = false` and re
 - WebSocket-based realtime (SSE is sufficient and simpler).
 - Postgres replicas / read-only nodes.
 
-## Open questions for Bogdan
+## Decisions
 
-1. **Cutover tolerance for downtime:** Phase 3 (the actual switch) requires every user to hard-refresh. Acceptable to schedule for after-hours (e.g. 22:00 Romania), with a 30-min planned outage window?
-2. **Backup before cutover:** want me to snapshot the VM disk before running the DB migration? Standard precaution.
-3. **Auth follow-up timing:** ship plaintext-compare in v1 to match current behavior, then bcrypt in v1.1 the following week — OK?
+1. **Cutover:** auto-reload via existing `_forceRefresh` mechanism — no user action required. Schedule the trigger for whenever the new bundle is verified, ideally a low-traffic window but not required.
+2. **VM snapshot:** YES, taken right before the DB migration. ~2 min, instant rollback.
+3. **Auth:** plaintext compare server-side. Same behavior as today, just moved off the browser. No encryption. Keep it simple.
