@@ -6,6 +6,8 @@ import { registerBootstrapRoutes } from "./bootstrap.js";
 import { registerBlobRoutes } from "./blobs.js";
 import { registerTaskRoutes } from "./tasks.js";
 import { registerEventsRoutes, broadcast, sseStats } from "./events.js";
+import { scheduleSweep } from "./sweep.js";
+import { registerAdminRoutes } from "./admin.js";
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || "info" } });
 
@@ -22,6 +24,7 @@ registerBootstrapRoutes(app);
 registerBlobRoutes(app, broadcast);
 registerTaskRoutes(app, broadcast);
 registerEventsRoutes(app);
+registerAdminRoutes(app, broadcast);
 
 app.get("/api/healthz", async () => {
   const t0 = Date.now();
@@ -43,6 +46,7 @@ app.post("/api/heartbeat", { preHandler: authPreHandler }, async () => {
 const port = parseInt(process.env.PORT || "3030", 10);
 app.listen({ port, host: "0.0.0.0" }).then(() => {
   console.log(`[scout-api] listening on ${port}`);
+  scheduleSweep();
 }).catch((err) => {
   console.error("[scout-api] boot failure", err);
   process.exit(1);
