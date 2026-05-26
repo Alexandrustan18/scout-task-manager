@@ -1,10 +1,11 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { pool } from "./db.js";
-import { registerAuthRoutes } from "./auth.js";
+import { registerAuthRoutes, authPreHandler } from "./auth.js";
 import { registerBootstrapRoutes } from "./bootstrap.js";
 import { registerBlobRoutes } from "./blobs.js";
 import { registerTaskRoutes } from "./tasks.js";
+import { registerEventsRoutes, broadcast, sseStats } from "./events.js";
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || "info" } });
 
@@ -18,14 +19,25 @@ await app.register(cors, {
 
 registerAuthRoutes(app);
 registerBootstrapRoutes(app);
-const noopBroadcast = () => {};
-registerBlobRoutes(app, noopBroadcast);
-registerTaskRoutes(app, noopBroadcast);
+registerBlobRoutes(app, broadcast);
+registerTaskRoutes(app, broadcast);
+registerEventsRoutes(app);
 
 app.get("/api/healthz", async () => {
   const t0 = Date.now();
   await pool.query("SELECT 1");
-  return { ok: true, db_ms: Date.now() - t0, uptime_s: Math.floor(process.uptime()) };
+  const mem = process.memoryUsage();
+  return {
+    ok: true,
+    db_ms: Date.now() - t0,
+    uptime_s: Math.floor(process.uptime()),
+    mem_mb: Math.round(mem.rss / 1048576),
+    ...sseStats(),
+  };
+});
+
+app.post("/api/heartbeat", { preHandler: authPreHandler }, async () => {
+  return { ok: true, serverTime: new Date().toISOString() };
 });
 
 const port = parseInt(process.env.PORT || "3030", 10);
