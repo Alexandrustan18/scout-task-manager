@@ -106,12 +106,39 @@ export function loadCachedBootstrap() {
 export function getVersion(rowId) { return versions[rowId] ?? 0; }
 export function setVersion(rowId, v) { versions[rowId] = v; }
 
-// ---------- Writes with retry queue ----------
+// ---------- Writes with PERSISTENT retry queue ----------
+// Queue is mirrored to localStorage. Jobs NEVER drop. On reload, queue resumes
+// draining from where it left off. Callbacks (onAck/onConflict) are not
+// persisted — they only fire when the write happens in the same session.
+const QUEUE_KEY = "s7_write_queue";
 const writeQueue = [];
 let draining = false;
 
+function persistQueue() {
+  try {
+    // Strip non-serializable callbacks before storing
+    const safe = writeQueue.map((j) => ({
+      rowId: j.rowId, path: j.path, method: j.method, body: j.body, retries: j.retries || 0,
+    }));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(safe));
+  } catch {}
+}
+
+function loadPersistedQueue() {
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length > 0) {
+      for (const j of arr) writeQueue.push(j);
+      setStatus({ queueLen: writeQueue.length, state: "saving" });
+    }
+  } catch {}
+}
+
 function enqueue(req) {
   writeQueue.push(req);
+  persistQueue();
   setStatus({ queueLen: writeQueue.length, state: "saving" });
   drain();
 }
@@ -124,21 +151,20 @@ async function drain() {
     try {
       const r = await apiFetch(job.path, { method: job.method, body: job.body });
       if (r.status === 409) {
+        // Version conflict: the server's row moved on. Adopt and drop this job.
+        // (Conflict resolution is by-design — newer version wins.)
         const c = await r.json();
         versions[job.rowId] = c.currentVersion;
         if (job.onConflict) try { job.onConflict(c); } catch {}
         writeQueue.shift();
+        persistQueue();
         continue;
       }
       if (!r.ok) {
+        // Server error — keep retrying forever with capped backoff.
         job.retries = (job.retries || 0) + 1;
-        if (job.retries > 3) {
-          console.warn("[api] dropping after 3 retries", job.path);
-          writeQueue.shift();
-          setStatus({ state: "error", lastError: "save_failed" });
-          continue;
-        }
-        const wait = Math.pow(4, job.retries) * 250;
+        persistQueue();
+        const wait = Math.min(Math.pow(2, job.retries) * 500, 30000);
         await new Promise((res) => setTimeout(res, wait));
         continue;
       }
@@ -146,18 +172,23 @@ async function drain() {
       if (out && typeof out.version === "number") versions[job.rowId] = out.version;
       if (job.onAck) try { job.onAck(out); } catch {}
       writeQueue.shift();
+      persistQueue();
     } catch (e) {
+      // Network error — keep retrying forever with capped backoff.
       job.retries = (job.retries || 0) + 1;
-      if (job.retries > 5) {
-        writeQueue.shift();
-        setStatus({ state: "offline", lastError: "network" });
-        continue;
-      }
-      await new Promise((res) => setTimeout(res, 2000));
+      persistQueue();
+      const wait = Math.min(Math.pow(2, job.retries) * 500, 30000);
+      await new Promise((res) => setTimeout(res, wait));
     }
   }
   draining = false;
   setStatus({ queueLen: 0, state: heartbeatOK ? "synced" : "offline" });
+}
+
+// Resume any writes that didn't get sent before the last tab closed.
+export function resumePersistedWrites() {
+  loadPersistedQueue();
+  if (writeQueue.length > 0) drain();
 }
 
 export function saveBlob(key, data, opts = {}) {

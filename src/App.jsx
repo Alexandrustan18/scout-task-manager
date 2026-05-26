@@ -1099,6 +1099,8 @@ export default function App() {
           _applyBootstrap(fresh);
           API.openEvents();
           API.startHeartbeat();
+          // Resume any writes that were queued but not sent before the last tab closed.
+          API.resumePersistedWrites();
         } catch (e) {
           console.error("bootstrap failed", e);
           // If bootstrap fails because token is invalid/expired, drop session.
@@ -2239,6 +2241,7 @@ export default function App() {
         _applyBootstrap(boot);
         API.openEvents();
         API.startHeartbeat();
+        API.resumePersistedWrites();
         return true;
       } catch (e) {
         console.error("API login failed", e);
