@@ -4,6 +4,7 @@ import { pool } from "./db.js";
 import { registerAuthRoutes } from "./auth.js";
 import { registerBootstrapRoutes } from "./bootstrap.js";
 import { registerBlobRoutes } from "./blobs.js";
+import { registerTaskRoutes } from "./tasks.js";
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || "info" } });
 
@@ -19,6 +20,7 @@ registerAuthRoutes(app);
 registerBootstrapRoutes(app);
 const noopBroadcast = () => {};
 registerBlobRoutes(app, noopBroadcast);
+registerTaskRoutes(app, noopBroadcast);
 
 app.get("/api/healthz", async () => {
   const t0 = Date.now();
