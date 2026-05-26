@@ -757,6 +757,28 @@ function ToastBanner({ toasts, onDismiss }) {
   </div>;
 }
 
+function SaveStatusPill() {
+  var [s, setS] = useState(API.getStatus());
+  useEffect(function() {
+    return API.onStatus(setS);
+  }, []);
+  if (s.state === "synced") {
+    return <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#10B981", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>✓ Sincronizat</div>;
+  }
+  if (s.state === "saving") {
+    return <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#94A3B8", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>⏳ Se salveaza... ({s.queueLen})</div>;
+  }
+  if (s.state === "offline") {
+    return <>
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, padding: "10px 16px", background: "#DC2626", color: "#fff", textAlign: "center", fontSize: 13, fontWeight: 700, zIndex: 99999 }}>
+        ⚠️ Conectare pierduta. Modificarile NU se salveaza. Reincarca pagina (Cmd+Shift+R / Ctrl+Shift+R).
+      </div>
+      <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#DC2626", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>✗ Offline</div>
+    </>;
+  }
+  return <div style={{ position: "fixed", bottom: 12, right: 12, padding: "6px 12px", background: "#F59E0B", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 700, zIndex: 9999, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>⚠️ Eroare salvare</div>;
+}
+
 // FEATURE 10: Achievement popup
 function AchievementPopup({ achievement, onClose }) {
   useEffect(function() { var t = setTimeout(onClose, 4000); return function() { clearTimeout(t); }; }, []);
@@ -2845,7 +2867,7 @@ export default function App() {
   var canDelete = hasPerm(user, team, "can_delete");
   var isAdmin = me.role === "admin";
 
-  if (profUser) return <div style={S.app}><style>{CSS}</style><ToastBanner toasts={toasts} onDismiss={dismissToast} />{achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}<ProfileView pu={profUser} team={team} tasks={tasks} timers={timers} getTS={getTS} logs={logs} sessions={sessions} getPerf={getPerf} range={profRange} setRange={setProfRange} onBack={function() { setProfUser(null); }} isMob={isMob} statusHistory={statusHistory} achievements={achievements} loginHistory={loginHistory} /></div>;
+  if (profUser) return <div style={S.app}><style>{CSS}</style><ToastBanner toasts={toasts} onDismiss={dismissToast} />{USE_API && <SaveStatusPill />}{achievementPopup && <AchievementPopup achievement={achievementPopup} onClose={function() { setAchievementPopup(null); }} />}<ProfileView pu={profUser} team={team} tasks={tasks} timers={timers} getTS={getTS} logs={logs} sessions={sessions} getPerf={getPerf} range={profRange} setRange={setProfRange} onBack={function() { setProfUser(null); }} isMob={isMob} statusHistory={statusHistory} achievements={achievements} loginHistory={loginHistory} /></div>;
 
   var fProps = { stats: stats, dateF: dateF, setDateF: setDateF, statusF: statusF, setStatusF: setStatusF, prioF: prioF, setPrioF: setPrioF, assignF: assignF, setAssignF: setAssignF, shopF: shopF, setShopF: setShopF, visUsers: visUsers, shops: shops, count: filtered.length, team: team, departments: departments, deptFilter: deptFilter, setDeptFilter: setDeptFilter, platformFilter: platformFilter, setPlatformFilter: setPlatformFilter, allTags: allTags, tagFilter: tagFilter, setTagFilter: setTagFilter, platforms: platforms };
 
@@ -2901,6 +2923,7 @@ export default function App() {
   return (
     <div style={S.app}><style>{CSS}</style>
       <ToastBanner toasts={toasts} onDismiss={dismissToast} />
+      {USE_API && <SaveStatusPill />}
       {celebration && <ConfettiOverlay type={celebration.type} key={celebration.id} />}
       {dailyWheelResult && dailyWheelResult.show && wheelConfig.enabled && <DailyWheel userId={dailyWheelResult.user} team={team} awardXP={awardXP} prizes={wheelConfig.prizes} onResult={function(r) {
         // Save to history
