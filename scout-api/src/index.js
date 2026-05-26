@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { pool } from "./db.js";
+import { registerAuthRoutes } from "./auth.js";
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || "info" } });
 
@@ -11,6 +12,8 @@ await app.register(cors, {
   credentials: true,
   allowedHeaders: ["Authorization", "Content-Type", "X-Scout-Tab-Id", "Last-Event-ID"],
 });
+
+registerAuthRoutes(app);
 
 app.get("/api/healthz", async () => {
   const t0 = Date.now();
