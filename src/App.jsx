@@ -111,6 +111,13 @@ async function immediateSave(key, value) {
 }
 
 async function cloudSave(key, value, _retryCount) {
+  // Cutover guard: when USE_API is on, route ALL blob saves through the API so
+  // direct callers (admin pages, default-seed paths) don't bypass version control.
+  if (typeof USE_API !== "undefined" && USE_API) {
+    if (key === "tasks") return; // tasks routed via setTasks wrapper
+    try { API.saveBlob(key, value); } catch(e) { console.warn("cloudSave→API failed", key, e); }
+    return;
+  }
   // Phase 3: tasks key now uses per-row writes (atomic at DB row level, no merge race).
   if (key === "tasks" && Array.isArray(value)) {
     return _cloudSaveTasksPerRow(value, _retryCount);
@@ -1381,6 +1388,7 @@ export default function App() {
   // pentru a recupera dupa o pierdere de conexiune realtime fara cost de bandwidth.
   useEffect(function() {
     if (loading || !user) return;
+    if (USE_API) return; // API path uses SSE + full_resync; no need to poll
     var interval = setInterval(async function() {
       // Skip daca avem o salvare in curs - nu vrem sa suprascriem date locale
       if (_pendingKeys["tasks"]) return;
@@ -1557,6 +1565,7 @@ export default function App() {
 
   // SAFETY NET: Every 3 seconds, force-flush any pending debounce for critical keys
   useEffect(function() {
+    if (USE_API) return; // API client manages its own retry queue
     var criticalKeys = ["tasks", "statusHistory", "timers"];
     var iv = setInterval(function() {
       criticalKeys.forEach(function(key) {
@@ -1615,6 +1624,7 @@ export default function App() {
   // CRITICAL: Warn user + flush pending saves on page unload (refresh/close)
   useEffect(function() {
     var handleBeforeUnload = function(e) {
+      if (USE_API) return; // API client has its own retry queue; no legacy flush needed
       var hasPending = false;
       Object.keys(saveTimers).forEach(function(k) { if (saveTimers[k]) hasPending = true; });
       Object.keys(_pendingKeys).forEach(function(k) { if (_pendingKeys[k]) hasPending = true; });
