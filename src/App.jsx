@@ -3069,9 +3069,9 @@ export default function App() {
             var groupItems = g.items.map(function(id) { return navItems.find(function(x) { return x.id === id; }); }).filter(function(n) { return n && accessibleIds.includes(n.id); });
             if (groupItems.length === 0) return null;
             var renderItem = function(n) {
-              var myActiveCount = n.id === "tasks" ? tasks.filter(function(t) { return t.assignee === user && t.status !== "Done" && !t._campaignParent; }).length : null;
-              var pmOverdueCount = (n.id === "dashboard" && me.role === "pm") ? tasks.filter(function(t) { return pmTeamMembers(user).includes(t.assignee) && isOv(t) && t.status !== "Done" && !t._campaignParent; }).length : 0;
-              var adminOverdueCount = (n.id === "dashboard" && me.role === "admin") ? tasks.filter(function(t) { return t.status !== "Done" && isOv(t) && !t._campaignParent; }).length : 0;
+              var myActiveCount = n.id === "tasks" ? visTasks.filter(function(t) { return t.assignee === user && t.status !== "Done"; }).length : null;
+              var pmOverdueCount = (n.id === "dashboard" && me.role === "pm") ? visTasks.filter(function(t) { return pmTeamMembers(user).includes(t.assignee) && isOv(t) && t.status !== "Done"; }).length : 0;
+              var adminOverdueCount = (n.id === "dashboard" && me.role === "admin") ? visTasks.filter(function(t) { return t.status !== "Done" && isOv(t); }).length : 0;
               var overdueCount = pmOverdueCount || adminOverdueCount;
               return <div key={n.id} style={S.navItem(page === n.id)} onClick={function() { setPage(n.id); setMobNav(false); }}>
                 <Ic d={n.icon} size={18} color={page === n.id ? "#4ADE80" : "#7A8BA0"} />
