@@ -1,7 +1,9 @@
 // Scout API client. Replaces direct Supabase/PostgREST writes from App.jsx.
 // Pattern: load bootstrap on mount, open EventSource, queue writes, version-check, broadcast.
 
-const API = "/api";
+// Absolute URL so the browser hits scout-api directly (CORS is configured on the API).
+// Relative "/api" would route to the Vercel-hosted frontend domain, which has no /api proxy.
+const API = "https://34-62-56-73.nip.io/api";
 const TOKEN_KEY = "s7_token";
 const TAB_KEY = "s7_tabId";
 const BOOT_CACHE_KEY = "s7_bootstrap_cache";
