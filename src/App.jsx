@@ -11,7 +11,7 @@ var supabase = createClient(
 // Feature flag: when true, all data ops go through the new Node API.
 // When false (legacy), the existing supabase-js + raw fetch paths are used.
 // DEFAULT FALSE — flipped to true in cutover task (T15).
-var USE_API = false;
+var USE_API = true;
 
 async function cloudLoad(key, fallback) {
   // Phase 3: tasks loads from per-row format (id LIKE 'task_%') rather than single blob row.
