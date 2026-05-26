@@ -1,5 +1,9 @@
 import pg from "pg";
-const { Pool } = pg;
+const { Pool, types } = pg;
+
+// pg returns BIGINT as string by default — parse to number so === checks against client
+// numbers don't false-409. (Safe for version counters; no overflow risk in practice.)
+types.setTypeParser(20, (v) => parseInt(v, 10));
 
 export const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
