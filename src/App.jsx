@@ -3260,8 +3260,19 @@ function BulkDupModal({ count, assUsers, team, shops, departments, platforms, ta
 }
 
 function LoginScreen({ team, onLogin, announcements }) {
-  var [u, setU] = useState(""); var [p, setP] = useState(""); var [show, setShow] = useState(false); var [err, setErr] = useState("");
-  var go = function() { if (!onLogin(u.toLowerCase().trim(), p)) setErr("Username sau parola gresita"); };
+  var [u, setU] = useState(""); var [p, setP] = useState(""); var [show, setShow] = useState(false); var [err, setErr] = useState(""); var [busy, setBusy] = useState(false);
+  var go = async function() {
+    if (busy) return;
+    setBusy(true); setErr("");
+    try {
+      var ok = await onLogin(u.toLowerCase().trim(), p);
+      if (!ok) setErr("Username sau parola gresita");
+    } catch (e) {
+      setErr("Eroare conectare: " + (e && e.message ? e.message : "necunoscuta"));
+    } finally {
+      setBusy(false);
+    }
+  };
   var pubAnn = (announcements || []).filter(function(a) { return a.public; }).slice(0, 3);
   return <div style={S.loginWrap}><style>{CSS}</style><div style={S.loginCard}>
     <div style={{ textAlign: "center", marginBottom: 28 }}><div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>HeyAds</div><div style={{ fontSize: 11, color: "#94A3B8", letterSpacing: 2, marginTop: 4, textTransform: "uppercase" }}>Task Manager</div></div>
