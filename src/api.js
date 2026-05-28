@@ -169,6 +169,17 @@ function loadPersistedQueue() {
 
 function enqueue(req) {
   req._username = localStorage.getItem(USERNAME_KEY) || null;
+  // Coalesce: blob PUTs are whole-object writes — the latest value supersedes
+  // older ones for the same row. Skip the index 0 (currently in-flight) to
+  // avoid replacing a job that drain() is mid-await on.
+  if (req.method === "PUT" && req.path && req.path.startsWith("/blob/")) {
+    for (let i = writeQueue.length - 1; i >= 1; i--) {
+      const q = writeQueue[i];
+      if (q.rowId === req.rowId && q.method === "PUT" && q.path === req.path) {
+        writeQueue.splice(i, 1);
+      }
+    }
+  }
   writeQueue.push(req);
   persistQueue();
   setStatus({ queueLen: writeQueue.length, state: "saving" });
