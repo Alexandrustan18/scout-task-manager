@@ -3453,7 +3453,7 @@ function PMDashboard({ me, user, allTasks, timers, targets, getPerf, team, leave
 
   // === TEAM DATA ===
   var teamUsers = (pmTeamMembers ? pmTeamMembers(user) : (me.team || [])).filter(function(u) { return team[u]; });
-  var teamTasks = allTasks.filter(function(t) { return teamUsers.includes(t.assignee) && !t._campaignParent; });
+  var teamTasks = allTasks.filter(function(t) { return teamUsers.includes(t.assignee) && !t._campaignParent && !t._deleted; });
   var teamDoneToday = teamTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
   var teamActive = teamTasks.filter(function(t) { return t.status !== "Done"; });
   var teamOverdue = teamTasks.filter(function(t) { return t.status !== "Done" && isOv(t); });
@@ -9476,7 +9476,7 @@ function TeamReportPage({ tasks, team, timers, statusHistory, taskActivity, isMo
   Object.keys(team).forEach(function(uid) {
     if (team[uid].role === "admin") return;
     if (allowedSet && !allowedSet.has(uid)) return;
-    var userTasks = tasks.filter(function(t) { return t.assignee === uid && !t._campaignParent; });
+    var userTasks = tasks.filter(function(t) { return t.assignee === uid && !t._campaignParent && !t._deleted; });
     var activeTasks = userTasks.filter(function(t) { return t.status !== "Done"; });
     var doneInRange = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && inRange(t.updatedAt); });
     var createdInRange = userTasks.filter(function(t) { return t.createdAt && inRange(t.createdAt); });
