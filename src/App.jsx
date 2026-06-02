@@ -3828,7 +3828,7 @@ function MemberDashboard({ me, user, allTasks, timers, targets, getPerf, team, l
   });
   useEffect(function() { try { localStorage.setItem("s7_mem_layout_" + user, JSON.stringify(memLayout)); } catch(e) {} }, [memLayout]);
   var toggleMem = function(k) { setMemLayout(function(p) { var n = Object.assign({}, p); n[k] = !n[k]; return n; }); };
-  var myTasks = allTasks.filter(function(t) { return t.assignee === user && !t._campaignParent; });
+  var myTasks = allTasks.filter(function(t) { return t.assignee === user && !t._campaignParent && !t._deleted; });
   var todayDone = myTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && ds(t.updatedAt) === TD; }).length;
   var activeTasks = myTasks.filter(function(t) { return t.status !== "Done"; });
   var overdueTasks = myTasks.filter(function(t) { return t.status !== "Done" && isOv(t); });
