@@ -6175,7 +6175,7 @@ function calcMemberLeaderboard(allTasks, team, targets, users) {
   var daysPassed = now.getDate();
   var competitors = users.filter(function(u) { return team[u] && team[u].role === "member"; });
   return competitors.map(function(u) {
-    var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent; });
+    var userTasks = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && !t._deleted; });
     var thisMonth = userTasks.filter(function(t) { return t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; });
     var overdue = userTasks.filter(function(t) { return isOv(t); }).length;
     var userTargets = (targets || []).filter(function(tg) { return tg.userId === u && tg.active !== false; });
@@ -6220,13 +6220,13 @@ function calcPMLeaderboard(allTasks, team, users) {
   return competitors.map(function(u) {
     var pmTeam = getPMTeam(team, u);
     // Tasks created by PM this month
-    var createdThisMonth = allTasks.filter(function(t) { return t.createdBy === u && !t._campaignParent && t.createdAt && new Date(t.createdAt) >= monthStart && new Date(t.createdAt) <= monthEnd; }).length;
+    var createdThisMonth = allTasks.filter(function(t) { return t.createdBy === u && !t._campaignParent && !t._deleted && t.createdAt && new Date(t.createdAt) >= monthStart && new Date(t.createdAt) <= monthEnd; }).length;
     // Tasks done by PM's team this month
-    var teamDoneThisMonth = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
+    var teamDoneThisMonth = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && !t._deleted && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
     // PM's own tasks done
-    var ownDone = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
+    var ownDone = allTasks.filter(function(t) { return t.assignee === u && !t._campaignParent && !t._deleted && t.status === "Done" && t.updatedAt && new Date(t.updatedAt) >= monthStart && new Date(t.updatedAt) <= monthEnd; }).length;
     // Team overdue
-    var teamOverdue = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && isOv(t); }).length;
+    var teamOverdue = allTasks.filter(function(t) { return pmTeam.includes(t.assignee) && !t._campaignParent && !t._deleted && isOv(t); }).length;
     // Score: created tasks weight + team done weight + own done - team overdue penalty
     var score = createdThisMonth * 5 + teamDoneThisMonth * 8 + ownDone * 10 - teamOverdue * 15;
     return { user: u, name: (team[u] || {}).name || u, color: (team[u] || {}).color || "#94A3B8", created: createdThisMonth, teamDone: teamDoneThisMonth, ownDone: ownDone, teamOverdue: teamOverdue, doneThis: createdThisMonth, score: Math.max(0, score), role: "pm", teamSize: pmTeam.length };
