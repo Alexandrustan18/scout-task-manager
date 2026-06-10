@@ -1687,7 +1687,7 @@ export default function App() {
     setTimeout(function() {
       // Re-check localStorage in case handleLogin already ran
       if (localStorage.getItem(penKey)) return;
-      var overdueCount = tasks.filter(function(tk2) { return tk2.assignee === user && isOv(tk2) && !tk2._campaignParent; }).length;
+      var overdueCount = tasks.filter(function(tk2) { return tk2.assignee === user && isOv(tk2) && !tk2._campaignParent && !tk2._deleted; }).length;
       if (overdueCount > 0) {
         localStorage.setItem(penKey, "1");
         var penEntry = { id: gid(), userId: user, userName: t.name, date: TD, overdueCount: overdueCount, time: ts() };
@@ -2304,7 +2304,7 @@ export default function App() {
         setTimeout(function() {
           var penKey = "s7_penalty_" + u + "_" + TD;
           if (!localStorage.getItem(penKey)) {
-            var overdueCount = tasks.filter(function(tk2) { return tk2.assignee === u && isOv(tk2) && !tk2._campaignParent; }).length;
+            var overdueCount = tasks.filter(function(tk2) { return tk2.assignee === u && isOv(tk2) && !tk2._campaignParent && !tk2._deleted; }).length;
             if (overdueCount > 0) {
               localStorage.setItem(penKey, "1");
               var penEntry = { id: gid(), userId: u, userName: t.name, date: TD, overdueCount: overdueCount, time: ts() };
