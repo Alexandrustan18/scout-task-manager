@@ -1,5 +1,0 @@
-[    1913ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ https://work-heyads.ro/?_v=fresh_session:0
-[ 9925828ms] [ERROR] Blocked attempt to show a 'beforeunload' confirmation panel for a frame that never had a user gesture since its load. https://www.chromestatus.com/feature/5082396709879808 @ https://work-heyads.ro/:0
-[ 9926058ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_LOAD Per-row load exception Failed to fetch @ https://work-heyads.ro/assets/index-CVh3FFqA.js:82
-[18391381ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://34-62-56-73.nip.io/rest/v1/app_data?on_conflict=id:0
-[18391391ms] [WARNING] [S.C.O.U.T ERROR] SUPABASE_SAVE Eroare salvare "notifs" (retry 0/2) TypeError: Failed to fetch @ https://work-heyads.ro/assets/index-CVh3FFqA.js:82

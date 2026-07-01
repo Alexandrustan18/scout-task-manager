@@ -1,3 +1,0 @@
-[   79542ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://auth.supabase.io/auth/v1/token?grant_type=password:0
-[  139174ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://auth.supabase.io/auth/v1/token?grant_type=password:0
-[  153224ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://auth.supabase.io/auth/v1/token?grant_type=password:0
