@@ -1694,9 +1694,23 @@ export default function App() {
         setPenalties(function(p) { return [penEntry].concat(p).slice(0, 1000); });
         addNotif("anomaly", "PENALIZARE: " + t.name + " are " + overdueCount + " taskuri intarziate", null, "admin");
         setShowPenaltyPopup({ user: user, name: t.name, count: overdueCount });
+        return;
+      }
+      // Also surface a target-missed penalty recorded by the server the previous
+      // business day. Server writes penalties with reason "target_missed"; we
+      // show once per (user, date) using a localStorage marker.
+      var yStr = ds(new Date(Date.now() - 86400000));
+      var missKey = "s7_target_missed_" + user + "_" + yStr;
+      if (localStorage.getItem(missKey)) return;
+      var missed = (penalties || []).find(function(p) {
+        return p && p.userId === user && p.date === yStr && p.reason === "target_missed";
+      });
+      if (missed) {
+        localStorage.setItem(missKey, "1");
+        setShowPenaltyPopup({ user: user, name: t.name, count: missed.missed || missed.overdueCount || 0, targetMissed: true, target: missed.target, actualDone: missed.actualDone, metric: missed.metric });
       }
     }, 3000);
-  }, [loading, user, tasks]);
+  }, [loading, user, tasks, penalties]);
 
   // Auto-saves (skip the initial render after load to avoid 30+ noise saves)
   // Note: `tasks` auto-saves via setTasks wrapper, no useEffect needed for it
@@ -3063,7 +3077,7 @@ export default function App() {
         <div style={{ background: "#fff", borderRadius: 20, padding: 30, maxWidth: 460, width: "90%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.4)", border: "4px solid #DC2626" }}>
           <div style={{ fontSize: 64, marginBottom: 8 }}>⚠️</div>
           <div style={{ fontSize: 24, fontWeight: 900, color: "#DC2626", marginBottom: 8 }}>PENALIZARE INREGISTRATA</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#1E293B", marginBottom: 16 }}>{showPenaltyPopup.name}, ai {showPenaltyPopup.count} {showPenaltyPopup.count === 1 ? "task intarziat" : "taskuri intarziate"}!</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#1E293B", marginBottom: 16 }}>{showPenaltyPopup.targetMissed ? (showPenaltyPopup.name + ", ai ratat target-ul de ieri (" + (showPenaltyPopup.actualDone || 0) + "/" + (showPenaltyPopup.target || 0) + ", " + showPenaltyPopup.count + " sub target)") : (showPenaltyPopup.name + ", ai " + showPenaltyPopup.count + " " + (showPenaltyPopup.count === 1 ? "task intarziat" : "taskuri intarziate") + "!")}</div>
           <div style={{ padding: "14px 16px", background: "#1E293B", borderRadius: 10, marginBottom: 16 }}>
             <div style={{ fontSize: 42, fontWeight: 900, color: "#DC2626" }}>{userPenCount}</div>
             <div style={{ fontSize: 13, color: "#94A3B8", marginTop: 2 }}>penalizari luna aceasta</div>
