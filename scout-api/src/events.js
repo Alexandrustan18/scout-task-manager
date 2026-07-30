@@ -49,11 +49,18 @@ export function registerEventsRoutes(app) {
     const tabId = req.query.tab || "no-tab";
     const username = payload.sub;
 
+    // Manually attach CORS headers — reply.raw bypasses the Fastify CORS plugin.
+    const origin = req.headers.origin || "";
+    const allowedOrigins = ["https://work-heyads.ro", "http://localhost:5173", "http://localhost:4173"];
+    const corsOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-store",
       "Connection": "keep-alive",
       "X-Accel-Buffering": "no",
+      "Access-Control-Allow-Origin": corsOrigin,
+      "Access-Control-Allow-Credentials": "true",
+      "Vary": "Origin",
     });
 
     // Replay

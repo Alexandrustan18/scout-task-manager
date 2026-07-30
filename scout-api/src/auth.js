@@ -54,14 +54,24 @@ export function registerAuthRoutes(app) {
       },
     },
   }, async (req, reply) => {
-    const { username, password } = req.body;
+    let { username, password } = req.body;
+    // Trim + case-insensitive lookup — protects against mobile keyboards that
+    // add trailing space or auto-capitalize the first letter.
+    username = (username || "").trim();
     const teamRow = await getRow("team");
     if (!teamRow) return reply.code(500).send({ error: "no_team_row" });
     const team = teamRow.data || {};
-    const user = team[username];
+    let user = team[username];
+    let canonicalUsername = username;
+    if (!user) {
+      // Fallback: match ignoring case
+      const key = Object.keys(team).find((k) => k.toLowerCase() === username.toLowerCase());
+      if (key) { user = team[key]; canonicalUsername = key; }
+    }
     if (!user) return reply.code(401).send({ error: "bad_credentials" });
     if (user.password !== password) return reply.code(401).send({ error: "bad_credentials" });
-    const token = await signToken({ username, role: user.role });
+    const token = await signToken({ username: canonicalUsername, role: user.role });
+    username = canonicalUsername;
     // Return only public fields
     const publicUser = {
       username,
