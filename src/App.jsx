@@ -2362,9 +2362,18 @@ export default function App() {
     var m = team[user]; if (!m) return [];
     if (m.role === "admin") return Object.keys(team);
     if (m.role === "pm") {
-      // Toți membrii pe care PM-ul îi poate atribui
-      var visMembers = pmTeamMembers(user);
-      return [user].concat(visMembers);
+      // Toți membrii pe care PM-ul îi poate atribui + visAlso (alți PM-i și echipele lor)
+      var acc = {};
+      acc[user] = true;
+      pmTeamMembers(user).forEach(function(k) { acc[k] = true; });
+      (Array.isArray(m.visAlso) ? m.visAlso : []).forEach(function(k) {
+        if (!team[k]) return;
+        acc[k] = true;
+        if (team[k].role === "pm") {
+          pmTeamMembers(k).forEach(function(sub) { acc[sub] = true; });
+        }
+      });
+      return Object.keys(acc);
     }
     return [user];
   }, [user, team, pmTeamMembers]);
